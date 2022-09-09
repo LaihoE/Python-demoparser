@@ -1,0 +1,218 @@
+use crate::game_events::HurtEvent;
+use crate::read_bits::BitReader;
+use crate::Demo;
+use crate::ServerClass;
+use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
+use csgoproto::netmessages::CSVCMsg_PacketEntities;
+use csgoproto::netmessages::CSVCMsg_SendTable;
+use protobuf;
+use protobuf::Message;
+use std::io;
+use std::vec;
+
+#[derive(Debug)]
+pub struct Entity {
+    pub class_id: u32,
+    pub entity_id: u32,
+    pub serial: u32,
+    //props:
+}
+#[derive(Debug)]
+pub struct Prop {
+    pub prop: Sendprop_t,
+    pub arr: Option<Sendprop_t>,
+    pub table: CSVCMsg_SendTable,
+}
+
+impl Demo {
+    pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities) {
+        let upd = pack_ents.updated_entries();
+
+        let mut b = BitReader::new(pack_ents.entity_data());
+        let mut entity_id = 0;
+
+        for inx in 0..pack_ents.updated_entries() {
+            if entity_id != 0 {
+                entity_id += b.read_u_bit_var();
+            } else {
+                b.read_u_bit_var();
+            }
+
+            if b.read_bool() {
+                self.entities.as_mut().unwrap().insert(entity_id, None);
+                b.read_bool();
+            } else if b.read_bool() {
+                let cls_id = b.read_nbits(self.class_bits.try_into().unwrap());
+                let serial = b.read_nbits(10);
+
+                let new_entitiy = Entity {
+                    class_id: cls_id,
+                    entity_id: entity_id,
+                    serial: serial,
+                };
+
+                self.entities
+                    .as_mut()
+                    .unwrap()
+                    .insert(entity_id, Some(new_entitiy));
+
+                self.read_new_ent(
+                    &Entity {
+                        class_id: cls_id,
+                        entity_id: entity_id,
+                        serial: serial,
+                    },
+                    &mut b,
+                );
+            } else {
+                let e = &self.entities.as_ref().unwrap()[&entity_id]
+                    .as_ref()
+                    .unwrap();
+                self.read_new_ent(&e, &mut b);
+            }
+        }
+    }
+
+    pub fn handle_entity_upd(&self, sv_cls: &ServerClass, b: &mut BitReader<&[u8]>) {
+        let mut val = -1;
+        let new_way = b.read_bool();
+        let mut indicies = vec![];
+
+        loop {
+            val = b.read_inx(val, new_way);
+            if val == -1 {
+                break;
+            }
+            indicies.push(val);
+        }
+
+        for inx in indicies {
+            let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
+            let r = b.decode(prop);
+        }
+    }
+
+    pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) {
+        let sv_cls = &self.serverclass_map[&(ent.class_id as u16)];
+        self.handle_entity_upd(sv_cls, b);
+    }
+
+    pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> Vec<Sendprop_t> {
+        let mut excl = vec![];
+
+        for prop in &table.props {
+            if (prop.flags() & (1 << 6) != 0) {
+                excl.push(prop.clone());
+            }
+
+            if prop.type_() == 6 {
+                let sub_table = &self.dt_map.as_ref().unwrap()[prop.dt_name()];
+                excl.extend(self.get_excl_props(&sub_table.clone()));
+            }
+        }
+        excl
+    }
+
+    pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
+        let excl = self.get_excl_props(table);
+        let mut fprops = self.get_props(table, &excl);
+        let mut prios = vec![];
+
+        prios.push(64);
+
+        let mut cnt = 0;
+
+        for i in 0..fprops.len() {
+            let prio = fprops[i].prop.priority();
+            let mut found = false;
+            for j in 0..prios.len() {
+                if prios[j] == prio {
+                    found = true;
+                    break;
+                }
+            }
+            if found {
+                prios.push(prio);
+            }
+        }
+        let mut start = 0;
+
+        for prio_inx in 0..prios.len() {
+            let mut priority = prios[prio_inx];
+            loop {
+                let mut currentprop = start;
+                while currentprop < fprops.len() {
+                    let prop = fprops[currentprop].prop.clone();
+                    if (prop.priority() == priority
+                        || (priority == 64 && ((1 << 18) & prop.flags() != 0)))
+                    {
+                        if (start != currentprop) {
+                            fprops.swap(currentprop, start);
+                        }
+                        start += 1;
+                    }
+                    currentprop += 1;
+                }
+                if (currentprop == fprops.len()) {
+                    break;
+                }
+            }
+        }
+        fprops
+    }
+
+    #[inline]
+    pub fn is_prop_excl(
+        &self,
+        excl: Vec<Sendprop_t>,
+        table: &CSVCMsg_SendTable,
+        prop: Sendprop_t,
+    ) -> bool {
+        for item in excl {
+            if table.net_table_name() == item.dt_name() && prop.var_name() == item.var_name() {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
+        let mut flat: Vec<Prop> = Vec::new();
+        let mut cnt = 0;
+
+        for prop in &table.props {
+            cnt += 1;
+
+            if (prop.flags() & (1 << 8) != 0)
+                || (prop.flags() & (1 << 6) != 0)
+                || self.is_prop_excl(excl.clone(), &table, prop.clone())
+            {
+                let found = self.is_prop_excl(excl.clone(), &table, prop.clone());
+                continue;
+            }
+
+            if prop.type_() == 6 {
+                let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
+                let child_props = self.get_props(sub_table, excl);
+                for p in child_props {
+                    flat.push(p);
+                }
+            } else if prop.type_() == 5 {
+                let prop_arr = Prop {
+                    prop: prop.clone(),
+                    arr: None, //arr: Some(table.props[cnt - 1]),
+                    table: table.clone(),
+                };
+                flat.push(prop_arr);
+            } else {
+                let prop = Prop {
+                    prop: prop.clone(),
+                    arr: None,
+                    table: table.clone(),
+                };
+                flat.push(prop);
+            }
+        }
+        flat
+    }
+}

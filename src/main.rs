@@ -1,52 +1,145 @@
-use std::fs::File;
-use std::io::BufReader;
-use std::io::Read;
+pub mod data_table;
+pub mod entities;
+pub mod game_events;
+pub mod header;
+pub mod read_bits;
+pub mod read_bytes;
+
+use crate::data_table::ServerClass;
+use crate::entities::Entity;
+use crate::entities::Prop;
+use crate::game_events::HurtEvent;
+use crate::header::Header;
+
+use crate::netmessages::CSVCMsg_PacketEntities;
+use crate::protobuf::Message;
+use csgoproto::netmessages;
+use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
+use csgoproto::netmessages::CSVCMsg_GameEvent;
+use csgoproto::netmessages::CSVCMsg_GameEventList;
+use csgoproto::netmessages::CSVCMsg_SendTable;
+use protobuf;
+use protobuf::reflect::MessageDescriptor;
+use std::any::Any;
+use std::collections::HashMap;
 use std::time::Instant;
-use std::str;
-use std::fs;
+use std::vec;
 
-#[derive(Debug)]
-struct Header <'a>{
-    header_magic: &'a str,
-	protocol: i32,
-    network_protocol: u32,
-    server_name: &'a str,
-    client_name: &'a str,
-    map_name: &'a str,
-    game_dir: &'a str,
-    playback_time: f32,
-    playback_ticks: i32,
-    playback_frames: i32,
-    signon_length: i32,
+#[allow(dead_code)]
+struct Frame {
+    cmd: u8,
+    tick: i32,
+    playerslot: u8,
 }
 
-fn parse_header(bytes: &[u8]) -> Header{   
-    let h = Header{
-        header_magic: str::from_utf8(&bytes[..8]).unwrap(),
-        protocol: i32::from_le_bytes(bytes[8..12].try_into().unwrap()),
-        network_protocol: u32::from_le_bytes(bytes[12..16].try_into().unwrap()),
-        server_name: str::from_utf8(&bytes[16..276]).unwrap(),
-        client_name: str::from_utf8(&bytes[276..536]).unwrap(),
-        map_name: str::from_utf8(&bytes[536..796]).unwrap(),
-        game_dir: str::from_utf8(&bytes[796..1056]).unwrap(),
-        playback_time: f32::from_le_bytes(bytes[1056..1060].try_into().unwrap()),
-        playback_ticks: i32::from_le_bytes(bytes[1060..1064].try_into().unwrap()),
-        playback_frames: i32::from_le_bytes(bytes[1064..1068].try_into().unwrap()),
-        signon_length: i32::from_le_bytes(bytes[1068..1072].try_into().unwrap()),
-    };
-    h
+struct DataTable {
+    len: i32,
 }
 
+struct Demo {
+    fp: usize,
+    tick: i32,
+    cmd: u8,
+    bytes: Vec<u8>,
+    class_bits: u32,
+    msg_map: Vec<MessageDescriptor>,
+    event_list: Option<CSVCMsg_GameEventList>,
+    event_vec: Option<Vec<Descriptor_t>>,
+    dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
+    serverclass_map: HashMap<u16, ServerClass>,
+    entities: Option<HashMap<u32, Option<Entity>>>,
+}
 
+impl Demo {
+    fn parse_frame(&mut self) {
+        // Main loop
+        while self.fp < self.bytes.len() as usize {
+            let f = self.read_frame();
+            self.tick = f.tick;
+            self.parse_cmd(f.cmd);
+        }
+    }
+
+    pub fn read_frame(&mut self) -> Frame {
+        let f = Frame {
+            cmd: self.read_byte(),
+            tick: self.read_i32(),
+            playerslot: self.read_byte(),
+        };
+        f
+    }
+
+    fn parse_cmd(&mut self, cmd: u8) {
+        match cmd {
+            1 => self.parse_packet(),
+            2 => self.parse_packet(),
+            6 => self.parse_datatable(),
+            3 => {}
+            _ => panic!("UNK CMD"),
+        }
+    }
+
+    fn parse_packet(&mut self) {
+        self.fp += 160;
+        let packet_len = self.read_i32();
+        let goal_inx = self.fp + packet_len as usize;
+
+        while self.fp < goal_inx {
+            let msg = self.read_varint();
+            let size = self.read_varint();
+            let data = self.read_n_bytes(size);
+
+            match msg as i32 {
+                25 => {
+                    let game_event: CSVCMsg_GameEvent = Message::parse_from_bytes(&data).unwrap();
+                    self.parse_game_events(game_event);
+                }
+                30 => {
+                    let event_list: CSVCMsg_GameEventList =
+                        Message::parse_from_bytes(&data).unwrap();
+                    self.parse_game_event_list(event_list)
+                }
+                26 => {
+                    let pack_ents: CSVCMsg_PacketEntities =
+                        Message::parse_from_bytes(data).unwrap();
+                    self.parse_packet_entities(pack_ents);
+                }
+                _ => {}
+            }
+        }
+    }
+}
 
 fn main() {
+    let x = netmessages::file_descriptor();
+    let y = x.messages();
+    let mut v: Vec<MessageDescriptor> = Vec::new();
+
+    let mut cnt = 0;
+    for i in y {
+        println!("{:?} {:?}", i.full_name(), i.name());
+        cnt += 1;
+    }
+
     let now = Instant::now();
-    let bytes = std::fs::read("/home/laiho/Documents/demos/rclonetest/q.dem").unwrap();
-    
-    let h: Header = parse_header(&bytes);
+    let mut d = Demo {
+        bytes: std::fs::read("/home/laiho/Documents/demos/rclonetest/q.dem").unwrap(),
+        fp: 0,
+        cmd: 0,
+        tick: 0,
+        msg_map: v,
+        event_list: None,
+        event_vec: None,
+        hurtevent_list: vec![],
+        dt_map: Some(HashMap::new()),
+        class_bits: 0,
+        serverclass_map: HashMap::new(),
+        entities: Some(HashMap::new()),
+    };
+
+    let h: Header = d.parse_header();
+    d.parse_frame();
+
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
-    //println!("{:?}", h);
-    // let sparkle_heart = str::from_utf8(&bytes[1073..107]).unwrap();
-
 }

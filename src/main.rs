@@ -75,7 +75,7 @@ impl Demo {
             2 => self.parse_packet(),
             6 => self.parse_datatable(),
             3 => {}
-            _ => panic!("UNK CMD"),
+            _ => {} //panic!("UNK CMD"),
         }
     }
 

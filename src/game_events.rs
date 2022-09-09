@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::Demo;
 use csgoproto::netmessages::csvcmsg_game_event::Key_t;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
@@ -45,6 +47,11 @@ impl Default for KeyData {
         KeyData::BoolData(false)
     }
 }
+#[derive(Debug)]
+pub struct NameDataPair {
+    pub name: String,
+    pub data: KeyData,
+}
 
 pub fn parse_game_event(game_event: &CSVCMsg_GameEvent, event: &Descriptor_t) -> HurtEvent {
     let mut he = HurtEvent::default();
@@ -65,22 +72,31 @@ pub fn parse_game_event(game_event: &CSVCMsg_GameEvent, event: &Descriptor_t) ->
     }
     he
 }
-pub fn gen_key_val_pairs(game_event: &CSVCMsg_GameEvent, event: &Descriptor_t) {
-    let mut cnt = 0;
+pub fn gen_name_val_pairs(
+    game_event: &CSVCMsg_GameEvent,
+    event: &Descriptor_t,
+) -> Vec<NameDataPair> {
+    // Takes the msg and its descriptor and parses key val pairs from it
+    let mut kv_pairs: Vec<NameDataPair> = Vec::new();
+
     for i in 0..game_event.keys.len() {
         let ge = &game_event.keys[i];
         let desc = &event.keys[i];
-        println!("{:?} @ {:?}", game_event.eventid, event.eventid);
+        let val = parse_key(ge);
+        kv_pairs.push(NameDataPair {
+            name: desc.name().to_owned(),
+            data: val,
+        })
     }
+    kv_pairs
 }
 
 impl Demo {
     pub fn parse_game_events(&self, game_event: CSVCMsg_GameEvent) {
-        //let game_event: CSVCMsg_GameEvent = Message::parse_from_bytes(data).unwrap();
-
         for event_desc in self.event_vec.as_ref().unwrap() {
-            if event_desc.name() == game_event.event_name() {
-                gen_key_val_pairs(&game_event, event_desc);
+            //println!("{:?} {:?}", event_desc.eventid, game_event.eventid);
+            if event_desc.eventid() == game_event.eventid() {
+                let pairs = gen_name_val_pairs(&game_event, event_desc);
             }
         }
     }

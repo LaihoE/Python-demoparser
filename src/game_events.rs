@@ -65,16 +65,22 @@ pub fn parse_game_event(game_event: &CSVCMsg_GameEvent, event: &Descriptor_t) ->
     }
     he
 }
+pub fn gen_key_val_pairs(game_event: &CSVCMsg_GameEvent, event: &Descriptor_t) {
+    let mut cnt = 0;
+    for i in 0..game_event.keys.len() {
+        let ge = &game_event.keys[i];
+        let desc = &event.keys[i];
+        println!("{:?} @ {:?}", game_event.eventid, event.eventid);
+    }
+}
 
 impl Demo {
     pub fn parse_game_events(&self, game_event: CSVCMsg_GameEvent) {
         //let game_event: CSVCMsg_GameEvent = Message::parse_from_bytes(data).unwrap();
 
         for event_desc in self.event_vec.as_ref().unwrap() {
-            if game_event.eventid == event_desc.eventid {
-                if event_desc.name() == "player_hurt" {
-                    let he: HurtEvent = parse_game_event(&game_event, event_desc);
-                }
+            if event_desc.name() == game_event.event_name() {
+                gen_key_val_pairs(&game_event, event_desc);
             }
         }
     }

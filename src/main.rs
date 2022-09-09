@@ -100,9 +100,11 @@ impl Demo {
                     self.parse_game_event_list(event_list)
                 }
                 26 => {
+                    /*
                     let pack_ents: CSVCMsg_PacketEntities =
                         Message::parse_from_bytes(data).unwrap();
                     self.parse_packet_entities(pack_ents);
+                     */
                 }
                 _ => {}
             }
@@ -115,12 +117,6 @@ fn main() {
     let y = x.messages();
     let mut v: Vec<MessageDescriptor> = Vec::new();
 
-    let mut cnt = 0;
-    for i in y {
-        println!("{:?} {:?}", i.full_name(), i.name());
-        cnt += 1;
-    }
-
     let now = Instant::now();
     let mut d = Demo {
         bytes: std::fs::read("/home/laiho/Documents/demos/rclonetest/q.dem").unwrap(),
@@ -130,7 +126,6 @@ fn main() {
         msg_map: v,
         event_list: None,
         event_vec: None,
-        hurtevent_list: vec![],
         dt_map: Some(HashMap::new()),
         class_bits: 0,
         serverclass_map: HashMap::new(),

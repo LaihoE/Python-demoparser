@@ -32,10 +32,6 @@ struct Frame {
     playerslot: u8,
 }
 
-struct DataTable {
-    len: i32,
-}
-
 struct Demo {
     fp: usize,
     tick: i32,
@@ -104,7 +100,7 @@ impl Demo {
                     let pack_ents: CSVCMsg_PacketEntities =
                         Message::parse_from_bytes(data).unwrap();
                     self.parse_packet_entities(pack_ents);
-                     */
+                    */
                 }
                 _ => {}
             }

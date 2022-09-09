@@ -52,6 +52,11 @@ pub struct NameDataPair {
     pub name: String,
     pub data: KeyData,
 }
+#[derive(Debug)]
+pub struct GameEvent {
+    name: String,
+    fields: Vec<NameDataPair>,
+}
 
 pub fn parse_game_event(game_event: &CSVCMsg_GameEvent, event: &Descriptor_t) -> HurtEvent {
     let mut he = HurtEvent::default();
@@ -76,7 +81,7 @@ pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
 ) -> Vec<NameDataPair> {
-    // Takes the msg and its descriptor and parses key val pairs from it
+    // Takes the msg and its descriptor and parses (name, val) pairs from it
     let mut kv_pairs: Vec<NameDataPair> = Vec::new();
 
     for i in 0..game_event.keys.len() {
@@ -91,14 +96,32 @@ pub fn gen_name_val_pairs(
     kv_pairs
 }
 
+pub fn _match_data_to_game_event(namedatavec: Vec<NameDataPair>, event_name: &str) {
+    //println!("{:#?} {:#?}", event_name, namedatavec);
+    if !event_name.contains("player")
+        && !event_name.contains("weapon")
+        && !event_name.contains("fire")
+        && !event_name.contains("item")
+    {
+        println!("{:#?}", event_name);
+    }
+}
+
 impl Demo {
-    pub fn parse_game_events(&self, game_event: CSVCMsg_GameEvent) {
+    pub fn parse_game_events(&self, game_event: CSVCMsg_GameEvent) -> Vec<GameEvent> {
+        let mut game_events: Vec<GameEvent> = Vec::new();
         for event_desc in self.event_vec.as_ref().unwrap() {
-            //println!("{:?} {:?}", event_desc.eventid, game_event.eventid);
             if event_desc.eventid() == game_event.eventid() {
-                let pairs = gen_name_val_pairs(&game_event, event_desc);
+                let name_data_pairs = gen_name_val_pairs(&game_event, event_desc);
+                game_events.push({
+                    GameEvent {
+                        name: event_desc.name().to_owned(),
+                        fields: name_data_pairs,
+                    }
+                })
             }
         }
+        game_events
     }
 
     pub fn parse_game_event_list(&mut self, event_list: CSVCMsg_GameEventList) {

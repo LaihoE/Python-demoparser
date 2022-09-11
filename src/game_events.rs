@@ -96,14 +96,10 @@ pub fn gen_name_val_pairs(
     kv_pairs
 }
 
-pub fn _match_data_to_game_event(namedatavec: Vec<NameDataPair>, event_name: &str) {
+pub fn _match_data_to_game_event(namedatavec: &Vec<NameDataPair>, event_name: &str) {
     //println!("{:#?} {:#?}", event_name, namedatavec);
-    if !event_name.contains("player")
-        && !event_name.contains("weapon")
-        && !event_name.contains("fire")
-        && !event_name.contains("item")
-    {
-        println!("{:#?}", event_name);
+    if event_name.contains("bomb_planted") {
+        println!("{:#?} {:#?}", event_name, namedatavec);
     }
 }
 
@@ -113,6 +109,7 @@ impl Demo {
         for event_desc in self.event_vec.as_ref().unwrap() {
             if event_desc.eventid() == game_event.eventid() {
                 let name_data_pairs = gen_name_val_pairs(&game_event, event_desc);
+                //_match_data_to_game_event(&name_data_pairs, event_desc.name());
                 game_events.push({
                     GameEvent {
                         name: event_desc.name().to_owned(),
@@ -125,6 +122,7 @@ impl Demo {
     }
 
     pub fn parse_game_event_list(&mut self, event_list: CSVCMsg_GameEventList) {
+        //println!("{}", event_list);
         self.event_vec = Some(event_list.descriptors);
     }
 }

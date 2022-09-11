@@ -45,6 +45,14 @@ impl Demo {
                 dt: dt,
                 fprops: Some(props),
             };
+
+            println!(
+                "QQ {} {} {:?}",
+                my_id,
+                server_class.dt,
+                server_class.fprops.as_ref().unwrap().len(),
+            );
+
             self.serverclass_map.insert(my_id, server_class);
         }
     }

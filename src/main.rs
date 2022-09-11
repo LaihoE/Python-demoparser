@@ -2,6 +2,7 @@ pub mod data_table;
 pub mod entities;
 pub mod game_events;
 pub mod header;
+pub mod newbitreader;
 pub mod read_bits;
 pub mod read_bytes;
 
@@ -44,6 +45,7 @@ struct Demo {
     dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
     serverclass_map: HashMap<u16, ServerClass>,
     entities: Option<HashMap<u32, Option<Entity>>>,
+    bad: Vec<String>,
 }
 
 impl Demo {
@@ -96,11 +98,9 @@ impl Demo {
                     self.parse_game_event_list(event_list)
                 }
                 26 => {
-                    /*
                     let pack_ents: CSVCMsg_PacketEntities =
                         Message::parse_from_bytes(data).unwrap();
                     self.parse_packet_entities(pack_ents);
-                    */
                 }
                 _ => {}
             }
@@ -112,6 +112,13 @@ fn main() {
     let x = netmessages::file_descriptor();
     let y = x.messages();
     let mut v: Vec<MessageDescriptor> = Vec::new();
+
+    let mut cnt = 0;
+    for i in y {
+        //println!("{} {:#?}", cnt, i.proto());
+        cnt += 1;
+    }
+    //println!("{:#?}", v);
 
     let now = Instant::now();
     let mut d = Demo {
@@ -126,6 +133,7 @@ fn main() {
         class_bits: 0,
         serverclass_map: HashMap::new(),
         entities: Some(HashMap::new()),
+        bad: Vec::new(),
     };
 
     let h: Header = d.parse_header();

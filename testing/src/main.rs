@@ -1,16 +1,7 @@
-use protobuf::Message;
-
-use crate::entities::Prop;
-use core::panic;
-use std::any::Any;
+use bitreader::BitReader;
+use std::convert::TryFrom;
 use std::convert::TryInto;
-use std::io;
-use std::mem;
-use std::u32;
-
-const NBITS: usize = 32;
-
-static MASKS: [u32; NBITS + 1] = [
+static MASKS: [u32; 32 + 1] = [
     0,
     u32::MAX >> 31,
     u32::MAX >> 30,
@@ -46,15 +37,85 @@ static MASKS: [u32; NBITS + 1] = [
     u32::MAX,
 ];
 
-pub(crate) struct BitReader<R: io::Read> {
+pub struct Bitr<'a> {
+    data: &'a [u8],
+    bits_avail: u32,
+    bytepos: usize,
+    bytes_len: usize,
+    buffer: BitReader<'a>,
+}
+
+impl<'a> Bitr<'a> {
+    pub fn new(data: &'a [u8]) -> Bitr<'a> {
+        let mut bits_avail = 0;
+        let mut bytepos = 0;
+        let mut buffer = BitReader::new(data);
+        let left_over = data.len() % 4;
+        let size_type = 4;
+
+        if data.len() > size_type && left_over != 0 {
+            bytepos = left_over - size_type;
+            bits_avail = left_over * 8;
+            //buffer = (buffer << (size_type * 8 - bits_avail) >> (size_type * 8 - bits_avail));
+        } else if data.len() <= 8 {
+            bits_avail = data.len() * 8;
+        } else {
+            bits_avail = size_type * 8;
+        }
+        println!("{}", bits_avail);
+        Bitr {
+            data: data,
+            bits_avail: bits_avail.try_into().unwrap(),
+            bytepos: bytepos,
+            bytes_len: data.len(),
+            buffer: buffer,
+        }
+    }
+
+    pub fn read_bits(&mut self, n: u32) -> u32 {
+        // If we have enough bits to fulfill request
+        if self.bits_avail >= n {
+            let temp = self.buffer.read_u32(n.try_into().unwrap()).unwrap();
+            let result = temp & MASKS[12];
+            //self.buffer.read_u8(n.try_into().unwrap());
+            self.bits_avail -= n;
+            result
+        } else {
+            // First read current buffer empty and then refill with new bits and read rest
+            let bits_still_needed = n - self.bits_avail;
+
+            let mut pre = self
+                .buffer
+                .read_u32(self.bits_avail.try_into().unwrap())
+                .unwrap();
+
+            self.buffer.read_u32(bits_still_needed.try_into().unwrap());
+            println!("{} {}", bits_still_needed, self.bits_avail);
+
+            self.bits_avail = 32 - bits_still_needed;
+            let rest = self.buffer.read_u32(32).unwrap();
+            pre |= rest & MASKS[n as usize];
+            return pre;
+        }
+    }
+}
+
+use std::any::Any;
+use std::io;
+use std::mem;
+use std::u32;
+
+const NBITS: usize = 32;
+
+pub(crate) struct poop<R: io::Read> {
     inner: R,
     bits: u32,
     available: usize,
 }
 
-impl<R: io::Read> BitReader<R> {
-    pub fn new(reader: R) -> BitReader<R> {
-        BitReader {
+impl<R: io::Read> poop<R> {
+    pub fn new(reader: R) -> poop<R> {
+        poop {
             inner: reader,
             bits: 0,
             available: 0,
@@ -87,7 +148,7 @@ impl<R: io::Read> BitReader<R> {
     }
 
     pub fn read_nbits(&mut self, n: usize) -> u32 {
-        //debug_assert!(n <= NBITS);
+        debug_assert!(n <= NBITS);
 
         if self.available >= n {
             let ret = self.bits & MASKS[n];
@@ -167,30 +228,6 @@ impl<R: io::Read> BitReader<R> {
     pub fn skip(&mut self, nbits: i32) -> f32 {
         self.read_nbits(nbits.try_into().unwrap());
         0.0
-    }
-
-    pub fn decode(&mut self, prop: &Prop) -> f32 {
-        let mut result = 0.0;
-
-        match prop.prop.type_() {
-            0 => result = self.decode_int(prop) as f64 as f32,
-            1 => result = self.decode_float(prop),
-            _ => {
-                panic!("UNK ENCODING")
-                //self.skip(prop.prop.compute_size().try_into().unwrap());
-                //println!("YEET");
-            } //panic!("UNKOWN ENCODING"),
-        }
-
-        println!(
-            "[] {} {} {} {}",
-            result,
-            prop.prop.num_bits(),
-            prop.prop.type_(),
-            prop.prop.var_name(),
-        );
-
-        result
     }
 
     pub fn read_bit_coord_mp(&mut self, coord_type: u32) -> f64 {
@@ -279,142 +316,29 @@ impl<R: io::Read> BitReader<R> {
             result
         }
     }
+}
 
-    pub fn read_bit_coord(&mut self) -> i32 {
-        let mut int_val = 0;
-        let mut frac_val = 0;
+fn main() {
+    let slice_of_u8: &[u8] = &[17, 34, 4, 8, 9];
+    // println!("{:?}", slice_of_u8);
 
-        let i2 = self.read_bool();
-        let f2 = self.read_bool();
+    // You probably should use try! or some other error handling mechanism in real code if the
+    // length of the input is not known in advance.
+    //let x = reader.read_u32(12).unwrap();
+    let mut poop = poop::new(slice_of_u8);
+    //println!("{}", a_single_bit);
 
-        if i2 == false && f2 == false {
-            return 0;
-        }
-        let sign = self.read_bool();
-        if i2 {
-            int_val = self.read_nbits(14) + 1;
-        }
-        if f2 {
-            frac_val = self.read_nbits(5);
-        }
-        // TURBOSLOW
-        let resol: f64 = (1.0 / (1 << 5) as f64);
-        let result: i32 = (int_val as f64 + (frac_val as f64 * resol) as f64) as i32;
-        if sign {
-            return -result;
-        } else {
-            result
-        }
-    }
+    //let slice_of_u8: &[u8] = &[17, 34];
 
-    pub fn read_bits(&mut self, n: i32) {
-        let mut res = 0;
-        let mut bitsleft = n;
-        let eight = 8.try_into().unwrap();
-        while bitsleft >= 32 {
-            let mut bytarr: Vec<u8> = vec![];
-            let first: u8 = self.read_nbits(eight).try_into().unwrap();
-            let second: u8 = self.read_nbits(eight).try_into().unwrap();
-            let third: u8 = self.read_nbits(eight).try_into().unwrap();
-            let four: u8 = self.read_nbits(eight).try_into().unwrap();
-
-            bytarr.push(first);
-            bytarr.push(second);
-            bytarr.push(third);
-            bytarr.push(four);
-
-            bitsleft -= 32;
-        }
-        while bitsleft >= 8 {
-            res += self.read_nbits(8);
-        }
-        if bitsleft > 0 {
-            res += self.read_nbits(bitsleft.try_into().unwrap());
-        }
-    }
-
-    pub fn decode_special_float(&mut self, prop: &Prop) -> f64 {
-        let mut val = 0.0;
-        let flags = prop.prop.flags();
-        if flags & (1 << 1) != 0 {
-            val = self.read_bit_coord() as f64;
-        } else if flags & (1 << 12) != 0 {
-            val = self.read_bit_coord_mp(0);
-        } else if flags & (1 << 13) != 0 {
-            val = self.read_bit_coord_mp(1);
-        } else if flags & (1 << 14) != 0 {
-            val = self.read_bit_coord_mp(2);
-        } else if flags & (1 << 2) != 0 {
-            //val = self.read_nbits(32) as f32 as f64;
-            self.read_bits(32);
-            val = 32 as f64;
-        } else if flags & (1 << 5) != 0 {
-            val = self.read_bit_normal();
-        } else if flags & (1 << 15) != 0 {
-            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 0) as f64;
-        } else if flags & (1 << 16) != 0 {
-            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 1) as f64;
-        } else if flags & (1 << 17) != 0 {
-            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 2) as f64;
-        }
-        val
-    }
-
-    pub fn decode_float(&mut self, prop: &Prop) -> f32 {
-        let mut val = self.decode_special_float(prop);
-        if val != 0.0 {
-            return val as f32;
-        } else {
-            let interp = self.read_nbits(prop.prop.num_bits().try_into().unwrap());
-            let mut val = (interp / (1 << prop.prop.num_bits() - 1)) as f32;
-            val = prop.prop.low_value()
-                + (prop.prop.high_value() - prop.prop.low_value()) * (val as f32);
-            val
-        }
-    }
-
-    pub fn decode_int(&mut self, prop: &Prop) -> u32 {
-        let flags = prop.prop.flags();
-        if flags & (1 << 19) != 0 {
-            if flags & (1 << 0) != 0 {
-                let result: i32 = self.read_varint().try_into().unwrap();
-                result.try_into().unwrap()
-            } else {
-                let mut result = self.read_varint();
-                result = ((result >> 1) ^ (!(result & 1)));
-                result.try_into().unwrap()
-            }
-        } else {
-            if flags & (1 << 0) != 0 {
-                if prop.prop.num_bits() == 1 {
-                    let result = self.read_nbits(1);
-                    result.try_into().unwrap()
-                } else {
-                    /*
-                    println!(
-                        "{} {} {} {}",
-                        self.available,
-                        self.bits,
-                        prop.prop.num_bits(),
-                        prop.prop.var_name()
-                    );
-                     */
-                    let result: u32 = self
-                        .read_nbits(prop.prop.num_bits().try_into().unwrap())
-                        .try_into()
-                        .unwrap();
-                    //println!("{} {}", result, result.to_le());
-                    result.try_into().unwrap()
-                }
-            } else {
-                let mut result = self.read_sbit_long(prop.prop.num_bits().try_into().unwrap());
-                result.try_into().unwrap()
-            }
-        }
-    }
-
-    pub fn read_sbit_long(&mut self, numbits: u32) -> i32 {
-        let nret = self.read_nbits(numbits.try_into().unwrap()) as i32;
-        return (nret << (32 - numbits)) >> (32 - numbits);
-    }
+    //let mut b = Bitr::new(slice_of_u8);
+    //let mut bb = BitReader::new(slice_of_u8);
+    //bb.ensure_bits();
+    // let x = b.read_bits(13);
+    // let x = bb.read_nbits(4);
+    // let x = bb.read_nbits(32);
+    // let x = bb.read_nbits(8);
+    // let x = b.read_bits(8);
+    // let x = poop.read_nbits(32);
+    let x = poop.read_nbits(8);
+    println!("{:?}", x.to_le());
 }

@@ -1,4 +1,5 @@
 use crate::game_events::HurtEvent;
+use crate::newbitreader::Bitr;
 use crate::read_bits::BitReader;
 use crate::Demo;
 use crate::ServerClass;
@@ -22,16 +23,23 @@ pub struct Prop {
     pub prop: Sendprop_t,
     pub arr: Option<Sendprop_t>,
     pub table: CSVCMsg_SendTable,
+    pub col: i32,
 }
 
 impl Demo {
     pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities) {
         let upd = pack_ents.updated_entries();
 
+        //println!("{}", pack_ents.entity_data().len());
+
+        //let pp = &pack_ents.entity_data()[2..pack_ents.entity_data().len()];
         let mut b = BitReader::new(pack_ents.entity_data());
+        b.ensure_bits();
+        //let mut b = BitReader::new(pp);
+
         let mut entity_id = 0;
 
-        for inx in 0..pack_ents.updated_entries() {
+        for inx in 0..upd {
             if entity_id != 0 {
                 entity_id += b.read_u_bit_var();
             } else {
@@ -86,7 +94,22 @@ impl Demo {
             indicies.push(val);
         }
 
+        if indicies.len() > 0 {
+            let y = 0;
+        }
+        let l = indicies.len();
+
         for inx in indicies {
+            /*
+            println!(
+                "LEN{} INX: {} var:{}",
+                l,
+                inx,
+                &sv_cls.fprops.as_ref().unwrap()[inx as usize]
+                    .prop
+                    .var_name()
+            );
+            */
             let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
             let r = b.decode(prop);
         }
@@ -115,50 +138,89 @@ impl Demo {
 
     pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
         let excl = self.get_excl_props(table);
-        let mut fprops = self.get_props(table, &excl);
-        let mut prios = vec![];
-
-        prios.push(64);
+        let (mut fprops, badv) = self.get_props(table, &excl);
 
         let mut cnt = 0;
 
-        for i in 0..fprops.len() {
-            let prio = fprops[i].prop.priority();
-            let mut found = false;
-            for j in 0..prios.len() {
-                if prios[j] == prio {
-                    found = true;
-                    break;
-                }
-            }
-            if found {
-                prios.push(prio);
+        let mut prios = vec![];
+
+        let mut newp: Vec<Prop> = Vec::new();
+
+        for p in &fprops {
+            prios.push(p.prop.priority());
+        }
+        prios.dedup();
+
+        for mut p in fprops {
+            if badv.contains(&p.prop.var_name().to_string()) {
+                p.col = 99;
+                newp.push(p);
+            } else {
+                newp.push(p);
             }
         }
+
+        newp.sort_by_key(|x| x.col);
+        if table.net_table_name() == "DT_CSPlayer" {
+            for cnt in 0..newp.len() {
+                let p = &newp[cnt];
+                /*
+                println!(
+                    "pre {} {} {} {}",
+                    cnt,
+                    p.prop.var_name(),
+                    p.col,
+                    p.prop.priority()
+                );
+                */
+            }
+            //panic!("k");
+        }
+
+        prios.push(64);
         let mut start = 0;
+        prios.sort();
 
         for prio_inx in 0..prios.len() {
             let mut priority = prios[prio_inx];
             loop {
                 let mut currentprop = start;
-                while currentprop < fprops.len() {
-                    let prop = fprops[currentprop].prop.clone();
+                while currentprop < newp.len() {
+                    let prop = newp[currentprop].prop.clone();
                     if (prop.priority() == priority
-                        || (priority == 64 && ((1 << 18) & prop.flags() != 0)))
+                        || (priority == 64 && ((prop.flags() & (1 << 18)) != 0)))
                     {
                         if (start != currentprop) {
-                            fprops.swap(currentprop, start);
+                            newp.swap(start, currentprop);
                         }
                         start += 1;
                     }
                     currentprop += 1;
                 }
-                if (currentprop == fprops.len()) {
+                if (currentprop == newp.len()) {
                     break;
                 }
             }
         }
-        fprops
+
+        //fprops.sort_by_key(|x| x.prop.priority());
+
+        if table.net_table_name() == "DT_CSPlayer" {
+            for p in &newp {
+                /*
+                println!(
+                    "REEEEEEe {} {} {} {}",
+                    cnt,
+                    p.prop.var_name(),
+                    p.col,
+                    p.prop.priority()
+                );
+                */
+                cnt += 1;
+            }
+        }
+
+        newp
     }
 
     #[inline]
@@ -176,9 +238,16 @@ impl Demo {
         false
     }
 
-    pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
+    pub fn get_props(
+        &self,
+        table: &CSVCMsg_SendTable,
+        excl: &Vec<Sendprop_t>,
+    ) -> (Vec<Prop>, Vec<String>) {
         let mut flat: Vec<Prop> = Vec::new();
         let mut cnt = 0;
+        let mut badv: Vec<String> = Vec::new();
+        let mut child_props = Vec::new();
+        let mut sub = Vec::new();
 
         for prop in &table.props {
             cnt += 1;
@@ -193,15 +262,28 @@ impl Demo {
 
             if prop.type_() == 6 {
                 let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
-                let child_props = self.get_props(sub_table, excl);
-                for p in child_props {
-                    flat.push(p);
+                (child_props, sub) = self.get_props(sub_table, excl);
+                for t in sub {
+                    badv.push(t);
+                }
+                if (prop.flags() & (1 << 11)) != 0 {
+                    for mut p in child_props {
+                        badv.push(p.prop.var_name().to_string());
+                        p.col = 55555555;
+                        flat.push(p);
+                    }
+                } else {
+                    for mut p in child_props {
+                        p.col = 0;
+                        flat.push(p);
+                    }
                 }
             } else if prop.type_() == 5 {
                 let prop_arr = Prop {
                     prop: prop.clone(),
                     arr: None, //arr: Some(table.props[cnt - 1]),
                     table: table.clone(),
+                    col: 1,
                 };
                 flat.push(prop_arr);
             } else {
@@ -209,10 +291,11 @@ impl Demo {
                     prop: prop.clone(),
                     arr: None,
                     table: table.clone(),
+                    col: 1,
                 };
                 flat.push(prop);
             }
         }
-        flat
+        return (flat, badv);
     }
 }

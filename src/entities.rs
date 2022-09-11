@@ -8,6 +8,7 @@ use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf;
 use protobuf::Message;
+use std::collections::HashSet;
 use std::io;
 use std::vec;
 
@@ -110,6 +111,12 @@ impl Demo {
                     .var_name()
             );
             */
+            let mut cnt = 0;
+            for x in sv_cls.fprops.as_ref().unwrap() {
+                //println!("CNT:{cnt} {:?}", x.prop.var_name());
+                cnt += 1;
+            }
+
             let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
             let r = b.decode(prop);
         }
@@ -138,33 +145,35 @@ impl Demo {
 
     pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
         let excl = self.get_excl_props(table);
-        let (mut fprops, badv) = self.get_props(table, &excl);
+        let (mut newp, badv) = self.get_props(table, &excl);
 
         let mut cnt = 0;
 
         let mut prios = vec![];
 
-        let mut newp: Vec<Prop> = Vec::new();
+        //let mut newp: Vec<Prop> = Vec::new();
 
-        for p in &fprops {
+        for p in &newp {
             prios.push(p.prop.priority());
         }
-        prios.dedup();
 
+        /*
         for mut p in fprops {
             if badv.contains(&p.prop.var_name().to_string()) {
-                p.col = 99;
+                p.col = 1;
                 newp.push(p);
             } else {
                 newp.push(p);
             }
         }
+        */
 
-        newp.sort_by_key(|x| x.col);
+        //newp.sort_by_key(|x| x.col);
+
         if table.net_table_name() == "DT_CSPlayer" {
             for cnt in 0..newp.len() {
                 let p = &newp[cnt];
-                /*
+
                 println!(
                     "pre {} {} {} {}",
                     cnt,
@@ -172,10 +181,14 @@ impl Demo {
                     p.col,
                     p.prop.priority()
                 );
-                */
             }
             //panic!("k");
         }
+
+        prios.dedup();
+        let set: HashSet<_> = prios.drain(..).collect(); // dedup
+        prios.extend(set.into_iter());
+        //println!("PRIOS {:?}", prios);
 
         prios.push(64);
         let mut start = 0;
@@ -207,7 +220,6 @@ impl Demo {
 
         if table.net_table_name() == "DT_CSPlayer" {
             for p in &newp {
-                /*
                 println!(
                     "REEEEEEe {} {} {} {}",
                     cnt,
@@ -215,7 +227,7 @@ impl Demo {
                     p.col,
                     p.prop.priority()
                 );
-                */
+
                 cnt += 1;
             }
         }
@@ -266,10 +278,10 @@ impl Demo {
                 for t in sub {
                     badv.push(t);
                 }
-                if (prop.flags() & (1 << 11)) != 0 {
+                if (prop.flags() & (1 << 11)) == 0 {
                     for mut p in child_props {
                         badv.push(p.prop.var_name().to_string());
-                        p.col = 55555555;
+                        p.col = 1;
                         flat.push(p);
                     }
                 } else {
@@ -283,7 +295,7 @@ impl Demo {
                     prop: prop.clone(),
                     arr: None, //arr: Some(table.props[cnt - 1]),
                     table: table.clone(),
-                    col: 1,
+                    col: 0,
                 };
                 flat.push(prop_arr);
             } else {
@@ -291,11 +303,16 @@ impl Demo {
                     prop: prop.clone(),
                     arr: None,
                     table: table.clone(),
-                    col: 1,
+                    col: 0,
                 };
                 flat.push(prop);
             }
         }
+        flat.sort_by_key(|x| x.col);
+        for f in &flat {
+            print!("{} ", f.prop.var_name());
+        }
+        println!("");
         return (flat, badv);
     }
 }

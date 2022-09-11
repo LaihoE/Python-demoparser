@@ -307,61 +307,59 @@ impl<R: io::Read> BitReader<R> {
         }
     }
 
-    pub fn read_bits(&mut self, n: i32) {
+    pub fn read_bits(&mut self, n: i32) -> f32 {
         let mut res = 0;
         let mut bitsleft = n;
         let eight = 8.try_into().unwrap();
+        let mut bytarr: [u8; 4] = [0, 0, 0, 0];
+
         while bitsleft >= 32 {
-            let mut bytarr: Vec<u8> = vec![];
-            let first: u8 = self.read_nbits(eight).try_into().unwrap();
-            let second: u8 = self.read_nbits(eight).try_into().unwrap();
-            let third: u8 = self.read_nbits(eight).try_into().unwrap();
-            let four: u8 = self.read_nbits(eight).try_into().unwrap();
-
-            bytarr.push(first);
-            bytarr.push(second);
-            bytarr.push(third);
-            bytarr.push(four);
-
+            bytarr[0] = self.read_nbits(eight).try_into().unwrap();
+            bytarr[1] = self.read_nbits(eight).try_into().unwrap();
+            bytarr[2] = self.read_nbits(eight).try_into().unwrap();
+            bytarr[3] = self.read_nbits(eight).try_into().unwrap();
             bitsleft -= 32;
         }
+        /*
         while bitsleft >= 8 {
             res += self.read_nbits(8);
         }
         if bitsleft > 0 {
             res += self.read_nbits(bitsleft.try_into().unwrap());
         }
+        */
+        let f = f32::from_le_bytes(bytarr);
+        f
     }
 
-    pub fn decode_special_float(&mut self, prop: &Prop) -> f64 {
+    pub fn decode_special_float(&mut self, prop: &Prop) -> f32 {
         let mut val = 0.0;
         let flags = prop.prop.flags();
         if flags & (1 << 1) != 0 {
-            val = self.read_bit_coord() as f64;
+            val = self.read_bit_coord() as f32;
         } else if flags & (1 << 12) != 0 {
-            val = self.read_bit_coord_mp(0);
+            val = self.read_bit_coord_mp(0) as f32;
         } else if flags & (1 << 13) != 0 {
-            val = self.read_bit_coord_mp(1);
+            val = self.read_bit_coord_mp(1) as f32;
         } else if flags & (1 << 14) != 0 {
-            val = self.read_bit_coord_mp(2);
+            val = self.read_bit_coord_mp(2) as f32;
         } else if flags & (1 << 2) != 0 {
-            //val = self.read_nbits(32) as f32 as f64;
-            self.read_bits(32);
-            val = 32 as f64;
+            val = self.read_bits(32);
         } else if flags & (1 << 5) != 0 {
-            val = self.read_bit_normal();
+            val = self.read_bit_normal() as f32;
         } else if flags & (1 << 15) != 0 {
-            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 0) as f64;
+            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 0) as f32;
         } else if flags & (1 << 16) != 0 {
-            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 1) as f64;
+            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 1) as f32;
         } else if flags & (1 << 17) != 0 {
-            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 2) as f64;
+            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 2) as f32;
         }
         val
     }
 
     pub fn decode_float(&mut self, prop: &Prop) -> f32 {
         let mut val = self.decode_special_float(prop);
+        println!("{} HERE", val);
         if val != 0.0 {
             return val as f32;
         } else {
@@ -398,7 +396,7 @@ impl<R: io::Read> BitReader<R> {
                         prop.prop.num_bits(),
                         prop.prop.var_name()
                     );
-                     */
+                    */
                     let result: u32 = self
                         .read_nbits(prop.prop.num_bits().try_into().unwrap())
                         .try_into()

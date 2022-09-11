@@ -32,7 +32,6 @@ impl Demo {
         let upd = pack_ents.updated_entries();
 
         //println!("{}", pack_ents.entity_data().len());
-
         //let pp = &pack_ents.entity_data()[2..pack_ents.entity_data().len()];
         let mut b = BitReader::new(pack_ents.entity_data());
         b.ensure_bits();
@@ -74,10 +73,10 @@ impl Demo {
                     &mut b,
                 );
             } else {
-                let e = &self.entities.as_ref().unwrap()[&entity_id]
-                    .as_ref()
-                    .unwrap();
-                self.read_new_ent(&e, &mut b);
+                match &self.entities.as_ref().unwrap()[&entity_id] {
+                    Some(e) => self.read_new_ent(&e, &mut b),
+                    None => println!("No ent found"),
+                };
             }
         }
     }
@@ -116,15 +115,18 @@ impl Demo {
                 //println!("CNT:{cnt} {:?}", x.prop.var_name());
                 cnt += 1;
             }
-
-            let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
-            let r = b.decode(prop);
+            if &sv_cls.fprops.as_ref().unwrap().len() > &(inx as usize) {
+                let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
+                let r = b.decode(prop);
+            }
         }
     }
 
     pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) {
-        let sv_cls = &self.serverclass_map[&(ent.class_id as u16)];
-        self.handle_entity_upd(sv_cls, b);
+        if self.serverclass_map.contains_key(&(ent.class_id as u16)) {
+            let sv_cls = &self.serverclass_map[&(ent.class_id as u16)];
+            self.handle_entity_upd(sv_cls, b);
+        }
     }
 
     pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> Vec<Sendprop_t> {
@@ -169,7 +171,7 @@ impl Demo {
         */
 
         //newp.sort_by_key(|x| x.col);
-
+        /*
         if table.net_table_name() == "DT_CSPlayer" {
             for cnt in 0..newp.len() {
                 let p = &newp[cnt];
@@ -182,13 +184,11 @@ impl Demo {
                     p.prop.priority()
                 );
             }
-            //panic!("k");
         }
-
+        */
         prios.dedup();
         let set: HashSet<_> = prios.drain(..).collect(); // dedup
         prios.extend(set.into_iter());
-        //println!("PRIOS {:?}", prios);
 
         prios.push(64);
         let mut start = 0;
@@ -217,9 +217,10 @@ impl Demo {
         }
 
         //fprops.sort_by_key(|x| x.prop.priority());
-
+        /*
         if table.net_table_name() == "DT_CSPlayer" {
             for p in &newp {
+
                 println!(
                     "REEEEEEe {} {} {} {}",
                     cnt,
@@ -231,6 +232,7 @@ impl Demo {
                 cnt += 1;
             }
         }
+        */
 
         newp
     }

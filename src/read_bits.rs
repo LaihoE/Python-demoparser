@@ -182,10 +182,26 @@ impl<R: io::Read> BitReader<R> {
     }
 
     pub fn decode_array(&mut self, prop: &Prop) {
-        let bits = f32::log2(prop.prop.num_bits() as f32).floor() + 1;
-        let num_elements = self.read_nbits(bits as usize);
+        println!("NUMBITS: {} {}", prop.prop.num_bits(), prop.prop.var_name());
+        let mut bits = 1.0;
+
+        if prop.prop.num_bits() == 0 {
+            bits = 0.0;
+        } else {
+            bits = f32::log2(prop.prop.num_bits() as f32).floor() + 1.0;
+        }
+        println!("NAMEEEEEEEE {}", prop.prop.var_name());
+        let mut num_elements = 0;
+        println!("NUMBITS: {}", bits);
+        if prop.prop.var_name() == "m_hViewModel" {
+            num_elements = self.read_nbits(3 as usize);
+        } else if prop.prop.var_name() == "\"player_array\"" {
+            num_elements = self.read_nbits(5 as usize);
+        }
+
         let mut elems = vec![];
         let p = prop.arr.as_ref().unwrap();
+        println!("NUM ELEMS: {}", num_elements);
 
         for inx in 0..num_elements {
             let pro = Prop {
@@ -202,7 +218,7 @@ impl<R: io::Read> BitReader<R> {
 
     pub fn decode(&mut self, prop: &Prop) -> f32 {
         let mut result = 0.0;
-        println!("TYPE: {}", prop.prop.type_());
+        //println!("TYPE: {}", prop.prop.type_());
         match prop.prop.type_() {
             0 => result = self.decode_int(prop) as f64 as f32,
             1 => result = self.decode_float(prop),
@@ -215,7 +231,6 @@ impl<R: io::Read> BitReader<R> {
             }
             5 => {
                 self.decode_array(prop);
-                //self.skip(prop.prop.num_bits());
                 result = 0.0;
             }
             _ => panic!("UNKOWN ENCODING"),
@@ -223,13 +238,7 @@ impl<R: io::Read> BitReader<R> {
             //result = 0.0;
         } //panic!("UNKOWN ENCODING"),
 
-        println!(
-            "[] {} {} {} {}",
-            result,
-            prop.prop.num_bits(),
-            prop.prop.type_(),
-            prop.prop.var_name(),
-        );
+        println!("{} {}", result, prop.prop.var_name(),);
 
         result
     }
@@ -456,6 +465,7 @@ impl<R: io::Read> BitReader<R> {
             return val as f32;
         } else {
             let interp = self.read_nbits(prop.prop.num_bits().try_into().unwrap());
+
             let mut val = (interp / (1 << prop.prop.num_bits() - 1)) as f32;
             val = prop.prop.low_value()
                 + (prop.prop.high_value() - prop.prop.low_value()) * (val as f32);

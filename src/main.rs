@@ -72,7 +72,7 @@ impl Demo {
             1 => self.parse_packet(),
             2 => self.parse_packet(),
             6 => self.parse_datatable(),
-            3 => {}
+            9 => {}
             _ => {} //panic!("UNK CMD"),
         }
     }
@@ -98,9 +98,11 @@ impl Demo {
                     self.parse_game_event_list(event_list)
                 }
                 26 => {
+                    /*
                     let pack_ents: CSVCMsg_PacketEntities =
                         Message::parse_from_bytes(data).unwrap();
                     self.parse_packet_entities(pack_ents);
+                    */
                 }
                 _ => {}
             }

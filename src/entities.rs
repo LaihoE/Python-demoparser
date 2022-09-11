@@ -145,7 +145,7 @@ impl Demo {
 
     pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
         let excl = self.get_excl_props(table);
-        let (mut newp, badv) = self.get_props(table, &excl);
+        let mut newp = self.get_props(table, &excl);
 
         let mut cnt = 0;
 
@@ -250,20 +250,11 @@ impl Demo {
         false
     }
 
-    pub fn get_props(
-        &self,
-        table: &CSVCMsg_SendTable,
-        excl: &Vec<Sendprop_t>,
-    ) -> (Vec<Prop>, Vec<String>) {
+    pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
         let mut flat: Vec<Prop> = Vec::new();
-        let mut cnt = 0;
-        let mut badv: Vec<String> = Vec::new();
         let mut child_props = Vec::new();
-        let mut sub = Vec::new();
 
         for prop in &table.props {
-            cnt += 1;
-
             if (prop.flags() & (1 << 8) != 0)
                 || (prop.flags() & (1 << 6) != 0)
                 || self.is_prop_excl(excl.clone(), &table, prop.clone())
@@ -274,19 +265,15 @@ impl Demo {
 
             if prop.type_() == 6 {
                 let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
-                (child_props, sub) = self.get_props(sub_table, excl);
-                for t in sub {
-                    badv.push(t);
-                }
+                child_props = self.get_props(sub_table, excl);
+
                 if (prop.flags() & (1 << 11)) == 0 {
                     for mut p in child_props {
-                        badv.push(p.prop.var_name().to_string());
-                        p.col = 1;
+                        p.col = 0;
                         flat.push(p);
                     }
                 } else {
                     for mut p in child_props {
-                        p.col = 0;
                         flat.push(p);
                     }
                 }
@@ -295,7 +282,7 @@ impl Demo {
                     prop: prop.clone(),
                     arr: None, //arr: Some(table.props[cnt - 1]),
                     table: table.clone(),
-                    col: 0,
+                    col: 1,
                 };
                 flat.push(prop_arr);
             } else {
@@ -303,16 +290,12 @@ impl Demo {
                     prop: prop.clone(),
                     arr: None,
                     table: table.clone(),
-                    col: 0,
+                    col: 1,
                 };
                 flat.push(prop);
             }
         }
         flat.sort_by_key(|x| x.col);
-        for f in &flat {
-            print!("{} ", f.prop.var_name());
-        }
-        println!("");
-        return (flat, badv);
+        return flat;
     }
 }

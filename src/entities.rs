@@ -253,7 +253,7 @@ impl Demo {
     pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
         let mut flat: Vec<Prop> = Vec::new();
         let mut child_props = Vec::new();
-
+        let mut cnt = 0;
         for prop in &table.props {
             if (prop.flags() & (1 << 8) != 0)
                 || (prop.flags() & (1 << 6) != 0)
@@ -280,7 +280,7 @@ impl Demo {
             } else if prop.type_() == 5 {
                 let prop_arr = Prop {
                     prop: prop.clone(),
-                    arr: None, //arr: Some(table.props[cnt - 1]),
+                    arr: Some(table.props[cnt - 1].clone()),
                     table: table.clone(),
                     col: 1,
                 };
@@ -294,6 +294,7 @@ impl Demo {
                 };
                 flat.push(prop);
             }
+            cnt += 1;
         }
         flat.sort_by_key(|x| x.col);
         return flat;

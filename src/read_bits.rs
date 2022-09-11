@@ -169,18 +169,59 @@ impl<R: io::Read> BitReader<R> {
         0.0
     }
 
+    pub fn decode_string(&mut self) -> String {
+        let mut length = self.read_nbits(9);
+        if length == 0 {
+            return "".to_string();
+        }
+        if length >= (1 << 9) {
+            length = (1 << 9) - 1
+        }
+        let result = self.read_string(length.try_into().unwrap());
+        result
+    }
+
+    pub fn decode_array(&mut self, prop: &Prop) {
+        let bits = f32::log2(prop.prop.num_bits() as f32).floor() + 1;
+        let num_elements = self.read_nbits(bits as usize);
+        let mut elems = vec![];
+        let p = prop.arr.as_ref().unwrap();
+
+        for inx in 0..num_elements {
+            let pro = Prop {
+                prop: p.clone(),
+                arr: None,
+                table: prop.table.clone(),
+                col: 0,
+            };
+            let val = self.decode(&pro);
+            elems.push(val);
+        }
+        println!("{:?}", elems);
+    }
+
     pub fn decode(&mut self, prop: &Prop) -> f32 {
         let mut result = 0.0;
-
+        println!("TYPE: {}", prop.prop.type_());
         match prop.prop.type_() {
             0 => result = self.decode_int(prop) as f64 as f32,
             1 => result = self.decode_float(prop),
-            _ => {
-                panic!("UNK ENCODING")
-                //self.skip(prop.prop.compute_size().try_into().unwrap());
-                //println!("YEET");
-            } //panic!("UNKOWN ENCODING"),
-        }
+            2 => result = self.decode_vec(prop)[0],
+            3 => result = self.decode_vec_xy(prop)[0],
+            4 => {
+                let s = self.decode_string();
+                println!("{:?}", s);
+                result = 0.0;
+            }
+            5 => {
+                self.decode_array(prop);
+                //self.skip(prop.prop.num_bits());
+                result = 0.0;
+            }
+            _ => panic!("UNKOWN ENCODING"),
+            //self.skip(prop.prop.num_bits()); //panic!("UNKOWN ENCODING"),
+            //result = 0.0;
+        } //panic!("UNKOWN ENCODING"),
 
         println!(
             "[] {} {} {} {}",
@@ -191,6 +232,58 @@ impl<R: io::Read> BitReader<R> {
         );
 
         result
+    }
+
+    pub fn read_string(&mut self, length: i32) -> String {
+        let mut s: Vec<u8> = Vec::new();
+        let mut inx = 1;
+        loop {
+            let c = self.read_sint_bits(8) as u8;
+            if c == 0 {
+                break;
+            }
+            s.push(c);
+            if inx == length {
+                break;
+            }
+            inx += 1;
+        }
+        let out = String::from_utf8(s).unwrap();
+        out
+    }
+
+    pub fn decode_vec(&mut self, prop: &Prop) -> Vec<f32> {
+        let x = self.decode_float(prop);
+        let y = self.decode_float(prop);
+        let mut z = 0.0;
+        if prop.prop.flags() & (1 << 5) == 0 {
+            z = self.decode_float(prop);
+        } else {
+            let sign = self.read_bool();
+            let temp = (x * x) + (y * y);
+            if temp < 1.0 {
+                z = (1.0 - temp).sqrt();
+            } else {
+                z = 0.0;
+            }
+            if sign {
+                z = -z
+            }
+        }
+        let v = vec![x, y, z];
+        println!("X:{} Y:{} Z:{}", x, y, z);
+        v
+    }
+    pub fn decode_vec_xy(&mut self, prop: &Prop) -> Vec<f32> {
+        let x = self.decode_float(prop);
+        let y = self.decode_float(prop);
+        let v = vec![x, y, 0.0];
+        v
+    }
+
+    pub fn read_sint_bits(&mut self, n: i32) -> u32 {
+        let r = self.read_nbits(n.try_into().unwrap()) << (32 - n) >> (32 - n);
+        r
     }
 
     pub fn read_bit_coord_mp(&mut self, coord_type: u32) -> f64 {
@@ -359,7 +452,6 @@ impl<R: io::Read> BitReader<R> {
 
     pub fn decode_float(&mut self, prop: &Prop) -> f32 {
         let mut val = self.decode_special_float(prop);
-        println!("{} HERE", val);
         if val != 0.0 {
             return val as f32;
         } else {
@@ -406,7 +498,7 @@ impl<R: io::Read> BitReader<R> {
                 }
             } else {
                 let mut result = self.read_sbit_long(prop.prop.num_bits().try_into().unwrap());
-                result.try_into().unwrap()
+                result as u32
             }
         }
     }

@@ -116,7 +116,8 @@ impl Demo {
                     user_data = buf.read_bits_st(data.user_data_size());
                     //println!("USERDATA 1");
                     if st.userinfo {
-                        self.parse_userinfo(user_data);
+                        let ui = self.parse_userinfo(user_data);
+                        self.players.push(ui);
                     }
                 } else {
                     let size = buf.read_nbits(14);

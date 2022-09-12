@@ -12,3 +12,6 @@ protobuf = "3.1.0"
 
 [dependencies.csgoproto]
 path = "./csgoproto"
+
+[profile.dev]
+overflow-checks = false

@@ -52,6 +52,7 @@ struct Demo {
     bad: Vec<String>,
     stringtables: Vec<StringTable>,
     players: Vec<UserInfo>,
+    data: Vec<f32>,
 }
 
 impl Demo {
@@ -104,11 +105,9 @@ impl Demo {
                     self.parse_game_event_list(event_list)
                 }
                 26 => {
-                    /*
                     let pack_ents: CSVCMsg_PacketEntities =
                         Message::parse_from_bytes(data).unwrap();
                     self.parse_packet_entities(pack_ents);
-                    */
                 }
                 12 => {
                     let x: CSVCMsg_CreateStringTable = Message::parse_from_bytes(&data).unwrap();
@@ -151,14 +150,15 @@ fn main() {
         bad: Vec::new(),
         stringtables: Vec::new(),
         players: Vec::new(),
+        data: Vec::new(),
     };
 
     let h: Header = d.parse_header();
     d.parse_frame();
     for p in d.players {
-        println!("{:?} {}", p.name, p.xuid);
+        println!("{:?} {} {}", &p.name[..30], p.xuid, p.entity_id);
     }
-
+    println!("{:?}", d.data);
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
 }

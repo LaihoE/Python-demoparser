@@ -9,6 +9,7 @@ use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf;
 use protobuf::Message;
 use std::collections::HashSet;
+use std::convert::TryInto;
 use std::io;
 use std::vec;
 
@@ -17,7 +18,7 @@ pub struct Entity {
     pub class_id: u32,
     pub entity_id: u32,
     pub serial: u32,
-    //props:
+    pub props: Vec<f32>,
 }
 #[derive(Debug)]
 pub struct Prop {
@@ -31,23 +32,26 @@ impl Demo {
     pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities) {
         let upd = pack_ents.updated_entries();
 
-        //println!("{}", pack_ents.entity_data().len());
-        //let pp = &pack_ents.entity_data()[2..pack_ents.entity_data().len()];
         let mut b = BitReader::new(pack_ents.entity_data());
         b.ensure_bits();
         //let mut b = BitReader::new(pp);
 
-        let mut entity_id = 0;
+        let mut entity_id: i32 = -1;
 
         for inx in 0..upd {
-            if entity_id != 0 {
-                entity_id += b.read_u_bit_var();
-            } else {
-                b.read_u_bit_var();
+            //println!("INX {inx}");
+            entity_id += 1 + (b.read_u_bit_var() as i32);
+            if entity_id < 0 {
+                break;
             }
-
+            if entity_id > 100000 {
+                break;
+            }
             if b.read_bool() {
-                self.entities.as_mut().unwrap().insert(entity_id, None);
+                self.entities
+                    .as_mut()
+                    .unwrap()
+                    .insert(entity_id.try_into().unwrap(), None);
                 b.read_bool();
             } else if b.read_bool() {
                 let cls_id = b.read_nbits(self.class_bits.try_into().unwrap());
@@ -55,27 +59,48 @@ impl Demo {
 
                 let new_entitiy = Entity {
                     class_id: cls_id,
-                    entity_id: entity_id,
+                    entity_id: entity_id.try_into().unwrap(),
                     serial: serial,
                 };
 
                 self.entities
                     .as_mut()
                     .unwrap()
-                    .insert(entity_id, Some(new_entitiy));
+                    .insert(entity_id.try_into().unwrap(), Some(new_entitiy));
 
                 self.read_new_ent(
                     &Entity {
                         class_id: cls_id,
-                        entity_id: entity_id,
+                        entity_id: entity_id.try_into().unwrap(),
                         serial: serial,
                     },
                     &mut b,
                 );
             } else {
-                match &self.entities.as_ref().unwrap()[&entity_id] {
-                    Some(e) => self.read_new_ent(&e, &mut b),
-                    None => println!("No ent found"),
+                //println!("ENTID {}", entity_id);
+                if entity_id < 0 {
+                    break;
+                }
+                if entity_id > 100000 {
+                    break;
+                }
+
+                if !self
+                    .entities
+                    .as_ref()
+                    .unwrap()
+                    .contains_key(&(entity_id.try_into().unwrap()))
+                {
+                    continue;
+                }
+                //println!("{}", entity_id);
+                match &self.entities.as_ref().unwrap()[&entity_id.try_into().unwrap()] {
+                    Some(e) => {
+                        self.data.push(self.read_new_ent(&e, &mut b));
+                    }
+                    None => {
+                        //println!("No ent found {entity_id}")
+                    }
                 };
             }
         }
@@ -88,6 +113,7 @@ impl Demo {
 
         loop {
             val = b.read_inx(val, new_way);
+            //println!("{}", val);
             if val == -1 {
                 break;
             }
@@ -98,26 +124,16 @@ impl Demo {
             let y = 0;
         }
         let l = indicies.len();
-
+        let mut data: Vec<f32> = Vec::new();
         for inx in indicies {
-            /*
-            println!(
-                "LEN{} INX: {} var:{}",
-                l,
-                inx,
-                &sv_cls.fprops.as_ref().unwrap()[inx as usize]
-                    .prop
-                    .var_name()
-            );
-            */
             let mut cnt = 0;
-            for x in sv_cls.fprops.as_ref().unwrap() {
-                //println!("CNT:{cnt} {:?}", x.prop.var_name());
-                cnt += 1;
-            }
             if &sv_cls.fprops.as_ref().unwrap().len() > &(inx as usize) {
                 let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
                 let r = b.decode(prop);
+                if prop.prop.var_name() == "m_vecVelocity[0]" {
+                    data.push(r);
+                    println!("{inx} {} {}", prop.prop.var_name(), r);
+                }
             }
         }
     }
@@ -159,33 +175,6 @@ impl Demo {
             prios.push(p.prop.priority());
         }
 
-        /*
-        for mut p in fprops {
-            if badv.contains(&p.prop.var_name().to_string()) {
-                p.col = 1;
-                newp.push(p);
-            } else {
-                newp.push(p);
-            }
-        }
-        */
-
-        //newp.sort_by_key(|x| x.col);
-        /*
-        if table.net_table_name() == "DT_CSPlayer" {
-            for cnt in 0..newp.len() {
-                let p = &newp[cnt];
-
-                println!(
-                    "pre {} {} {} {}",
-                    cnt,
-                    p.prop.var_name(),
-                    p.col,
-                    p.prop.priority()
-                );
-            }
-        }
-        */
         prios.dedup();
         let set: HashSet<_> = prios.drain(..).collect(); // dedup
         prios.extend(set.into_iter());
@@ -215,24 +204,6 @@ impl Demo {
                 }
             }
         }
-
-        //fprops.sort_by_key(|x| x.prop.priority());
-        /*
-        if table.net_table_name() == "DT_CSPlayer" {
-            for p in &newp {
-
-                println!(
-                    "REEEEEEe {} {} {} {}",
-                    cnt,
-                    p.prop.var_name(),
-                    p.col,
-                    p.prop.priority()
-                );
-
-                cnt += 1;
-            }
-        }
-        */
 
         newp
     }

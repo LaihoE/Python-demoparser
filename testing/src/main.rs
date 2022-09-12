@@ -131,6 +131,7 @@ impl<R: io::Read> poop<R> {
     }
 
     pub fn consume(&mut self, n: usize) {
+        debug_assert!(n <= NBITS);
         self.bits = match n {
             NBITS => 0,
             n => self.bits >> n,

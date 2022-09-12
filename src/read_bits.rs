@@ -261,6 +261,24 @@ impl<R: io::Read> BitReader<R> {
         out
     }
 
+    pub fn read_string_lossy(&mut self, length: i32) -> String {
+        let mut s: Vec<u8> = Vec::new();
+        let mut inx = 1;
+        loop {
+            let c = self.read_sint_bits(8) as u8;
+            if c == 0 {
+                break;
+            }
+            s.push(c);
+            if inx == length {
+                break;
+            }
+            inx += 1;
+        }
+        let out = String::from_utf8_lossy(&s);
+        out.to_string()
+    }
+
     pub fn decode_vec(&mut self, prop: &Prop) -> Vec<f32> {
         let x = self.decode_float(prop);
         let y = self.decode_float(prop);
@@ -432,6 +450,18 @@ impl<R: io::Read> BitReader<R> {
         */
         let f = f32::from_le_bytes(bytarr);
         f
+    }
+
+    pub fn read_bits_st(&mut self, n: i32) -> [u8; 340] {
+        let mut res = 0;
+        let mut bitsleft = n;
+        let eight = 8.try_into().unwrap();
+        let mut bytarr: [u8; 340] = [0; 340];
+
+        for i in 0..340 {
+            bytarr[i] = self.read_nbits(eight).try_into().unwrap();
+        }
+        bytarr
     }
 
     pub fn decode_special_float(&mut self, prop: &Prop) -> f32 {

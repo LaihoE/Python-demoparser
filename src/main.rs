@@ -5,6 +5,7 @@ pub mod header;
 pub mod newbitreader;
 pub mod read_bits;
 pub mod read_bytes;
+pub mod stringtables;
 
 use crate::data_table::ServerClass;
 use crate::entities::Entity;
@@ -14,8 +15,10 @@ use crate::header::Header;
 
 use crate::netmessages::CSVCMsg_PacketEntities;
 use crate::protobuf::Message;
+use crate::stringtables::StringTable;
 use csgoproto::netmessages;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
+use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
 use csgoproto::netmessages::CSVCMsg_SendTable;
@@ -25,6 +28,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::time::Instant;
 use std::vec;
+use stringtables::UserInfo;
 
 #[allow(dead_code)]
 struct Frame {
@@ -46,6 +50,8 @@ struct Demo {
     serverclass_map: HashMap<u16, ServerClass>,
     entities: Option<HashMap<u32, Option<Entity>>>,
     bad: Vec<String>,
+    stringtables: Vec<StringTable>,
+    players: Vec<UserInfo>,
 }
 
 impl Demo {
@@ -72,7 +78,7 @@ impl Demo {
             1 => self.parse_packet(),
             2 => self.parse_packet(),
             6 => self.parse_datatable(),
-            9 => {}
+            //12 => self.parse_string_table(),
             _ => {} //panic!("UNK CMD"),
         }
     }
@@ -104,6 +110,10 @@ impl Demo {
                     self.parse_packet_entities(pack_ents);
                     */
                 }
+                12 => {
+                    let x: CSVCMsg_CreateStringTable = Message::parse_from_bytes(&data).unwrap();
+                    self.create_string_table(x);
+                }
                 _ => {}
             }
         }
@@ -116,11 +126,14 @@ fn main() {
     let mut v: Vec<MessageDescriptor> = Vec::new();
 
     let mut cnt = 0;
-    for i in y {
-        //println!("{} {:#?}", cnt, i.proto());
+    for x in y {
+        //println!("{cnt} {:?}", x.name());
         cnt += 1;
     }
-    //println!("{:#?}", v);
+    //    svc_CreateStringTable = 12,
+    // @@protoc_insertion_point(enum_value:SVC_Messages.svc_UpdateStringTable)
+    //    svc_UpdateStringTable = 13,
+    //
 
     let now = Instant::now();
     let mut d = Demo {
@@ -136,10 +149,15 @@ fn main() {
         serverclass_map: HashMap::new(),
         entities: Some(HashMap::new()),
         bad: Vec::new(),
+        stringtables: Vec::new(),
+        players: Vec::new(),
     };
 
     let h: Header = d.parse_header();
     d.parse_frame();
+    for p in d.players {
+        println!("{:?} {}", p.name, p.xuid);
+    }
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);

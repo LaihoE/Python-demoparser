@@ -122,7 +122,6 @@ impl Demo {
     }
 
     pub fn parse_game_event_list(&mut self, event_list: CSVCMsg_GameEventList) {
-        //println!("{}", event_list);
         self.event_vec = Some(event_list.descriptors);
     }
 }

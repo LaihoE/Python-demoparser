@@ -34,12 +34,10 @@ impl Demo {
 
         let mut b = BitReader::new(pack_ents.entity_data());
         b.ensure_bits();
-        //let mut b = BitReader::new(pp);
 
         let mut entity_id: i32 = -1;
 
         for inx in 0..upd {
-            //println!("INX {inx}");
             entity_id += 1 + (b.read_u_bit_var() as i32);
             if entity_id < 0 {
                 break;
@@ -48,10 +46,12 @@ impl Demo {
                 break;
             }
             if b.read_bool() {
+                /*
                 self.entities
                     .as_mut()
                     .unwrap()
                     .insert(entity_id.try_into().unwrap(), None);
+                */
                 b.read_bool();
             } else if b.read_bool() {
                 let cls_id = b.read_nbits(self.class_bits.try_into().unwrap());
@@ -61,6 +61,7 @@ impl Demo {
                     class_id: cls_id,
                     entity_id: entity_id.try_into().unwrap(),
                     serial: serial,
+                    props: Vec::new(),
                 };
 
                 self.entities
@@ -68,16 +69,15 @@ impl Demo {
                     .unwrap()
                     .insert(entity_id.try_into().unwrap(), Some(new_entitiy));
 
-                self.read_new_ent(
-                    &Entity {
-                        class_id: cls_id,
-                        entity_id: entity_id.try_into().unwrap(),
-                        serial: serial,
-                    },
-                    &mut b,
-                );
+                let mut e = Entity {
+                    class_id: cls_id,
+                    entity_id: entity_id.try_into().unwrap(),
+                    serial: serial,
+                    props: Vec::new(),
+                };
+                let data = self.read_new_ent(&e, &mut b);
+                e.props.extend(data);
             } else {
-                //println!("ENTID {}", entity_id);
                 if entity_id < 0 {
                     break;
                 }
@@ -93,27 +93,38 @@ impl Demo {
                 {
                     continue;
                 }
-                //println!("{}", entity_id);
-                match &self.entities.as_ref().unwrap()[&entity_id.try_into().unwrap()] {
-                    Some(e) => {
-                        self.data.push(self.read_new_ent(&e, &mut b));
+
+                let hm = self.entities.as_ref().unwrap();
+                if hm.contains_key(&(entity_id as u32)) {
+                    let ent = hm.get(&(entity_id as u32));
+                    if ent.as_ref().unwrap().is_some() {
+                        let x = ent.as_ref().unwrap().as_ref().unwrap();
+                        //println!("{:?}", &x.props.len());
+
+                        let data = self.read_new_ent(&x, &mut b);
+
+                        let mut mhm = self.entities.as_mut().unwrap();
+                        let mut_ent = mhm.get_mut(&(entity_id as u32));
+                        let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
+                        for d in data {
+                            ps.push(d);
+                        }
+
+                        //println!("{:?}", &x.props);
+                        //mut_ent.unwrap().as_mut().unwrap().props.extend(data);
                     }
-                    None => {
-                        //println!("No ent found {entity_id}")
-                    }
-                };
+                }
             }
         }
     }
 
-    pub fn handle_entity_upd(&self, sv_cls: &ServerClass, b: &mut BitReader<&[u8]>) {
+    pub fn handle_entity_upd(&self, sv_cls: &ServerClass, b: &mut BitReader<&[u8]>) -> Vec<f32> {
         let mut val = -1;
         let new_way = b.read_bool();
         let mut indicies = vec![];
 
         loop {
             val = b.read_inx(val, new_way);
-            //println!("{}", val);
             if val == -1 {
                 break;
             }
@@ -130,19 +141,24 @@ impl Demo {
             if &sv_cls.fprops.as_ref().unwrap().len() > &(inx as usize) {
                 let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
                 let r = b.decode(prop);
-                if prop.prop.var_name() == "m_vecVelocity[0]" {
+                //println!("{}", prop.prop.var_name());
+                if prop.prop.var_name() == "m_angEyeAngles[1]" {
                     data.push(r);
                     println!("{inx} {} {}", prop.prop.var_name(), r);
                 }
             }
         }
+        data
     }
 
-    pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) {
+    pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) -> Vec<f32> {
+        let mut data = vec![];
         if self.serverclass_map.contains_key(&(ent.class_id as u16)) {
             let sv_cls = &self.serverclass_map[&(ent.class_id as u16)];
-            self.handle_entity_upd(sv_cls, b);
+            let props = self.handle_entity_upd(sv_cls, b);
+            data.extend(props);
         }
+        data
     }
 
     pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> Vec<Sendprop_t> {

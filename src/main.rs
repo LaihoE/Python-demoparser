@@ -53,6 +53,7 @@ struct Demo {
     stringtables: Vec<StringTable>,
     players: Vec<UserInfo>,
     data: Vec<f32>,
+    cnt: i32,
 }
 
 impl Demo {
@@ -110,8 +111,9 @@ impl Demo {
                     self.parse_packet_entities(pack_ents);
                 }
                 12 => {
-                    let x: CSVCMsg_CreateStringTable = Message::parse_from_bytes(&data).unwrap();
-                    self.create_string_table(x);
+                    let string_table: CSVCMsg_CreateStringTable =
+                        Message::parse_from_bytes(&data).unwrap();
+                    self.create_string_table(string_table);
                 }
                 _ => {}
             }
@@ -151,14 +153,24 @@ fn main() {
         stringtables: Vec::new(),
         players: Vec::new(),
         data: Vec::new(),
+        cnt: 0,
     };
 
     let h: Header = d.parse_header();
     d.parse_frame();
-    for p in d.players {
-        println!("{:?} {} {}", &p.name[..30], p.xuid, p.entity_id);
-    }
+
     println!("{:?}", d.data);
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
+
+    for (k, v) in d.entities.unwrap().iter() {
+        if v.is_some() {
+            if v.as_ref().unwrap().props.len() > 500 {
+                println!("{:?}", &v.as_ref().unwrap().props.len());
+            }
+        }
+    }
+    for p in d.players {
+        println!("{:?} {} {}", &p.name[..30], p.xuid, p.entity_id);
+    }
 }

@@ -42,7 +42,7 @@ impl Demo {
         for inx in 0..upd {
             entity_id += 1 + (b.read_u_bit_var() as i32);
             //println!("ENTID {}", entity_id);
-            if entity_id > 100 {
+            if entity_id > 25 {
                 break;
             }
             if b.read_bool() {
@@ -133,10 +133,12 @@ impl Demo {
             if &sv_cls.fprops.as_ref().unwrap().len() > &(inx as usize) {
                 let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
                 let pdata = b.decode(prop);
+                /*
                 if prop.prop.var_name().contains("bSpotted") {
                     println!("{:?}", pdata);
                     data.push(pdata);
                 }
+                */
             }
         }
         data

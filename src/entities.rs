@@ -41,19 +41,15 @@ impl Demo {
 
         for inx in 0..upd {
             entity_id += 1 + (b.read_u_bit_var() as i32);
-            if entity_id < 0 {
-                break;
-            }
-            if entity_id > 100000 {
+            //println!("ENTID {}", entity_id);
+            if entity_id > 100 {
                 break;
             }
             if b.read_bool() {
-                /*
                 self.entities
                     .as_mut()
                     .unwrap()
                     .insert(entity_id.try_into().unwrap(), None);
-                */
                 b.read_bool();
             } else if b.read_bool() {
                 let cls_id = b.read_nbits(self.class_bits.try_into().unwrap());
@@ -77,17 +73,11 @@ impl Demo {
                     serial: serial,
                     props: Vec::new(),
                 };
+                //println!("EE {}", e.entity_id);
                 let data = self.read_new_ent(&e, &mut b);
-                println!("{:?}", data);
                 e.props.extend(data);
             } else {
-                if entity_id < 0 {
-                    break;
-                }
-                if entity_id > 100000 {
-                    break;
-                }
-
+                /*
                 if !self
                     .entities
                     .as_ref()
@@ -96,23 +86,22 @@ impl Demo {
                 {
                     continue;
                 }
-
+                */
                 let hm = self.entities.as_ref().unwrap();
-                if hm.contains_key(&(entity_id as u32)) {
-                    let ent = hm.get(&(entity_id as u32));
-                    if ent.as_ref().unwrap().is_some() {
-                        let x = ent.as_ref().unwrap().as_ref().unwrap();
-                        //println!("{:?}", &x.props.len());
 
-                        let data = self.read_new_ent(&x, &mut b);
+                let ent = hm.get(&(entity_id.try_into().unwrap()));
+                if ent.as_ref().unwrap().is_some() {
+                    let x = ent.as_ref().unwrap().as_ref().unwrap();
+                    //println!("{:?}", &x.props.len());
 
-                        let mut mhm = self.entities.as_mut().unwrap();
-                        let mut_ent = mhm.get_mut(&(entity_id as u32));
-                        let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
-                        println!("{:?}", data);
-                        for d in data {
-                            ps.push(d);
-                        }
+                    let data = self.read_new_ent(&x, &mut b);
+
+                    let mut mhm = self.entities.as_mut().unwrap();
+                    let mut_ent = mhm.get_mut(&(entity_id as u32));
+                    let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
+
+                    for d in data {
+                        ps.push(d);
                     }
                 }
             }
@@ -136,9 +125,6 @@ impl Demo {
             indicies.push(val);
         }
 
-        if indicies.len() > 0 {
-            let y = 0;
-        }
         let l = indicies.len();
         let mut data: Vec<PropData> = Vec::new();
 
@@ -147,7 +133,10 @@ impl Demo {
             if &sv_cls.fprops.as_ref().unwrap().len() > &(inx as usize) {
                 let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
                 let pdata = b.decode(prop);
-                data.push(pdata);
+                if prop.prop.var_name().contains("EyeAngles") {
+                    println!("{:?}", pdata);
+                    data.push(pdata);
+                }
             }
         }
         data
@@ -155,12 +144,15 @@ impl Demo {
 
     pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) -> Vec<PropData> {
         let mut data = vec![];
-        if self.serverclass_map.contains_key(&(ent.class_id as u16)) {
-            let sv_cls = &self.serverclass_map[&(ent.class_id as u16)];
+        if self
+            .serverclass_map
+            .contains_key(&(ent.class_id.try_into().unwrap()))
+        {
+            let sv_cls = &self.serverclass_map[&(ent.class_id.try_into().unwrap())];
             let props = self.handle_entity_upd(sv_cls, b);
             data.extend(props);
         }
-        println!("{:?}", data);
+        //println!("{:?}", data);
         data
     }
 
@@ -195,22 +187,22 @@ impl Demo {
         let mut start = 0;
 
         for prio_inx in 0..prios.len() {
-            let mut priority = prios[prio_inx];
+            let priority = prios[prio_inx];
             loop {
                 let mut currentprop = start;
                 while currentprop < newp.len() {
                     let prop = newp[currentprop].prop.clone();
-                    if (prop.priority() == priority
-                        || (priority == 64 && ((prop.flags() & (1 << 18)) != 0)))
+                    if prop.priority() == priority
+                        || priority == 64 && ((prop.flags() & (1 << 18)) != 0)
                     {
-                        if (start != currentprop) {
+                        if start != currentprop {
                             newp.swap(start, currentprop);
                         }
                         start += 1;
                     }
                     currentprop += 1;
                 }
-                if (currentprop == newp.len()) {
+                if currentprop == newp.len() {
                     break;
                 }
             }
@@ -243,7 +235,6 @@ impl Demo {
                 || (prop.flags() & (1 << 6) != 0)
                 || self.is_prop_excl(excl.clone(), &table, prop.clone())
             {
-                let found = self.is_prop_excl(excl.clone(), &table, prop.clone());
                 continue;
             }
 

@@ -162,7 +162,7 @@ fn main() {
     for (k, v) in d.entities.unwrap().iter() {
         if v.is_some() {
             if v.as_ref().unwrap().props.len() > 500 {
-                println!("{:?}", &v.as_ref().unwrap().props.len());
+                println!("{k} {:?}", &v.as_ref().unwrap().props);
             }
         }
     }

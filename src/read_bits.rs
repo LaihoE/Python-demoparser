@@ -1,4 +1,5 @@
 use protobuf::Message;
+use protobuf::MessageDyn;
 
 use crate::entities::Prop;
 use core::panic;
@@ -97,7 +98,7 @@ impl<R: io::Read> BitReader<R> {
     }
 
     pub fn read_nbits(&mut self, n: usize) -> u32 {
-        debug_assert!(n <= NBITS);
+        assert!(n <= NBITS);
 
         if self.available >= n {
             let ret = self.bits & MASKS[n];
@@ -115,17 +116,17 @@ impl<R: io::Read> BitReader<R> {
     }
 
     pub fn read_u_bit_var(&mut self) -> u32 {
-        //println!("BEFORE AV {}", self.available);
         let mut ret = self.read_nbits(6);
+        //println!("{} {}", self.available, ret);
         if ret & 48 == 16 {
             ret = (ret & 15) | (self.read_nbits(4) << 4);
-            //assert!(ret >= 16);
+            assert!(ret >= 16);
         } else if ret & 48 == 32 {
             ret = (ret & 15) | (self.read_nbits(8) << 4);
-            //assert!(ret >= 256);
+            assert!(ret >= 256);
         } else if ret & 48 == 48 {
             ret = (ret & 15) | (self.read_nbits(28) << 4);
-            //assert!(ret >= 4096);
+            assert!(ret >= 4096);
         }
         ret
     }
@@ -183,6 +184,7 @@ impl<R: io::Read> BitReader<R> {
     pub fn decode_string(&mut self) -> String {
         let mut length = self.read_nbits(9);
         if length == 0 {
+            //println!("EMPTY STRING");
             return "".to_string();
         }
         if length >= (1 << 9) {
@@ -201,27 +203,68 @@ impl<R: io::Read> BitReader<R> {
             4 => return PropData::String(self.decode_string()),
             5 => return PropData::Vec(self.decode_array(prop)),
             6 => return PropData::I64(self.decode_int64(prop)),
-            _ => return PropData::I32(-69),
+            _ => panic!("EEK"), //return PropData::I32(-69),
         }
     }
 
     pub fn decode_array(&mut self, prop: &Prop) -> Vec<i32> {
+        let b = (prop.prop.num_elements() as f32).log2().floor() + 1.0;
+        let num_elements = self.read_nbits(b as usize);
+        if prop.prop.var_name().contains("player_array") {
+            let mut total_read = 0;
+            total_read += self.available;
+            self.read_nbits(self.available);
+            self.ensure_bits();
+
+            if self.available >= (50 - total_read) {
+                self.read_nbits(50 - total_read);
+                return vec![
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0,
+                ];
+            } else {
+                self.read_nbits(32);
+                self.ensure_bits();
+                self.read_nbits(50 - 32 - total_read);
+                return vec![
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0,
+                ];
+            }
+
+            return vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ];
+        }
+        /*
         let mut maxel = prop.prop.num_elements();
         let mut bitstoread = 1;
-        loop {
-            if maxel == 0 {
-                break;
-            }
+        while maxel != 0 {
             maxel >>= 1;
             bitstoread += 1;
         }
-
-        let num_elements = self.read_nbits(bitstoread);
+        let mut num_elements = 0;
+        if !prop.prop.var_name().contains("player_array") {
+            num_elements = self.read_nbits(bitstoread - 1);
+        } else {
+            num_elements = self.read_nbits(bitstoread + 4);
+        }
 
         let mut elems = vec![];
         let p = prop.arr.as_ref().unwrap();
+        //
+        println!("{:?}", prop.prop.var_name());
+        if prop.prop.var_name().contains("player_array") {
+            num_elements = 5;
+        } else {
+            num_elements = 3;
+        }
+        */
 
-        for inx in 0..num_elements {
+        let p = prop.arr.as_ref().unwrap();
+        let mut elems = vec![];
+
+        for _ in 0..num_elements {
             let pro = Prop {
                 prop: p.clone(),
                 arr: None,
@@ -468,7 +511,7 @@ impl<R: io::Read> BitReader<R> {
         } else if flags & (1 << 14) != 0 {
             val = self.read_bit_coord_mp(2) as f32;
         } else if flags & (1 << 2) != 0 {
-            val = self.read_bits(32);
+            val = self.read_nbits(32) as f32;
         } else if flags & (1 << 5) != 0 {
             val = self.read_bit_normal() as f32;
         } else if flags & (1 << 15) != 0 {
@@ -517,20 +560,11 @@ impl<R: io::Read> BitReader<R> {
                     let result = self.read_nbits(1);
                     result.try_into().unwrap()
                 } else {
-                    /*
-                    println!(
-                        "{} {} {} {}",
-                        self.available,
-                        self.bits,
-                        prop.prop.num_bits(),
-                        prop.prop.var_name()
-                    );
-                    */
                     let result: u32 = self
                         .read_nbits(prop.prop.num_bits().try_into().unwrap())
                         .try_into()
                         .unwrap();
-                    //println!("{} {}", result, result.to_le());
+
                     result.try_into().unwrap()
                 }
             } else {

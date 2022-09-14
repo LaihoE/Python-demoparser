@@ -124,7 +124,9 @@ impl Demo {
                     user_data = buf.read_bits_st(size.try_into().unwrap());
 
                     if st.userinfo {
-                        let ui = self.parse_userinfo(user_data);
+                        let mut ui = self.parse_userinfo(user_data);
+                        ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
+                        println!("? {:?}", ui.entity_id);
                         self.players.push(ui);
                     }
                 }

@@ -45,6 +45,16 @@ static MASKS: [u32; NBITS + 1] = [
     u32::MAX >> 1,
     u32::MAX,
 ];
+#[derive(Debug)]
+pub enum PropData {
+    I32(i32),
+    F32(f32),
+    I64(i64),
+    String(String),
+    VecXY(Vec<f32>),
+    VecXYZ(Vec<f32>),
+    Vec(Vec<i32>),
+}
 
 pub(crate) struct BitReader<R: io::Read> {
     inner: R,
@@ -182,9 +192,20 @@ impl<R: io::Read> BitReader<R> {
         result
     }
 
-    pub fn decode_array(&mut self, prop: &Prop) {
-        //println!("NUMBITS: {} {}", prop.prop.num_bits(), prop.prop.var_name());
+    pub fn decode(&mut self, prop: &Prop) -> PropData {
+        match prop.prop.type_() {
+            0 => return PropData::I32(self.decode_int(prop) as i32),
+            1 => return PropData::F32(self.decode_float(prop)),
+            2 => return PropData::VecXY(self.decode_vec(prop)),
+            3 => return PropData::VecXYZ(self.decode_vec_xy(prop)),
+            4 => return PropData::String(self.decode_string()),
+            5 => return PropData::Vec(self.decode_array(prop)),
+            6 => return PropData::I64(self.decode_int64(prop)),
+            _ => return PropData::I32(-69),
+        }
+    }
 
+    pub fn decode_array(&mut self, prop: &Prop) -> Vec<i32> {
         let mut maxel = prop.prop.num_elements();
         let mut bitstoread = 1;
         loop {
@@ -206,41 +227,12 @@ impl<R: io::Read> BitReader<R> {
                 arr: None,
                 table: prop.table.clone(),
                 col: 0,
+                data: None,
             };
             let val = self.decode(&pro);
             elems.push(val);
         }
-        println!("{:?}", elems);
-    }
-
-    pub fn decode(&mut self, prop: &Prop) -> f32 {
-        let mut result = 0.0;
-        //println!("TYPE: {}", prop.prop.type_());
-        match prop.prop.type_() {
-            0 => result = self.decode_int(prop) as f64 as f32,
-            1 => result = self.decode_float(prop),
-            2 => result = self.decode_vec(prop)[0],
-            3 => result = self.decode_vec_xy(prop)[0],
-            4 => {
-                let s = self.decode_string();
-                //println!("{:?}", s);
-                result = 0.0;
-            }
-            5 => {
-                self.decode_array(prop);
-                result = 0.0;
-            }
-            6 => {
-                self.decode_int64(prop);
-            }
-            _ => println!("UNKOWN ENCODING"),
-            //self.skip(prop.prop.num_bits()); //panic!("UNKOWN ENCODING"),
-            //result = 0.0;
-        } //panic!("UNKOWN ENCODING"),
-
-        //println!("{} {}", result, prop.prop.var_name(),);
-
-        result
+        vec![0, 0, 0]
     }
 
     pub fn read_string(&mut self, length: i32) -> String {

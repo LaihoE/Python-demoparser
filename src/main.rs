@@ -131,10 +131,6 @@ fn main() {
         //println!("{cnt} {:?}", x.name());
         cnt += 1;
     }
-    //    svc_CreateStringTable = 12,
-    // @@protoc_insertion_point(enum_value:SVC_Messages.svc_UpdateStringTable)
-    //    svc_UpdateStringTable = 13,
-    //
 
     let now = Instant::now();
     let mut d = Demo {

@@ -1,6 +1,7 @@
 use crate::game_events::HurtEvent;
 use crate::newbitreader::Bitr;
 use crate::read_bits::BitReader;
+use crate::read_bits::PropData;
 use crate::Demo;
 use crate::ServerClass;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
@@ -18,7 +19,7 @@ pub struct Entity {
     pub class_id: u32,
     pub entity_id: u32,
     pub serial: u32,
-    pub props: Vec<f32>,
+    pub props: Vec<PropData>,
 }
 #[derive(Debug)]
 pub struct Prop {
@@ -26,6 +27,7 @@ pub struct Prop {
     pub arr: Option<Sendprop_t>,
     pub table: CSVCMsg_SendTable,
     pub col: i32,
+    pub data: Option<PropData>,
 }
 
 impl Demo {
@@ -76,6 +78,7 @@ impl Demo {
                     props: Vec::new(),
                 };
                 let data = self.read_new_ent(&e, &mut b);
+                println!("{:?}", data);
                 e.props.extend(data);
             } else {
                 if entity_id < 0 {
@@ -106,19 +109,21 @@ impl Demo {
                         let mut mhm = self.entities.as_mut().unwrap();
                         let mut_ent = mhm.get_mut(&(entity_id as u32));
                         let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
+                        println!("{:?}", data);
                         for d in data {
                             ps.push(d);
                         }
-
-                        //println!("{:?}", &x.props);
-                        //mut_ent.unwrap().as_mut().unwrap().props.extend(data);
                     }
                 }
             }
         }
     }
 
-    pub fn handle_entity_upd(&self, sv_cls: &ServerClass, b: &mut BitReader<&[u8]>) -> Vec<f32> {
+    pub fn handle_entity_upd(
+        &self,
+        sv_cls: &ServerClass,
+        b: &mut BitReader<&[u8]>,
+    ) -> Vec<PropData> {
         let mut val = -1;
         let new_way = b.read_bool();
         let mut indicies = vec![];
@@ -135,29 +140,27 @@ impl Demo {
             let y = 0;
         }
         let l = indicies.len();
-        let mut data: Vec<f32> = Vec::new();
+        let mut data: Vec<PropData> = Vec::new();
+
         for inx in indicies {
             let mut cnt = 0;
             if &sv_cls.fprops.as_ref().unwrap().len() > &(inx as usize) {
                 let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
-                let r = b.decode(prop);
-                //println!("{}", prop.prop.var_name());
-                if prop.prop.var_name() == "m_angEyeAngles[1]" {
-                    data.push(r);
-                    println!("{inx} {} {}", prop.prop.var_name(), r);
-                }
+                let pdata = b.decode(prop);
+                data.push(pdata);
             }
         }
         data
     }
 
-    pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) -> Vec<f32> {
+    pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) -> Vec<PropData> {
         let mut data = vec![];
         if self.serverclass_map.contains_key(&(ent.class_id as u16)) {
             let sv_cls = &self.serverclass_map[&(ent.class_id as u16)];
             let props = self.handle_entity_upd(sv_cls, b);
             data.extend(props);
         }
+        println!("{:?}", data);
         data
     }
 
@@ -180,24 +183,16 @@ impl Demo {
     pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
         let excl = self.get_excl_props(table);
         let mut newp = self.get_props(table, &excl);
-
-        let mut cnt = 0;
-
         let mut prios = vec![];
-
-        //let mut newp: Vec<Prop> = Vec::new();
-
         for p in &newp {
             prios.push(p.prop.priority());
         }
 
-        prios.dedup();
-        let set: HashSet<_> = prios.drain(..).collect(); // dedup
+        let set: HashSet<_> = prios.drain(..).collect();
         prios.extend(set.into_iter());
-
         prios.push(64);
-        let mut start = 0;
         prios.sort();
+        let mut start = 0;
 
         for prio_inx in 0..prios.len() {
             let mut priority = prios[prio_inx];
@@ -272,6 +267,7 @@ impl Demo {
                     arr: Some(table.props[cnt - 1].clone()),
                     table: table.clone(),
                     col: 1,
+                    data: None,
                 };
                 flat.push(prop_arr);
             } else {
@@ -280,6 +276,7 @@ impl Demo {
                     arr: None,
                     table: table.clone(),
                     col: 1,
+                    data: None,
                 };
                 flat.push(prop);
             }

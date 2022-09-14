@@ -43,7 +43,6 @@ struct Demo {
     cmd: u8,
     bytes: Vec<u8>,
     class_bits: u32,
-    msg_map: Vec<MessageDescriptor>,
     event_list: Option<CSVCMsg_GameEventList>,
     event_vec: Option<Vec<Descriptor_t>>,
     dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
@@ -126,19 +125,12 @@ fn main() {
     let y = x.messages();
     let mut v: Vec<MessageDescriptor> = Vec::new();
 
-    let mut cnt = 0;
-    for x in y {
-        //println!("{cnt} {:?}", x.name());
-        cnt += 1;
-    }
-
     let now = Instant::now();
     let mut d = Demo {
         bytes: std::fs::read("/home/laiho/Documents/demos/rclonetest/q.dem").unwrap(),
         fp: 0,
         cmd: 0,
         tick: 0,
-        msg_map: v,
         event_list: None,
         event_vec: None,
         dt_map: Some(HashMap::new()),
@@ -161,8 +153,8 @@ fn main() {
 
     for (k, v) in d.entities.unwrap().iter() {
         if v.is_some() {
-            if v.as_ref().unwrap().props.len() > 500 {
-                println!("{k} {:?}", &v.as_ref().unwrap().props);
+            if v.as_ref().unwrap().props.len() > 5 {
+                println!("{k} {:?}", &v.as_ref().unwrap().props.len());
             }
         }
     }

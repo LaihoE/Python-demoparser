@@ -133,7 +133,7 @@ impl Demo {
             if &sv_cls.fprops.as_ref().unwrap().len() > &(inx as usize) {
                 let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
                 let pdata = b.decode(prop);
-                if prop.prop.var_name().contains("EyeAngles") {
+                if prop.prop.var_name().contains("bSpotted") {
                     println!("{:?}", pdata);
                     data.push(pdata);
                 }
@@ -152,7 +152,6 @@ impl Demo {
             let props = self.handle_entity_upd(sv_cls, b);
             data.extend(props);
         }
-        //println!("{:?}", data);
         data
     }
 

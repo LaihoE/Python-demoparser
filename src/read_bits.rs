@@ -511,7 +511,7 @@ impl<R: io::Read> BitReader<R> {
         } else if flags & (1 << 14) != 0 {
             val = self.read_bit_coord_mp(2) as f32;
         } else if flags & (1 << 2) != 0 {
-            val = self.read_nbits(32) as f32;
+            val = self.read_bits(32) as f32;
         } else if flags & (1 << 5) != 0 {
             val = self.read_bit_normal() as f32;
         } else if flags & (1 << 15) != 0 {

@@ -41,8 +41,7 @@ impl Demo {
 
         for inx in 0..upd {
             entity_id += 1 + (b.read_u_bit_var() as i32);
-            //println!("ENTID {}", entity_id);
-            if entity_id > 25 {
+            if entity_id > 50 {
                 break;
             }
             if b.read_bool() {

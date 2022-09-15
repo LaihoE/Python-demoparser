@@ -125,35 +125,29 @@ impl Demo {
 
                 match pdata {
                     PropData::VecXY(v) => {
-                        let inxes = vec![0, 1];
                         let endings = vec!["_X", "_Y"];
-                        for inx in inxes {
-                            for ending in &endings {
-                                let data = PropData::F32(v[inx]);
-                                let name = prop.prop.var_name().to_string() + endings[inx];
-                                let atom = PropAtom {
-                                    prop_name: name,
-                                    data: data,
-                                    tick: self.tick,
-                                };
-                                props.push(atom);
-                            }
+                        for inx in 0..2 {
+                            let data = PropData::F32(v[inx]);
+                            let name = prop.prop.var_name().to_string() + endings[inx];
+                            let atom = PropAtom {
+                                prop_name: name,
+                                data: data,
+                                tick: self.tick,
+                            };
+                            props.push(atom);
                         }
                     }
                     PropData::VecXYZ(v) => {
-                        let inxes = vec![0, 1, 2];
                         let endings = vec!["_X", "_Y", "_Z"];
-                        for inx in inxes {
-                            for ending in &endings {
-                                let data = PropData::F32(v[inx]);
-                                let name = prop.prop.var_name().to_string() + endings[inx];
-                                let atom = PropAtom {
-                                    prop_name: name,
-                                    data: data,
-                                    tick: self.tick,
-                                };
-                                props.push(atom);
-                            }
+                        for inx in 0..3 {
+                            let data = PropData::F32(v[inx]);
+                            let name = prop.prop.var_name().to_string() + endings[inx];
+                            let atom = PropAtom {
+                                prop_name: name,
+                                data: data,
+                                tick: self.tick,
+                            };
+                            props.push(atom);
                         }
                     }
 

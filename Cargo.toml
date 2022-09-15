@@ -1,14 +1,18 @@
 [package]
-name = "demoparse"
+name = "new"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
+[lib]
+name = "new"
+crate-type = ["cdylib"]
 
 [dependencies]
+pyo3 = { version = "0.17", features = ["extension-module"] }
 bitreader = "0.3.6"
 protobuf = "3.1.0"
+numpy = "0.17.1"
 
 [dependencies.csgoproto]
 path = "./csgoproto"

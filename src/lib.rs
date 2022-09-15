@@ -1,5 +1,6 @@
 pub mod data_table;
 pub mod entities;
+pub mod extract_props;
 pub mod game_events;
 pub mod header;
 pub mod newbitreader;
@@ -23,6 +24,7 @@ use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
 use csgoproto::netmessages::CSVCMsg_SendTable;
+use extract_props::extract_props;
 use protobuf;
 use protobuf::reflect::MessageDescriptor;
 use pyo3::prelude::*;
@@ -69,34 +71,23 @@ struct Demo {
 impl Demo {
     fn parse_frame(&mut self, props_names: &Vec<String>) -> HashMap<String, Vec<f32>> {
         // Main loop
-        let mut data: HashMap<String, Vec<f32>> = HashMap::new();
-
+        let mut ticks_props: HashMap<String, Vec<f32>> = HashMap::new();
+        for name in props_names {
+            ticks_props.insert(name.to_string(), Vec::new());
+        }
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame();
             self.tick = f.tick;
+            let props_this_tick: HashMap<String, Vec<f32>> =
+                extract_props(&self.entities, props_names);
+            println!("{:?}", &ticks_props);
 
-            if self.entities.is_some() {
-                if self.entities.as_ref().unwrap().contains_key(&6) {
-                    if self.entities.as_ref().unwrap()[&6].is_some() {
-                        let x = self.entities.as_ref().unwrap()[&6].as_ref().unwrap();
+            ticks_props.extend(props_this_tick);
 
-                        for prop_name in props_names {
-                            if x.props.contains_key(prop_name) {
-                                data.entry(prop_name.to_string())
-                                    .or_insert(Vec::new())
-                                    .push(x.props[prop_name].data.to_float())
-                            } else {
-                                data.entry(prop_name.to_string())
-                                    .or_insert(Vec::new())
-                                    .push(-1.0);
-                            }
-                        }
-                    }
-                }
-            }
             self.parse_cmd(f.cmd);
         }
-        data
+        println!("{:?}", ticks_props);
+        ticks_props
     }
 
     pub fn read_frame(&mut self) -> Frame {

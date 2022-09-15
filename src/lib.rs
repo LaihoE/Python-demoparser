@@ -15,6 +15,7 @@ use crate::header::Header;
 
 use crate::netmessages::CSVCMsg_PacketEntities;
 use crate::protobuf::Message;
+use crate::read_bits::PropData;
 use crate::stringtables::StringTable;
 use csgoproto::netmessages;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
@@ -24,11 +25,21 @@ use csgoproto::netmessages::CSVCMsg_GameEventList;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf;
 use protobuf::reflect::MessageDescriptor;
+use pyo3::prelude::*;
+use read_bits::PropAtom;
 use std::any::Any;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::time::Instant;
 use std::vec;
 use stringtables::UserInfo;
+
+use numpy::ndarray::{Array1, ArrayD, ArrayView1, ArrayViewD, ArrayViewMutD, Zip};
+use numpy::{
+    datetime::{units, Timedelta},
+    Complex64, IntoPyArray, PyArray1, PyArrayDyn, PyReadonlyArray1, PyReadonlyArrayDyn,
+    PyReadwriteArray1, PyReadwriteArrayDyn,
+};
 
 #[allow(dead_code)]
 struct Frame {
@@ -56,13 +67,36 @@ struct Demo {
 }
 
 impl Demo {
-    fn parse_frame(&mut self) {
+    fn parse_frame(&mut self, props_names: &Vec<String>) -> HashMap<String, Vec<f32>> {
         // Main loop
+        let mut data: HashMap<String, Vec<f32>> = HashMap::new();
+
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame();
             self.tick = f.tick;
+
+            if self.entities.is_some() {
+                if self.entities.as_ref().unwrap().contains_key(&6) {
+                    if self.entities.as_ref().unwrap()[&6].is_some() {
+                        let x = self.entities.as_ref().unwrap()[&6].as_ref().unwrap();
+
+                        for prop_name in props_names {
+                            if x.props.contains_key(prop_name) {
+                                data.entry(prop_name.to_string())
+                                    .or_insert(Vec::new())
+                                    .push(x.props[prop_name].data.to_float())
+                            } else {
+                                data.entry(prop_name.to_string())
+                                    .or_insert(Vec::new())
+                                    .push(-1.0);
+                            }
+                        }
+                    }
+                }
+            }
             self.parse_cmd(f.cmd);
         }
+        data
     }
 
     pub fn read_frame(&mut self) -> Frame {
@@ -87,7 +121,6 @@ impl Demo {
         self.fp += 160;
         let packet_len = self.read_i32();
         let goal_inx = self.fp + packet_len as usize;
-
         while self.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();
@@ -119,45 +152,64 @@ impl Demo {
     }
 }
 
-fn main() {
-    let x = netmessages::file_descriptor();
-    let y = x.messages();
-    let mut v: Vec<MessageDescriptor> = Vec::new();
+#[pymodule]
 
-    let now = Instant::now();
-    let mut d = Demo {
-        bytes: std::fs::read("/home/laiho/Documents/demos/rclonetest/q.dem").unwrap(),
-        fp: 0,
-        cmd: 0,
-        tick: 0,
-        event_list: None,
-        event_vec: None,
-        dt_map: Some(HashMap::new()),
-        class_bits: 0,
-        serverclass_map: HashMap::new(),
-        entities: Some(HashMap::new()),
-        bad: Vec::new(),
-        stringtables: Vec::new(),
-        players: Vec::new(),
-        data: Vec::new(),
-        cnt: 0,
-    };
+fn new(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+    pub fn parse(
+        demo_name: String,
+        props_names: Vec<String>,
+        mut out_arr: ArrayViewMutD<'_, f64>,
+    ) -> PyResult<Vec<f32>> {
+        let x = netmessages::file_descriptor();
+        let y = x.messages();
+        let mut v: Vec<MessageDescriptor> = Vec::new();
+        let now = Instant::now();
+        let mut d = Demo {
+            bytes: std::fs::read(demo_name).unwrap(),
+            fp: 0,
+            cmd: 0,
+            tick: 0,
+            event_list: None,
+            event_vec: None,
+            dt_map: Some(HashMap::new()),
+            class_bits: 0,
+            serverclass_map: HashMap::new(),
+            entities: Some(HashMap::new()),
+            bad: Vec::new(),
+            stringtables: Vec::new(),
+            players: Vec::new(),
+            data: Vec::new(),
+            cnt: 0,
+        };
 
-    let h: Header = d.parse_header();
-    d.parse_frame();
-
-    println!("{:?}", d.data);
-    let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
-
-    for (k, v) in d.entities.unwrap().iter() {
-        if v.is_some() {
-            if v.as_ref().unwrap().props.len() > 5 {
-                println!("{k} {:?}", &v.as_ref().unwrap().props.len());
+        let h: Header = d.parse_header();
+        let data = d.parse_frame(&props_names);
+        let mut cnt = 0;
+        for prop_name in &props_names {
+            let v = &data[prop_name];
+            for prop in v {
+                out_arr[cnt] = *prop as f64;
+                cnt += 1
             }
         }
+
+        let elapsed = now.elapsed();
+        println!("Elapsed: {:.2?}", elapsed);
+
+        let mut result = vec![];
+        println!("{cnt}");
+
+        Ok(result)
     }
-    for p in d.players {
-        println!("{:?} {} {}", &p.name[..30], p.xuid, p.entity_id);
+    #[pyfn(m)]
+    #[pyo3(name = "parse")]
+    fn parse_py(
+        demo_name: String,
+        mut props_names: Vec<String>,
+        mut out_arr: PyReadwriteArrayDyn<f64>,
+    ) {
+        let out_arr = out_arr.as_array_mut();
+        parse(demo_name, props_names, out_arr);
     }
+    Ok(())
 }

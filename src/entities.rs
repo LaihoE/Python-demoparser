@@ -1,6 +1,7 @@
 use crate::game_events::HurtEvent;
 use crate::newbitreader::Bitr;
 use crate::read_bits::BitReader;
+use crate::read_bits::PropAtom;
 use crate::read_bits::PropData;
 use crate::Demo;
 use crate::ServerClass;
@@ -9,6 +10,7 @@ use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf;
 use protobuf::Message;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::io;
@@ -19,7 +21,7 @@ pub struct Entity {
     pub class_id: u32,
     pub entity_id: u32,
     pub serial: u32,
-    pub props: Vec<PropData>,
+    pub props: HashMap<String, PropAtom>,
 }
 #[derive(Debug)]
 pub struct Prop {
@@ -33,15 +35,14 @@ pub struct Prop {
 impl Demo {
     pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities) {
         let upd = pack_ents.updated_entries();
-
+        let mut entity_id: i32 = -1;
         let mut b = BitReader::new(pack_ents.entity_data());
         b.ensure_bits();
 
-        let mut entity_id: i32 = -1;
-
         for inx in 0..upd {
             entity_id += 1 + (b.read_u_bit_var() as i32);
-            if entity_id > 50 {
+            //println!("ENTID {}", entity_id);
+            if entity_id > 25 {
                 break;
             }
             if b.read_bool() {
@@ -58,7 +59,7 @@ impl Demo {
                     class_id: cls_id,
                     entity_id: entity_id.try_into().unwrap(),
                     serial: serial,
-                    props: Vec::new(),
+                    props: HashMap::new(),
                 };
 
                 self.entities
@@ -70,37 +71,26 @@ impl Demo {
                     class_id: cls_id,
                     entity_id: entity_id.try_into().unwrap(),
                     serial: serial,
-                    props: Vec::new(),
+                    props: HashMap::new(),
                 };
-                //println!("EE {}", e.entity_id);
+
                 let data = self.read_new_ent(&e, &mut b);
-                e.props.extend(data);
-            } else {
-                /*
-                if !self
-                    .entities
-                    .as_ref()
-                    .unwrap()
-                    .contains_key(&(entity_id.try_into().unwrap()))
-                {
-                    continue;
+                for pa in data {
+                    e.props.insert(pa.prop_name.clone(), pa);
                 }
-                */
+            } else {
                 let hm = self.entities.as_ref().unwrap();
 
                 let ent = hm.get(&(entity_id.try_into().unwrap()));
                 if ent.as_ref().unwrap().is_some() {
                     let x = ent.as_ref().unwrap().as_ref().unwrap();
-                    //println!("{:?}", &x.props.len());
-
                     let data = self.read_new_ent(&x, &mut b);
-
                     let mut mhm = self.entities.as_mut().unwrap();
                     let mut_ent = mhm.get_mut(&(entity_id as u32));
                     let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
 
-                    for d in data {
-                        ps.push(d);
+                    for pa in data {
+                        ps.insert(pa.prop_name.clone(), pa);
                     }
                 }
             }
@@ -111,7 +101,7 @@ impl Demo {
         &self,
         sv_cls: &ServerClass,
         b: &mut BitReader<&[u8]>,
-    ) -> Vec<PropData> {
+    ) -> Vec<PropAtom> {
         let mut val = -1;
         let new_way = b.read_bool();
         let mut indicies = vec![];
@@ -125,25 +115,64 @@ impl Demo {
         }
 
         let l = indicies.len();
-        let mut data: Vec<PropData> = Vec::new();
+        let mut props: Vec<PropAtom> = Vec::new();
 
         for inx in indicies {
             let mut cnt = 0;
             if &sv_cls.fprops.as_ref().unwrap().len() > &(inx as usize) {
                 let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
                 let pdata = b.decode(prop);
-                /*
-                if prop.prop.var_name().contains("bSpotted") {
-                    println!("{:?}", pdata);
-                    data.push(pdata);
+
+                match pdata {
+                    PropData::VecXY(v) => {
+                        let inxes = vec![0, 1];
+                        let endings = vec!["_X", "_Y"];
+                        for inx in inxes {
+                            for ending in &endings {
+                                let data = PropData::F32(v[inx]);
+                                let name = prop.prop.var_name().to_string() + endings[inx];
+                                let atom = PropAtom {
+                                    prop_name: name,
+                                    data: data,
+                                    tick: self.tick,
+                                };
+                                props.push(atom);
+                            }
+                        }
+                    }
+                    PropData::VecXYZ(v) => {
+                        let inxes = vec![0, 1, 2];
+                        let endings = vec!["_X", "_Y", "_Z"];
+                        for inx in inxes {
+                            for ending in &endings {
+                                let data = PropData::F32(v[inx]);
+                                let name = prop.prop.var_name().to_string() + endings[inx];
+                                let atom = PropAtom {
+                                    prop_name: name,
+                                    data: data,
+                                    tick: self.tick,
+                                };
+                                props.push(atom);
+                            }
+                        }
+                    }
+
+                    PropData::String(_) => {}
+                    _ => {
+                        let atom = PropAtom {
+                            prop_name: prop.prop.var_name().to_string(),
+                            data: pdata,
+                            tick: self.tick,
+                        };
+                        props.push(atom);
+                    }
                 }
-                */
             }
         }
-        data
+        props
     }
 
-    pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) -> Vec<PropData> {
+    pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) -> Vec<PropAtom> {
         let mut data = vec![];
         if self
             .serverclass_map

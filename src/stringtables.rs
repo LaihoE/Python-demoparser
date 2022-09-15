@@ -42,11 +42,8 @@ impl Demo {
     pub fn parse_string_table(&mut self) {
         let length = self.read_i32();
         let data = self.read_n_bytes(length.try_into().unwrap());
-        println!("{:?}", data);
     }
     pub fn parse_userinfo(&mut self, userdata: [u8; 340]) -> UserInfo {
-        println!("{:?}", userdata);
-
         let ui = UserInfo {
             version: u64::from_be_bytes(userdata[0..8].try_into().unwrap()),
             xuid: u64::from_be_bytes(userdata[8..16].try_into().unwrap()),
@@ -62,7 +59,6 @@ impl Demo {
             entity_id: u32::from_be_bytes(userdata[331..335].try_into().unwrap()),
             tbd: u32::from_be_bytes(userdata[331..335].try_into().unwrap()),
         };
-        println!("{:#?}", ui);
         ui
     }
 
@@ -82,7 +78,7 @@ impl Demo {
         let mut user_data: [u8; 340] = [0; 340];
         buf.read_bool();
 
-        for i in 1..20000 {
+        for i in 1..10000 {
             history.push("".to_string())
         }
 
@@ -126,7 +122,6 @@ impl Demo {
                     if st.userinfo {
                         let mut ui = self.parse_userinfo(user_data);
                         ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
-                        println!("? {:?}", ui.entity_id);
                         self.players.push(ui);
                     }
                 }
@@ -142,7 +137,6 @@ impl Demo {
             }
             history.push(entry.to_string())
         }
-        println!("DONe@@@@@@@@@@@@@");
         st
     }
 
@@ -160,7 +154,7 @@ impl Demo {
             udsb: data.user_data_size_bits(),
             data: Vec::new(),
         };
-        for i in 1..20000 {
+        for i in 1..10000 {
             st.data.push(StField {
                 entry: "".to_string(),
                 udata: "".to_string(),

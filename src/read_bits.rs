@@ -3,6 +3,7 @@ use protobuf::MessageDyn;
 
 use crate::entities::Prop;
 use core::panic;
+use pyo3::prelude::*;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
@@ -46,6 +47,7 @@ static MASKS: [u32; NBITS + 1] = [
     u32::MAX >> 1,
     u32::MAX,
 ];
+
 #[derive(Debug)]
 pub enum PropData {
     I32(i32),
@@ -55,6 +57,24 @@ pub enum PropData {
     VecXY(Vec<f32>),
     VecXYZ(Vec<f32>),
     Vec(Vec<i32>),
+}
+
+impl PropData {
+    pub fn to_float(&self) -> f32 {
+        match self {
+            PropData::F32(f) => *f,
+            PropData::I32(i) => *i as f32,
+            PropData::I64(ii) => *ii as f32,
+            _ => panic!("DONT SUP F32"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct PropAtom {
+    pub prop_name: String,
+    pub data: PropData,
+    pub tick: i32,
 }
 
 pub(crate) struct BitReader<R: io::Read> {

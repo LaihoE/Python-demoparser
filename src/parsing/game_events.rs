@@ -6,6 +6,7 @@ use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
 use protobuf::Message;
+use pyo3::prelude::*;
 
 #[derive(Debug, Default)]
 pub struct HurtEvent {
@@ -47,6 +48,20 @@ impl Default for KeyData {
         KeyData::BoolData(false)
     }
 }
+impl KeyData {
+    pub fn to_string_py(&self) -> String {
+        match self {
+            KeyData::StrData(f) => f.to_string(),
+            KeyData::FloatData(f) => f.to_string(),
+            KeyData::LongData(f) => f.to_string(),
+            KeyData::ShortData(f) => f.to_string(),
+            KeyData::ByteData(f) => f.to_string(),
+            KeyData::BoolData(f) => f.to_string(),
+            KeyData::Uint64Data(f) => f.to_string(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct NameDataPair {
     pub name: String,
@@ -54,8 +69,8 @@ pub struct NameDataPair {
 }
 #[derive(Debug)]
 pub struct GameEvent {
-    name: String,
-    fields: Vec<NameDataPair>,
+    pub name: String,
+    pub fields: Vec<NameDataPair>,
 }
 
 pub fn parse_game_event(game_event: &CSVCMsg_GameEvent, event: &Descriptor_t) -> HurtEvent {

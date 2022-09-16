@@ -1,7 +1,7 @@
 use protobuf::Message;
 use protobuf::MessageDyn;
 
-use crate::entities::Prop;
+use crate::parsing::entities::Prop;
 use core::panic;
 use pyo3::prelude::*;
 use std::any::Any;
@@ -77,7 +77,7 @@ pub struct PropAtom {
     pub tick: i32,
 }
 
-pub(crate) struct BitReader<R: io::Read> {
+pub struct BitReader<R: io::Read> {
     inner: R,
     bits: u32,
     available: usize,

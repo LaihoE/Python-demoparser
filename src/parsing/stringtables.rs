@@ -3,8 +3,7 @@ use std::convert::TryInto;
 use csgoproto::cstrike15_gcmessages::score_leaderboard_data::Entry;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 
-use crate::protobuf::Message;
-use crate::read_bits::BitReader;
+use crate::parsing::read_bits::BitReader;
 use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 

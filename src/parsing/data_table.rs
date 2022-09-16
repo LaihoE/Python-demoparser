@@ -1,5 +1,5 @@
+use crate::parsing::entities::Prop;
 use crate::Demo;
-use crate::Prop;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf::Message;
 

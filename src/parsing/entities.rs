@@ -1,10 +1,10 @@
-use crate::game_events::HurtEvent;
-use crate::newbitreader::Bitr;
-use crate::read_bits::BitReader;
-use crate::read_bits::PropAtom;
-use crate::read_bits::PropData;
+use crate::parsing::data_table::ServerClass;
+use crate::parsing::game_events::HurtEvent;
+use crate::parsing::newbitreader::Bitr;
+use crate::parsing::read_bits::BitReader;
+use crate::parsing::read_bits::PropAtom;
+use crate::parsing::read_bits::PropData;
 use crate::Demo;
-use crate::ServerClass;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
@@ -33,7 +33,11 @@ pub struct Prop {
 }
 
 impl Demo {
-    pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities) {
+    pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities, should_parse: bool) {
+        if !should_parse {
+            return;
+        };
+
         let upd = pack_ents.updated_entries();
         let mut entity_id: i32 = -1;
         let mut b = BitReader::new(pack_ents.entity_data());
@@ -41,7 +45,6 @@ impl Demo {
 
         for inx in 0..upd {
             entity_id += 1 + (b.read_u_bit_var() as i32);
-            //println!("ENTID {}", entity_id);
             if entity_id > 25 {
                 break;
             }

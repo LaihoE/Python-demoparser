@@ -73,6 +73,18 @@ pub struct GameEvent {
     pub fields: Vec<NameDataPair>,
 }
 
+impl GameEvent {
+    pub fn to_py_tuples(&self, py: Python<'_>) -> Vec<(String, PyObject)> {
+        let mut py_tuples: Vec<(String, PyObject)> = Vec::new();
+        for pair in &self.fields {
+            let name = &pair.name;
+            let val = pair.data.to_string_py().to_object(py);
+            py_tuples.push((name.to_string(), val));
+        }
+        py_tuples
+    }
+}
+
 pub fn parse_game_event(game_event: &CSVCMsg_GameEvent, event: &Descriptor_t) -> HurtEvent {
     let mut he = HurtEvent::default();
     let mut cnt = 0;
@@ -95,6 +107,7 @@ pub fn parse_game_event(game_event: &CSVCMsg_GameEvent, event: &Descriptor_t) ->
 pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
+    tick: &i32,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
     let mut kv_pairs: Vec<NameDataPair> = Vec::new();
@@ -108,13 +121,22 @@ pub fn gen_name_val_pairs(
             data: val,
         })
     }
+    kv_pairs.push(NameDataPair {
+        name: "tick".to_owned(),
+        data: KeyData::LongData(*tick),
+    });
     kv_pairs
 }
 
-pub fn _match_data_to_game_event(namedatavec: &Vec<NameDataPair>, event_name: &str) {
-    //println!("{:#?} {:#?}", event_name, namedatavec);
-    if event_name.contains("bomb_planted") {
-        println!("{:#?} {:#?}", event_name, namedatavec);
+pub fn _match_data_to_game_event(
+    namedatavec: &Vec<NameDataPair>,
+    event_name: &str,
+    wanted_event: &String,
+) -> bool {
+    if event_name.contains(wanted_event) {
+        return true;
+    } else {
+        return false;
     }
 }
 
@@ -123,14 +145,17 @@ impl Demo {
         let mut game_events: Vec<GameEvent> = Vec::new();
         for event_desc in self.event_vec.as_ref().unwrap() {
             if event_desc.eventid() == game_event.eventid() {
-                let name_data_pairs = gen_name_val_pairs(&game_event, event_desc);
-                //_match_data_to_game_event(&name_data_pairs, event_desc.name());
-                game_events.push({
-                    GameEvent {
-                        name: event_desc.name().to_owned(),
-                        fields: name_data_pairs,
-                    }
-                })
+                let name_data_pairs = gen_name_val_pairs(&game_event, event_desc, &self.tick);
+                //println!("{} {:?}", event_desc.name().to_owned(), name_data_pairs);
+                if _match_data_to_game_event(&name_data_pairs, event_desc.name(), &self.event_name)
+                {
+                    game_events.push({
+                        GameEvent {
+                            name: event_desc.name().to_owned(),
+                            fields: name_data_pairs,
+                        }
+                    })
+                }
             }
         }
         game_events

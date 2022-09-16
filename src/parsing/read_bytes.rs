@@ -26,7 +26,6 @@ impl Demo {
         s
     }
     pub fn read_string(&mut self) -> String {
-        // SLOW?
         let mut v = vec![];
         loop {
             let c = self.read_byte();

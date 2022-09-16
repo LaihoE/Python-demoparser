@@ -77,7 +77,7 @@ impl Demo {
         let mut user_data: [u8; 340] = [0; 340];
         buf.read_bool();
 
-        for i in 1..10000 {
+        for i in 1..20000 {
             history.push("".to_string())
         }
 
@@ -134,7 +134,15 @@ impl Demo {
                     history.remove(0);
                 }
             }
-            history.push(entry.to_string())
+            history.push(entry.to_string());
+            /*
+            if data.name() == "instancebaseline" {
+                let cls_id = entry// as i32u//entry.parse::<i32>().unwrap();
+                println!("{}", cls_id);
+                //if self.serverclass_map.contains_key(cls_id) {}
+            }
+            println!("ST {}", data.name());
+            */
         }
         st
     }
@@ -153,7 +161,7 @@ impl Demo {
             udsb: data.user_data_size_bits(),
             data: Vec::new(),
         };
-        for i in 1..10000 {
+        for i in 1..20000 {
             st.data.push(StField {
                 entry: "".to_string(),
                 udata: "".to_string(),

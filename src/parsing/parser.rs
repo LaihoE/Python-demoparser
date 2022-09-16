@@ -58,6 +58,7 @@ pub struct Demo {
     pub players: Vec<UserInfo>,
     pub parse_props: bool,
     pub game_events: Vec<GameEvent>,
+    pub event_name: String,
 }
 
 impl Demo {
@@ -67,13 +68,17 @@ impl Demo {
         for name in props_names {
             ticks_props.insert(name.to_string(), Vec::new());
         }
+        let mut cc = 0;
         while self.fp < self.bytes.len() as usize {
+            cc += 1;
             let f = self.read_frame();
             self.tick = f.tick;
-            let props_this_tick: Vec<(String, f32)> = extract_props(&self.entities, props_names);
+            let props_this_tick: Vec<(String, f32)> =
+                extract_props(&self.entities, props_names, &self.tick);
             for (k, v) in props_this_tick {
                 ticks_props.entry(k).or_insert_with(Vec::new).push(v);
             }
+
             self.parse_cmd(f.cmd);
         }
         ticks_props

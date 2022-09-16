@@ -44,10 +44,10 @@ impl Demo {
         b.ensure_bits();
 
         for inx in 0..upd {
-            entity_id += 1 + (b.read_u_bit_var() as i32);
-            if entity_id > 25 {
-                break;
-            }
+            let skip = b.read_u_bit_var();
+            entity_id += 1 + (skip as i32);
+            println!("{}", entity_id);
+
             if b.read_bool() {
                 self.entities
                     .as_mut()

@@ -215,6 +215,7 @@ impl<R: io::Read> BitReader<R> {
     }
 
     pub fn decode(&mut self, prop: &Prop) -> PropData {
+        println!("TYPE: {}", prop.prop.type_());
         match prop.prop.type_() {
             0 => return PropData::I32(self.decode_int(prop) as i32),
             1 => return PropData::F32(self.decode_float(prop)),

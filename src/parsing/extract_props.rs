@@ -4,13 +4,14 @@ use std::collections::HashMap;
 pub fn extract_props(
     entities: &Option<HashMap<u32, Option<Entity>>>,
     props_names: &Vec<String>,
+    tick: &i32,
 ) -> Vec<(String, f32)> {
     let mut tick_props: Vec<(String, f32)> = Vec::new();
 
     if entities.is_some() {
-        if entities.as_ref().unwrap().contains_key(&6) {
-            if entities.as_ref().unwrap()[&6].is_some() {
-                let x = entities.as_ref().unwrap()[&6].as_ref().unwrap();
+        if entities.as_ref().unwrap().contains_key(&7) {
+            if entities.as_ref().unwrap()[&7].is_some() {
+                let x = entities.as_ref().unwrap()[&7].as_ref().unwrap();
 
                 for prop_name in props_names {
                     if x.props.contains_key(prop_name) {
@@ -19,6 +20,7 @@ pub fn extract_props(
                         tick_props.push((prop_name.to_string(), -1.0))
                     }
                 }
+                tick_props.push(("tick".to_string(), *tick as f32))
             }
         }
     }

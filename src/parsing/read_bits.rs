@@ -84,11 +84,22 @@ pub struct BitReader<R: io::Read> {
 }
 
 impl<R: io::Read> BitReader<R> {
-    pub fn new(reader: R) -> BitReader<R> {
-        BitReader {
+    pub fn new(reader: R, uneven: i32) -> BitReader<R> {
+        let mut b = BitReader {
             inner: reader,
             bits: 0,
             available: 0,
+        };
+        b
+    }
+    pub fn read_uneven_start_bits(&mut self, uneven: usize) {
+        match uneven {
+            1 => {
+                let mut buf = [0; 8 / 8];
+                self.inner.read_exact(&mut buf);
+                self.bits = unsafe { mem::transmute(buf) };
+                self.available = NBITS;
+            }
         }
     }
 
@@ -101,6 +112,17 @@ impl<R: io::Read> BitReader<R> {
     }
 
     pub fn consume(&mut self, n: usize) {
+        if self.available == 0 {
+            //println!("GETTIN EM BITS BOI");
+            let r = self.ensure_bits();
+            //println!("{:?}", r);
+        }
+        //println!(
+        //"bitreader wanted to consume more than available, AVAILABLE: {} WANTED:{}",
+        //self.available, n
+        //);
+
+        //assert!(self.available >= n);
         self.bits = match n {
             NBITS => 0,
             n => self.bits >> n,
@@ -215,7 +237,7 @@ impl<R: io::Read> BitReader<R> {
     }
 
     pub fn decode(&mut self, prop: &Prop) -> PropData {
-        println!("TYPE: {}", prop.prop.type_());
+        //println!("PROP TYPE {}", prop.prop.type_());
         match prop.prop.type_() {
             0 => return PropData::I32(self.decode_int(prop) as i32),
             1 => return PropData::F32(self.decode_float(prop)),
@@ -231,56 +253,6 @@ impl<R: io::Read> BitReader<R> {
     pub fn decode_array(&mut self, prop: &Prop) -> Vec<i32> {
         let b = (prop.prop.num_elements() as f32).log2().floor() + 1.0;
         let num_elements = self.read_nbits(b as usize);
-        if prop.prop.var_name().contains("player_array") {
-            let mut total_read = 0;
-            total_read += self.available;
-            self.read_nbits(self.available);
-            self.ensure_bits();
-
-            if self.available >= (50 - total_read) {
-                self.read_nbits(50 - total_read);
-                return vec![
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0,
-                ];
-            } else {
-                self.read_nbits(32);
-                self.ensure_bits();
-                self.read_nbits(50 - 32 - total_read);
-                return vec![
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0,
-                ];
-            }
-
-            return vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            ];
-        }
-        /*
-        let mut maxel = prop.prop.num_elements();
-        let mut bitstoread = 1;
-        while maxel != 0 {
-            maxel >>= 1;
-            bitstoread += 1;
-        }
-        let mut num_elements = 0;
-        if !prop.prop.var_name().contains("player_array") {
-            num_elements = self.read_nbits(bitstoread - 1);
-        } else {
-            num_elements = self.read_nbits(bitstoread + 4);
-        }
-
-        let mut elems = vec![];
-        let p = prop.arr.as_ref().unwrap();
-        //
-        println!("{:?}", prop.prop.var_name());
-        if prop.prop.var_name().contains("player_array") {
-            num_elements = 5;
-        } else {
-            num_elements = 3;
-        }
-        */
 
         let p = prop.arr.as_ref().unwrap();
         let mut elems = vec![];
@@ -296,6 +268,7 @@ impl<R: io::Read> BitReader<R> {
             let val = self.decode(&pro);
             elems.push(val);
         }
+        //println!("{:?}", elems);
         vec![0, 0, 0]
     }
 
@@ -373,8 +346,8 @@ impl<R: io::Read> BitReader<R> {
         let mut result = 0.0;
         let ret = 0;
         let sign = false;
-        let integral = (coord_type == 2);
-        let low_pres = (coord_type == 1);
+        let integral = coord_type == 2;
+        let low_pres = coord_type == 1;
         let mut in_bounds = false;
         if self.read_bool() {
             in_bounds = true;
@@ -488,14 +461,21 @@ impl<R: io::Read> BitReader<R> {
         let mut bitsleft = n;
         let eight = 8.try_into().unwrap();
         let mut bytarr: [u8; 4] = [0, 0, 0, 0];
-
+        //println!("0 {}", self.available);
+        //self.ensure_bits();
+        //assert!(bitsleft <= n);
+        //println!("LEFT BEFORE", self.available)
         while bitsleft >= 32 {
             bytarr[0] = self.read_nbits(eight).try_into().unwrap();
+            //println!("1 {}", self.available);
             bytarr[1] = self.read_nbits(eight).try_into().unwrap();
+            //println!("2 {}", self.available);
             bytarr[2] = self.read_nbits(eight).try_into().unwrap();
+            //println!("3 {}", self.available);
             bytarr[3] = self.read_nbits(eight).try_into().unwrap();
             bitsleft -= 32;
         }
+        //println!("4 {}", self.available);
         /*
         while bitsleft >= 8 {
             res += self.read_nbits(8);

@@ -40,15 +40,18 @@ impl Demo {
 
         let upd = pack_ents.updated_entries();
         let mut entity_id: i32 = -1;
+        println!("PACKET LEN{:?}", &pack_ents.entity_data().len());
         let mut b = BitReader::new(pack_ents.entity_data());
         b.ensure_bits();
 
         for inx in 0..upd {
             let skip = b.read_u_bit_var();
             entity_id += 1 + (skip as i32);
-            println!("{}", entity_id);
+            //println!("{}", entity_id);
+            //assert!(entity_id <= (1 << 11));
 
             if b.read_bool() {
+                //println!("POOP{}", entity_id);
                 self.entities
                     .as_mut()
                     .unwrap()
@@ -83,11 +86,12 @@ impl Demo {
                 }
             } else {
                 let hm = self.entities.as_ref().unwrap();
-
                 let ent = hm.get(&(entity_id.try_into().unwrap()));
+
                 if ent.as_ref().unwrap().is_some() {
                     let x = ent.as_ref().unwrap().as_ref().unwrap();
                     let data = self.read_new_ent(&x, &mut b);
+
                     let mut mhm = self.entities.as_mut().unwrap();
                     let mut_ent = mhm.get_mut(&(entity_id as u32));
                     let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
@@ -95,6 +99,9 @@ impl Demo {
                     for pa in data {
                         ps.insert(pa.prop_name.clone(), pa);
                     }
+                } else {
+                    println!("ENTITY: {} NOT FOUND!", entity_id);
+                    panic!("f");
                 }
             }
         }
@@ -186,7 +193,7 @@ impl Demo {
         let mut excl = vec![];
 
         for prop in &table.props {
-            if (prop.flags() & (1 << 6) != 0) {
+            if prop.flags() & (1 << 6) != 0 {
                 excl.push(prop.clone());
             }
 
@@ -281,7 +288,7 @@ impl Demo {
             } else if prop.type_() == 5 {
                 let prop_arr = Prop {
                     prop: prop.clone(),
-                    arr: Some(table.props[cnt - 1].clone()),
+                    arr: Some(table.props[cnt].clone()),
                     table: table.clone(),
                     col: 1,
                     data: None,

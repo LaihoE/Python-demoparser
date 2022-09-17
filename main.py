@@ -21,18 +21,20 @@ def clean_events(events):
 
 
 
-demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
-#demo_name = "/home/laiho/Documents/demos/rclonetest/4.dem"
-event_name = "player_death"
+#demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
+demo_name = "/home/laiho/Documents/demos/rclonetest/q.dem"
+event_name = "announce_phase_end"
 
-events = clean_events(demoparser.parse_events(demo_name, event_name))
-wanted_ticks = []
+"""events = clean_events(demoparser.parse_events(demo_name, event_name))
+print(events)
+wanted_ticks = []"""
 
-for event in events:
-    if event["userid"] == "3":
-        wanted_ticks.append(int(event["tick"]))
-print(wanted_ticks)
-
+#for event in events:
+    #print(event)
+    #if event["userid"] == "3":
+        #wanted_ticks.append(int(event["tick"]))
+#print(wanted_ticks)
+#exit()
 
 
 out_arr = np.zeros((10000000), order='F')
@@ -40,12 +42,12 @@ prop_names = ["m_vecVelocity[0]", "m_vecVelocity[1]", "m_vecVelocity[2]"]
 dims = demoparser.parse_props(demo_name, prop_names, out_arr)
 
 
-
+"""
 df = transform_props(dims, out_arr, cols=prop_names)
 df = df[df["tick"].isin(wanted_ticks)]
 print(df.iloc[:50, :])
 
-
+"""
 
 # df = df[df["m_vecOrigin_X"] < 2000]
 # df = df[df["m_vecOrigin_Y"] > -6000] 

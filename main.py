@@ -22,7 +22,7 @@ def clean_events(events):
 
 
 #demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
-demo_name = "/home/laiho/Documents/demos/rclonetest/q.dem"
+demo_name = "/home/laiho/Documents/demos/rclonetest/5.dem"
 event_name = "announce_phase_end"
 
 """events = clean_events(demoparser.parse_events(demo_name, event_name))
@@ -35,12 +35,13 @@ wanted_ticks = []"""
         #wanted_ticks.append(int(event["tick"]))
 #print(wanted_ticks)
 #exit()
-
+import time
 
 out_arr = np.zeros((10000000), order='F')
 prop_names = ["m_vecVelocity[0]", "m_vecVelocity[1]", "m_vecVelocity[2]"]
+before = time.time()
 dims = demoparser.parse_props(demo_name, prop_names, out_arr)
-
+print(time.time() - before)
 
 """
 df = transform_props(dims, out_arr, cols=prop_names)

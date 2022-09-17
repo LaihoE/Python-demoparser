@@ -66,7 +66,12 @@ impl Demo {
         data: CSVCMsg_CreateStringTable,
         mut st: StringTable,
     ) -> StringTable {
-        let mut buf = BitReader::new(data.string_data());
+        let left_over = (data.string_data().len() % 4) as i32;
+        println!("LEFT OVER {} {}", left_over, data.string_data().len());
+
+        let mut buf = BitReader::new(data.string_data(), left_over);
+        buf.read_uneven_end_bits();
+
         let mut entry_bits = (data.max_entries() as f32).log2() as i32;
         let mut index = 0;
         let mut last_inx: i32 = -1;

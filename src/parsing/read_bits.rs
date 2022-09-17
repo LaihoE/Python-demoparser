@@ -81,47 +81,69 @@ pub struct BitReader<R: io::Read> {
     inner: R,
     bits: u32,
     available: usize,
+    left_over: i32,
 }
 
 impl<R: io::Read> BitReader<R> {
-    pub fn new(reader: R, uneven: i32) -> BitReader<R> {
+    pub fn new(reader: R, left_over: i32) -> BitReader<R> {
         let mut b = BitReader {
             inner: reader,
             bits: 0,
             available: 0,
+            left_over: left_over,
         };
         b
     }
-    pub fn read_uneven_start_bits(&mut self, uneven: usize) {
-        match uneven {
+
+    pub fn read_uneven_end_bits(&mut self) {
+        match self.left_over {
+            0 => {}
             1 => {
                 let mut buf = [0; 8 / 8];
                 self.inner.read_exact(&mut buf);
-                self.bits = unsafe { mem::transmute(buf) };
-                self.available = NBITS;
+                self.available = 8;
+                self.bits = u32::from(buf[0]);
             }
+            2 => {
+                let mut buf = [0; 16 / 8];
+                self.inner.read_exact(&mut buf);
+                self.available = 16;
+                self.bits = u32::from(buf[0]) + (u32::from(buf[1]) << 8);
+            }
+            3 => {
+                let mut buf = [0; 24 / 8];
+                self.inner.read_exact(&mut buf);
+                self.available = 24;
+                self.bits =
+                    u32::from(buf[0]) + (u32::from(buf[1]) << 8) + (u32::from(buf[2]) << 16);
+            }
+            _ => panic!("UNK LEFT OVER"),
         }
     }
 
+    //#[inline]
     pub fn ensure_bits(&mut self) -> io::Result<()> {
         let mut buf = [0; NBITS / 8];
-        self.inner.read_exact(&mut buf)?;
+        let had_enough = self.inner.read_exact(&mut buf);
+
         self.bits = unsafe { mem::transmute(buf) };
         self.available = NBITS;
+
         Ok(())
     }
-
+    //#[inline]
     pub fn consume(&mut self, n: usize) {
-        if self.available == 0 {
-            //println!("GETTIN EM BITS BOI");
-            let r = self.ensure_bits();
-            //println!("{:?}", r);
-        }
-        //println!(
-        //"bitreader wanted to consume more than available, AVAILABLE: {} WANTED:{}",
-        //self.available, n
-        //);
-
+        //if self.available >= n {
+        //println!("GETTIN EM BITS BOI");
+        //let r = self.ensure_bits();
+        //println!("{:?}", r);
+        //}
+        /*
+        println!(
+            "bitreader wanted to consume more than available, AVAILABLE: {} WANTED:{}",
+            self.available, n
+        );
+        */
         //assert!(self.available >= n);
         self.bits = match n {
             NBITS => 0,
@@ -129,7 +151,7 @@ impl<R: io::Read> BitReader<R> {
         };
         self.available -= n;
     }
-
+    //#[inline]
     pub fn read_bool(&mut self) -> bool {
         if self.available == 0 {
             self.ensure_bits();
@@ -138,7 +160,7 @@ impl<R: io::Read> BitReader<R> {
         self.consume(1);
         ret
     }
-
+    //#[inline]
     pub fn read_nbits(&mut self, n: usize) -> u32 {
         assert!(n <= NBITS);
 
@@ -156,7 +178,7 @@ impl<R: io::Read> BitReader<R> {
             ret.to_le()
         }
     }
-
+    //#[inline]
     pub fn read_u_bit_var(&mut self) -> u32 {
         let mut ret = self.read_nbits(6);
         //println!("{} {}", self.available, ret);
@@ -172,7 +194,7 @@ impl<R: io::Read> BitReader<R> {
         }
         ret
     }
-
+    //#[inline]
     pub fn read_inx(&mut self, last: i32, new_way: bool) -> i32 {
         let mut ret = 0;
         let mut val = 0;
@@ -198,7 +220,7 @@ impl<R: io::Read> BitReader<R> {
         let y: i32 = ret.try_into().unwrap();
         return last + 1 + y;
     }
-
+    //#[inline]
     pub fn read_varint(&mut self) -> u32 {
         let mut result: u32 = 0;
         let mut count: i32 = 0;
@@ -217,12 +239,12 @@ impl<R: io::Read> BitReader<R> {
         }
         return result.try_into().unwrap();
     }
-
+    //#[inline]
     pub fn skip(&mut self, nbits: i32) -> f32 {
         self.read_nbits(nbits.try_into().unwrap());
         0.0
     }
-
+    //#[inline]
     pub fn decode_string(&mut self) -> String {
         let mut length = self.read_nbits(9);
         if length == 0 {
@@ -235,7 +257,7 @@ impl<R: io::Read> BitReader<R> {
         let result = self.read_string(length.try_into().unwrap());
         result
     }
-
+    //#[inline]
     pub fn decode(&mut self, prop: &Prop) -> PropData {
         //println!("PROP TYPE {}", prop.prop.type_());
         match prop.prop.type_() {
@@ -249,7 +271,7 @@ impl<R: io::Read> BitReader<R> {
             _ => panic!("EEK"), //return PropData::I32(-69),
         }
     }
-
+    //#[inline]
     pub fn decode_array(&mut self, prop: &Prop) -> Vec<i32> {
         let b = (prop.prop.num_elements() as f32).log2().floor() + 1.0;
         let num_elements = self.read_nbits(b as usize);
@@ -271,7 +293,7 @@ impl<R: io::Read> BitReader<R> {
         //println!("{:?}", elems);
         vec![0, 0, 0]
     }
-
+    //#[inline]
     pub fn read_string(&mut self, length: i32) -> String {
         let mut s: Vec<u8> = Vec::new();
         let mut inx = 1;
@@ -289,7 +311,7 @@ impl<R: io::Read> BitReader<R> {
         let out = String::from_utf8_lossy(&s);
         out.try_into().unwrap()
     }
-
+    //#[inline]
     pub fn read_string_lossy(&mut self, length: i32) -> String {
         let mut s: Vec<u8> = Vec::new();
         let mut inx = 1;
@@ -307,7 +329,7 @@ impl<R: io::Read> BitReader<R> {
         let out = String::from_utf8_lossy(&s);
         out.to_string()
     }
-
+    //#[inline]
     pub fn decode_vec(&mut self, prop: &Prop) -> Vec<f32> {
         let x = self.decode_float(prop);
         let y = self.decode_float(prop);
@@ -330,18 +352,19 @@ impl<R: io::Read> BitReader<R> {
         //println!("X:{} Y:{} Z:{}", x, y, z);
         v
     }
+    //#[inline]
     pub fn decode_vec_xy(&mut self, prop: &Prop) -> Vec<f32> {
         let x = self.decode_float(prop);
         let y = self.decode_float(prop);
         let v = vec![x, y, 0.0];
         v
     }
-
+    //#[inline]
     pub fn read_sint_bits(&mut self, n: i32) -> u32 {
         let r = self.read_nbits(n.try_into().unwrap()) << (32 - n) >> (32 - n);
         r
     }
-
+    //#[inline]
     pub fn read_bit_coord_mp(&mut self, coord_type: u32) -> f64 {
         let mut result = 0.0;
         let ret = 0;
@@ -391,7 +414,7 @@ impl<R: io::Read> BitReader<R> {
             result
         }
     }
-
+    //#[inline]
     pub fn read_bit_cell_coord(&mut self, n: usize, coord_type: u32) -> u32 {
         let mut frac_bits = 0;
         let mut resolution = 0;
@@ -417,7 +440,7 @@ impl<R: io::Read> BitReader<R> {
         }
         return result;
     }
-
+    //#[inline]
     pub fn read_bit_normal(&mut self) -> f64 {
         let sign = self.read_bool();
         let frac = self.read_nbits(11);
@@ -428,7 +451,7 @@ impl<R: io::Read> BitReader<R> {
             result
         }
     }
-
+    //#[inline]
     pub fn read_bit_coord(&mut self) -> i32 {
         let mut int_val = 0;
         let mut frac_val = 0;
@@ -455,7 +478,7 @@ impl<R: io::Read> BitReader<R> {
             result
         }
     }
-
+    //#[inline]
     pub fn read_bits(&mut self, n: i32) -> f32 {
         let mut res = 0;
         let mut bitsleft = n;
@@ -487,7 +510,7 @@ impl<R: io::Read> BitReader<R> {
         let f = f32::from_le_bytes(bytarr);
         f
     }
-
+    //#[inline]
     pub fn read_bits_st(&mut self, n: i32) -> [u8; 340] {
         let mut res = 0;
         let mut bitsleft = n;
@@ -499,7 +522,7 @@ impl<R: io::Read> BitReader<R> {
         }
         bytarr
     }
-
+    //#[inline]
     pub fn decode_special_float(&mut self, prop: &Prop) -> f32 {
         let mut val = 0.0;
         let flags = prop.prop.flags();
@@ -524,7 +547,7 @@ impl<R: io::Read> BitReader<R> {
         }
         val
     }
-
+    //#[inline]
     pub fn decode_float(&mut self, prop: &Prop) -> f32 {
         let mut val = self.decode_special_float(prop);
         let mut interp = 0;
@@ -543,7 +566,7 @@ impl<R: io::Read> BitReader<R> {
             val
         }
     }
-
+    //#[inline]
     pub fn decode_int(&mut self, prop: &Prop) -> u32 {
         let flags = prop.prop.flags();
         if flags & (1 << 19) != 0 {
@@ -574,7 +597,7 @@ impl<R: io::Read> BitReader<R> {
             }
         }
     }
-
+    //#[inline]
     pub fn decode_int64(&mut self, prop: &Prop) -> i64 {
         let sign = false;
         let mut result: i64 = 0;
@@ -608,7 +631,7 @@ impl<R: io::Read> BitReader<R> {
         }
         result
     }
-
+    //#[inline]
     pub fn read_sbit_long(&mut self, numbits: u32) -> i32 {
         let nret = self.read_nbits(numbits.try_into().unwrap()) as i32;
         return (nret << (32 - numbits)) >> (32 - numbits);

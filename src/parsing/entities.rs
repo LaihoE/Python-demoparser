@@ -40,14 +40,23 @@ impl Demo {
 
         let upd = pack_ents.updated_entries();
         let mut entity_id: i32 = -1;
-        println!("PACKET LEN{:?}", &pack_ents.entity_data().len());
-        let mut b = BitReader::new(pack_ents.entity_data());
-        b.ensure_bits();
+        //println!("PACKET LEN{:?}", &pack_ents.entity_data().len());
+        let left_over = (pack_ents.entity_data().len() % 4) as i32;
+        println!("LEFT OVER {}", left_over);
+
+        let mut b = BitReader::new(pack_ents.entity_data(), left_over);
+        b.read_uneven_end_bits();
 
         for inx in 0..upd {
             let skip = b.read_u_bit_var();
             entity_id += 1 + (skip as i32);
-            //println!("{}", entity_id);
+            /*
+            if entity_id > 100 {
+                println!("WEEEEEEEEEEE {}", entity_id);
+                break;
+            }
+            */
+            println!("{} {}", entity_id, upd);
             //assert!(entity_id <= (1 << 11));
 
             if b.read_bool() {

@@ -131,20 +131,8 @@ impl<R: io::Read> BitReader<R> {
 
         Ok(())
     }
-    //#[inline]
+    #[inline]
     pub fn consume(&mut self, n: usize) {
-        //if self.available >= n {
-        //println!("GETTIN EM BITS BOI");
-        //let r = self.ensure_bits();
-        //println!("{:?}", r);
-        //}
-        /*
-        println!(
-            "bitreader wanted to consume more than available, AVAILABLE: {} WANTED:{}",
-            self.available, n
-        );
-        */
-        //assert!(self.available >= n);
         self.bits = match n {
             NBITS => 0,
             n => self.bits >> n,
@@ -160,9 +148,9 @@ impl<R: io::Read> BitReader<R> {
         self.consume(1);
         ret
     }
-    //#[inline]
+    #[inline(always)]
     pub fn read_nbits(&mut self, n: usize) -> u32 {
-        assert!(n <= NBITS);
+        //assert!(n <= NBITS);
 
         if self.available >= n {
             let ret = self.bits & MASKS[n];
@@ -214,7 +202,8 @@ impl<R: io::Read> BitReader<R> {
                 _ => {}
             }
         }
-        if ret == 0xfff || last > 100000 {
+        if ret == 0xfff {
+            // || last > 100000 {
             return -1;
         }
         let y: i32 = ret.try_into().unwrap();
@@ -484,10 +473,6 @@ impl<R: io::Read> BitReader<R> {
         let mut bitsleft = n;
         let eight = 8.try_into().unwrap();
         let mut bytarr: [u8; 4] = [0, 0, 0, 0];
-        //println!("0 {}", self.available);
-        //self.ensure_bits();
-        //assert!(bitsleft <= n);
-        //println!("LEFT BEFORE", self.available)
         while bitsleft >= 32 {
             bytarr[0] = self.read_nbits(eight).try_into().unwrap();
             //println!("1 {}", self.available);
@@ -498,15 +483,6 @@ impl<R: io::Read> BitReader<R> {
             bytarr[3] = self.read_nbits(eight).try_into().unwrap();
             bitsleft -= 32;
         }
-        //println!("4 {}", self.available);
-        /*
-        while bitsleft >= 8 {
-            res += self.read_nbits(8);
-        }
-        if bitsleft > 0 {
-            res += self.read_nbits(bitsleft.try_into().unwrap());
-        }
-        */
         let f = f32::from_le_bytes(bytarr);
         f
     }
@@ -547,7 +523,7 @@ impl<R: io::Read> BitReader<R> {
         }
         val
     }
-    //#[inline]
+    #[inline(always)]
     pub fn decode_float(&mut self, prop: &Prop) -> f32 {
         let mut val = self.decode_special_float(prop);
         let mut interp = 0;

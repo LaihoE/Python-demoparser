@@ -68,9 +68,8 @@ impl Demo {
         for name in props_names {
             ticks_props.insert(name.to_string(), Vec::new());
         }
-        let mut cc = 0;
+
         while self.fp < self.bytes.len() as usize {
-            cc += 1;
             let f = self.read_frame();
             self.tick = f.tick;
             let props_this_tick: Vec<(String, f32)> =
@@ -116,27 +115,60 @@ impl Demo {
 
             match msg as i32 {
                 25 => {
-                    let game_event: CSVCMsg_GameEvent = Message::parse_from_bytes(&data).unwrap();
-                    let game_events = self.parse_game_events(game_event);
-                    self.game_events.extend(game_events);
+                    let game_event = Message::parse_from_bytes(&data);
+                    match game_event {
+                        Ok(ge) => {
+                            let game_event = ge;
+                            let game_events = self.parse_game_events(game_event);
+                            self.game_events.extend(game_events);
+                        }
+                        Err(e) => panic!(
+                            "Failed to parse game event at tick {}. Error: {e}",
+                            self.tick
+                        ),
+                    }
                 }
                 30 => {
-                    let event_list: CSVCMsg_GameEventList =
-                        Message::parse_from_bytes(&data).unwrap();
-                    self.parse_game_event_list(event_list)
+                    let event_list = Message::parse_from_bytes(&data);
+                    match event_list {
+                        Ok(ev) => {
+                            let event_list = ev;
+                            self.parse_game_event_list(event_list)
+                        }
+                        Err(e) => panic!(
+                            "Failed to parse game event LIST at tick {}. Error: {e}",
+                            self.tick
+                        ),
+                    }
                 }
                 26 => {
                     if parse_props {
-                        let pack_ents: CSVCMsg_PacketEntities =
-                            Message::parse_from_bytes(data).unwrap();
-                        self.parse_packet_entities(pack_ents, parse_props);
+                        let pack_ents = Message::parse_from_bytes(data);
+                        match pack_ents {
+                            Ok(pe) => {
+                                let pack_ents = pe;
+                                self.parse_packet_entities(pack_ents, parse_props);
+                            }
+                            Err(e) => panic!(
+                                "Failed to parse Packet entities at tick {}. Error: {e}",
+                                self.tick
+                            ),
+                        }
                     }
                 }
                 12 => {
                     if parse_props {
-                        let string_table: CSVCMsg_CreateStringTable =
-                            Message::parse_from_bytes(&data).unwrap();
-                        self.create_string_table(string_table);
+                        let string_table = Message::parse_from_bytes(&data);
+                        match string_table {
+                            Ok(st) => {
+                                let string_table = st;
+                                self.create_string_table(string_table);
+                            }
+                            Err(e) => panic!(
+                                "Failed to parse String tables at tick {}. Error: {e}",
+                                self.tick
+                            ),
+                        }
                     }
                 }
                 _ => {}

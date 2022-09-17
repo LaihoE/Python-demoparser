@@ -12,20 +12,31 @@ pub struct ServerClass {
 
 impl Demo {
     pub fn parse_datatable(&mut self) {
-        let dt_len = self.read_i32();
+        let _ = self.read_i32();
         loop {
-            let v_type = self.read_varint();
+            let _ = self.read_varint();
             let size = self.read_varint();
             let data = self.read_n_bytes(size);
 
-            let table: CSVCMsg_SendTable = Message::parse_from_bytes(data).unwrap();
-            if table.is_end() {
-                break;
+            let table = Message::parse_from_bytes(data);
+            match table {
+                Ok(t) => {
+                    let table: CSVCMsg_SendTable = t;
+                    if table.is_end() {
+                        break;
+                    }
+                    self.dt_map.as_mut().unwrap().insert(
+                        table.net_table_name.as_ref().unwrap().to_string(),
+                        table.clone(),
+                    );
+                }
+                Err(e) => {
+                    panic!(
+                        "Failed to parse datatable at tick {}. Error: {}",
+                        self.tick, e
+                    )
+                }
             }
-            self.dt_map.as_mut().unwrap().insert(
-                table.net_table_name.as_ref().unwrap().to_string(),
-                table.clone(),
-            );
         }
 
         let class_count = self.read_short();

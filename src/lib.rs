@@ -94,7 +94,6 @@ pub fn parse_props(
     let mut cnt = 0;
     let mut col_len = 1;
 
-    props_names.push("tick".to_string());
     for prop_name in &props_names {
         let v = &data[prop_name];
         col_len = v.len();
@@ -104,6 +103,7 @@ pub fn parse_props(
             cnt += 1
         }
     }
+
     let mut result: Vec<i32> = vec![
         cnt.try_into().unwrap(),
         col_len.try_into().unwrap(),

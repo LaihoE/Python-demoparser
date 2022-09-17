@@ -67,8 +67,6 @@ impl Demo {
         mut st: StringTable,
     ) -> StringTable {
         let left_over = (data.string_data().len() % 4) as i32;
-        println!("LEFT OVER {} {}", left_over, data.string_data().len());
-
         let mut buf = BitReader::new(data.string_data(), left_over);
         buf.read_uneven_end_bits();
 

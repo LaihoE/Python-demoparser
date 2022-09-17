@@ -85,25 +85,6 @@ impl GameEvent {
     }
 }
 
-pub fn parse_game_event(game_event: &CSVCMsg_GameEvent, event: &Descriptor_t) -> HurtEvent {
-    let mut he = HurtEvent::default();
-    let mut cnt = 0;
-    for key in &game_event.keys {
-        match event.keys[cnt].name() {
-            "userid" => he.userid = key.val_short(),
-            "attacker" => he.attacker = key.val_short(),
-            "health" => he.health = key.val_byte(),
-            "armor" => he.armor = key.val_byte(),
-            "weapon" => he.weapon = key.val_string().try_into().unwrap(),
-            "dmg_health" => he.dmg_health = key.val_short(),
-            "dmg_armor" => he.dmg_armor = key.val_byte(),
-            "hitgroup" => he.hitgroup = key.val_byte(),
-            _ => println!("POOP"),
-        }
-        cnt += 1;
-    }
-    he
-}
 pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,

@@ -93,19 +93,15 @@ impl Demo {
                     .unwrap();
             }
             last_inx = index;
-            //println!("INX = {}", index);
             if buf.read_bool() {
                 if buf.read_bool() {
                     idx = buf.read_nbits(5);
                     btc = buf.read_nbits(5);
-                    //let substring = &history[idx as usize][..btc as usize];
                     let substring = "";
                     let suffix = buf.read_string_lossy(0);
                     entry = (substring.to_string() + &suffix.to_owned());
-                    //println!("ENTRY 1");
                 } else {
                     entry = buf.read_string_lossy(0);
-                    //println!("ENTRY 2");
                 }
                 st.data[index as usize].entry = entry.to_string()
             }
@@ -127,25 +123,11 @@ impl Demo {
                         self.players.push(ui);
                     }
                 }
-                if st.userinfo {
-                    /*
-                    let ui = self.parse_userinfo(user_data);
-                    self.players.push(ui);
-                    */
-                }
                 if history.len() == 32 {
                     history.remove(0);
                 }
             }
             history.push(entry.to_string());
-            /*
-            if data.name() == "instancebaseline" {
-                let cls_id = entry// as i32u//entry.parse::<i32>().unwrap();
-                println!("{}", cls_id);
-                //if self.serverclass_map.contains_key(cls_id) {}
-            }
-            println!("ST {}", data.name());
-            */
         }
         st
     }

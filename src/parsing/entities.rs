@@ -8,21 +8,25 @@ use crate::Demo;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
+use fxhash::FxHashMap;
 use protobuf;
 use protobuf::Message;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::io;
 use std::vec;
+
+use hashbrown::HashMap;
 
 #[derive(Debug)]
 pub struct Entity {
     pub class_id: u32,
     pub entity_id: u32,
     pub serial: u32,
+    //pub props: HashMap<String, PropAtom>,
     pub props: HashMap<String, PropAtom>,
 }
+
 #[derive(Debug)]
 pub struct Prop {
     pub prop: Sendprop_t,
@@ -38,23 +42,16 @@ impl Demo {
             return;
         };
 
-        let upd = pack_ents.updated_entries();
-        let mut entity_id: i32 = -1;
-        //println!("PACKET LEN{:?}", &pack_ents.entity_data().len());
+        let n_upd_ents = pack_ents.updated_entries();
         let left_over = (pack_ents.entity_data().len() % 4) as i32;
-
         let mut b = BitReader::new(pack_ents.entity_data(), left_over);
         b.read_uneven_end_bits();
+        let mut entity_id: i32 = -1;
 
-        for inx in 0..upd {
-            let skip = b.read_u_bit_var();
-            entity_id += 1 + (skip as i32);
+        for _ in 0..n_upd_ents {
+            entity_id += 1 + (b.read_u_bit_var() as i32);
 
             if b.read_bool() {
-                self.entities
-                    .as_mut()
-                    .unwrap()
-                    .insert(entity_id.try_into().unwrap(), None);
                 b.read_bool();
             } else if b.read_bool() {
                 let cls_id = b.read_nbits(self.class_bits.try_into().unwrap());
@@ -64,7 +61,7 @@ impl Demo {
                     class_id: cls_id,
                     entity_id: entity_id.try_into().unwrap(),
                     serial: serial,
-                    props: HashMap::new(),
+                    props: HashMap::default(),
                 };
 
                 self.entities
@@ -76,12 +73,14 @@ impl Demo {
                     class_id: cls_id,
                     entity_id: entity_id.try_into().unwrap(),
                     serial: serial,
-                    props: HashMap::new(),
+                    props: HashMap::default(),
                 };
 
                 let data = self.read_new_ent(&e, &mut b);
                 for pa in data {
-                    e.props.insert(pa.prop_name.clone(), pa);
+                    if self.wanted_props.contains(&pa.prop_name) {
+                        e.props.insert(pa.prop_name.clone(), pa);
+                    }
                 }
             } else {
                 let hm = self.entities.as_ref().unwrap();
@@ -93,10 +92,14 @@ impl Demo {
 
                     let mut mhm = self.entities.as_mut().unwrap();
                     let mut_ent = mhm.get_mut(&(entity_id as u32));
+
                     let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
+                    self.cnt += ps.len() as i32;
 
                     for pa in data {
-                        ps.insert(pa.prop_name.clone(), pa);
+                        if self.wanted_props.contains(&pa.prop_name) {
+                            ps.insert(pa.prop_name.clone(), pa);
+                        }
                     }
                 } else {
                     println!("ENTITY: {} NOT FOUND!", entity_id);
@@ -123,52 +126,53 @@ impl Demo {
             indicies.push(val);
         }
 
-        let l = indicies.len();
-        let mut props: Vec<PropAtom> = Vec::new();
+        let mut props: Vec<PropAtom> = Vec::with_capacity(indicies.len());
 
         for inx in indicies {
-            let mut cnt = 0;
-            if &sv_cls.fprops.as_ref().unwrap().len() > &(inx as usize) {
-                let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
-                let pdata = b.decode(prop);
-
-                match pdata {
-                    PropData::VecXY(v) => {
-                        let endings = vec!["_X", "_Y"];
-                        for inx in 0..2 {
-                            let data = PropData::F32(v[inx]);
-                            let name = prop.prop.var_name().to_string() + endings[inx];
-                            let atom = PropAtom {
-                                prop_name: name,
-                                data: data,
-                                tick: self.tick,
-                            };
-                            props.push(atom);
-                        }
-                    }
-                    PropData::VecXYZ(v) => {
-                        let endings = vec!["_X", "_Y", "_Z"];
-                        for inx in 0..3 {
-                            let data = PropData::F32(v[inx]);
-                            let name = prop.prop.var_name().to_string() + endings[inx];
-                            let atom = PropAtom {
-                                prop_name: name,
-                                data: data,
-                                tick: self.tick,
-                            };
-                            props.push(atom);
-                        }
-                    }
-
-                    PropData::String(_) => {}
-                    _ => {
+            let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
+            let pdata = b.decode(prop);
+            if !self
+                .wanted_props
+                .contains(&prop.prop.var_name().to_string())
+            {
+                continue;
+            }
+            match pdata {
+                PropData::VecXY(v) => {
+                    let endings = ["_X", "_Y"];
+                    for inx in 0..2 {
+                        let data = PropData::F32(v[inx]);
+                        let name = prop.prop.var_name().to_string() + endings[inx];
                         let atom = PropAtom {
-                            prop_name: prop.prop.var_name().to_string(),
-                            data: pdata,
+                            prop_name: name,
+                            data: data,
                             tick: self.tick,
                         };
                         props.push(atom);
                     }
+                }
+                PropData::VecXYZ(v) => {
+                    let endings = ["_X", "_Y", "_Z"];
+                    for inx in 0..3 {
+                        let data = PropData::F32(v[inx]);
+                        let name = prop.prop.var_name().to_string() + endings[inx];
+                        let atom = PropAtom {
+                            prop_name: name,
+                            data: data,
+                            tick: self.tick,
+                        };
+                        props.push(atom);
+                    }
+                }
+
+                PropData::String(_) => {}
+                _ => {
+                    let atom = PropAtom {
+                        prop_name: prop.prop.var_name().to_string(),
+                        data: pdata,
+                        tick: self.tick,
+                    };
+                    props.push(atom);
                 }
             }
         }
@@ -177,14 +181,9 @@ impl Demo {
 
     pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) -> Vec<PropAtom> {
         let mut data = vec![];
-        if self
-            .serverclass_map
-            .contains_key(&(ent.class_id.try_into().unwrap()))
-        {
-            let sv_cls = &self.serverclass_map[&(ent.class_id.try_into().unwrap())];
-            let props = self.handle_entity_upd(sv_cls, b);
-            data.extend(props);
-        }
+        let sv_cls = &self.serverclass_map[&(ent.class_id.try_into().unwrap())];
+        let props = self.handle_entity_upd(sv_cls, b);
+        //data.extend(props);
         data
     }
 
@@ -246,9 +245,9 @@ impl Demo {
     #[inline]
     pub fn is_prop_excl(
         &self,
-        excl: Vec<Sendprop_t>,
+        excl: &Vec<Sendprop_t>,
         table: &CSVCMsg_SendTable,
-        prop: Sendprop_t,
+        prop: &Sendprop_t,
     ) -> bool {
         for item in excl {
             if table.net_table_name() == item.dt_name() && prop.var_name() == item.var_name() {
@@ -265,7 +264,7 @@ impl Demo {
         for prop in &table.props {
             if (prop.flags() & (1 << 8) != 0)
                 || (prop.flags() & (1 << 6) != 0)
-                || self.is_prop_excl(excl.clone(), &table, prop.clone())
+                || self.is_prop_excl(excl, &table, prop)
             {
                 continue;
             }

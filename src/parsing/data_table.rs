@@ -40,7 +40,6 @@ impl Demo {
         }
 
         let class_count = self.read_short();
-        let mut temp: u32 = class_count.try_into().unwrap();
         self.class_bits = (class_count as f32 + 1.).log2().ceil() as u32;
 
         for _ in 0..class_count {

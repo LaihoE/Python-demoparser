@@ -1,5 +1,5 @@
 use crate::parsing::entities::Entity;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 pub fn extract_props(
     entities: &Option<HashMap<u32, Option<Entity>>>,

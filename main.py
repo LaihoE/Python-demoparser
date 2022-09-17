@@ -1,3 +1,5 @@
+from asyncio import events
+from typing import List
 import demoparser
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,27 +21,43 @@ def clean_events(events):
         cleaned_events.append(subd)
     return cleaned_events
 
+class PythonDemoParser:
+    def __init__(self, file: str) -> None:
+        self.path = file
+
+    def parse_props(self, props) -> pd.DataFrame:
+        out_arr = np.zeros((10000000), order='F')
+        dims = demoparser.parse_props(self.path, prop_names, out_arr)
+        df = transform_props(dims, out_arr, cols=prop_names)
+        return df
+
+    def parse_events(self, game_events) -> list:
+        game_events = demoparser.parse_events(self.path, game_events)
+        game_events = clean_events(game_events)
+        return game_events
 
 
 demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
 
 import glob
 import time
-out_arr = np.zeros((10000000), order='F')
-files = glob.glob("/home/laiho/Documents/demos/benchmark/*")
 
 
-before = time.time()
-for demo_name in files:
+prop_names = [
+"m_vecVelocity[0]",
+"m_vecVelocity[1]",
+"m_vecVelocity[2]",
+"m_vecViewOffset[2]",
+"m_angEyeAngles[0]",
+"m_angEyeAngles[1]",
+"m_vecOrigin_X"
+"m_vecOrigin_Y"
+"m_vecOrigin[2]"]
 
-    # demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
-
-    prop_names = ["m_vecOrigin_X", "m_vecOrigin_Y"]
-
-    dims = demoparser.parse_props(demo_name, prop_names, out_arr)
-
-    df = transform_props(dims, out_arr, cols=prop_names)
+event_name = "round_end"
 
 
-print(time.time() - before)
-# 10s
+parser = PythonDemoParser(demo_name)
+
+game_events = parser.parse_events(event_name)
+df = parser.parse_props(prop_names)

@@ -5,13 +5,14 @@ use numpy::{
     PyReadwriteArray1, PyReadwriteArrayDyn,
 };
 mod parsing;
+use fxhash::FxHashMap;
+use hashbrown::HashMap;
 use parsing::header::Header;
 use parsing::parser::Demo;
 use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
 use pyo3::types::PyList;
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::time::Instant;
 
@@ -30,30 +31,31 @@ pub fn parse_events(
         tick: 0,
         event_list: None,
         event_vec: None,
-        dt_map: Some(HashMap::new()),
+        dt_map: Some(HashMap::default()),
         class_bits: 0,
-        serverclass_map: HashMap::new(),
-        entities: Some(HashMap::new()),
+        serverclass_map: HashMap::default(),
+        entities: Some(HashMap::default()),
         bad: Vec::new(),
         stringtables: Vec::new(),
         players: Vec::new(),
         parse_props: false,
         game_events: Vec::new(),
         event_name: event_name,
+        wanted_props: Vec::new(),
+        cnt: 0,
     };
     let props_names = vec!["".to_owned()];
     let h: Header = d.parse_header();
     let data = d.parse_frame(&props_names);
     let mut cnt = 0;
-    let mut game_evs: Vec<HashMap<String, Vec<PyObject>>> = Vec::new();
+    let mut game_evs: Vec<FxHashMap<String, Vec<PyObject>>> = Vec::new();
 
     for ge in d.game_events {
-        let mut hm: HashMap<String, Vec<PyObject>> = HashMap::new();
+        let mut hm: FxHashMap<String, Vec<PyObject>> = FxHashMap::default();
         let tuples = ge.to_py_tuples(py);
         for (k, v) in tuples {
             hm.entry(k).or_insert_with(Vec::new).push(v);
         }
-
         game_evs.push(hm);
     }
 
@@ -75,16 +77,18 @@ pub fn parse_props(
         tick: 0,
         event_list: None,
         event_vec: None,
-        dt_map: Some(HashMap::new()),
+        dt_map: Some(HashMap::default()),
         class_bits: 0,
-        serverclass_map: HashMap::new(),
-        entities: Some(HashMap::new()),
+        serverclass_map: HashMap::default(),
+        entities: Some(HashMap::default()),
         bad: Vec::new(),
         stringtables: Vec::new(),
         players: Vec::new(),
         parse_props: true,
+        wanted_props: props_names.clone(),
         game_events: Vec::new(),
         event_name: "".to_string(),
+        cnt: 0,
     };
 
     let h: Header = d.parse_header();
@@ -93,11 +97,11 @@ pub fn parse_props(
     let data = d.parse_frame(&props_names);
     let mut cnt = 0;
     let mut col_len = 1;
-
+    props_names.push("tick".to_string());
     for prop_name in &props_names {
         let v = &data[prop_name];
         col_len = v.len();
-        println!("{}", col_len);
+
         for prop in v {
             out_arr[cnt] = *prop as f64;
             cnt += 1
@@ -110,9 +114,6 @@ pub fn parse_props(
         props_names.len().try_into().unwrap(),
     ];
 
-    for player in d.players {
-        println!("{} {}", player.name, player.entity_id)
-    }
     Ok(result)
 }
 

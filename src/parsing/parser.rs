@@ -15,16 +15,19 @@ use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
 use csgoproto::netmessages::CSVCMsg_SendTable;
+use fxhash::FxHashMap;
 use netmessages::CSVCMsg_PacketEntities;
 use protobuf;
 use protobuf::reflect::MessageDescriptor;
 use protobuf::Message;
 use pyo3::prelude::*;
 use std::any::Any;
-use std::collections::HashMap;
 use std::convert::TryInto;
+use std::thread;
 use std::time::Instant;
 use std::vec;
+
+use hashbrown::HashMap;
 
 use numpy::ndarray::{Array1, ArrayD, ArrayView1, ArrayViewD, ArrayViewMutD, Zip};
 use numpy::{
@@ -59,12 +62,14 @@ pub struct Demo {
     pub parse_props: bool,
     pub game_events: Vec<GameEvent>,
     pub event_name: String,
+    pub cnt: i32,
+    pub wanted_props: Vec<String>,
 }
 
 impl Demo {
-    pub fn parse_frame(&mut self, props_names: &Vec<String>) -> HashMap<String, Vec<f32>> {
+    pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, Vec<f32>> {
         // Main loop
-        let mut ticks_props: HashMap<String, Vec<f32>> = HashMap::new();
+        let mut ticks_props: FxHashMap<String, Vec<f32>> = FxHashMap::default();
         for name in props_names {
             ticks_props.insert(name.to_string(), Vec::new());
         }
@@ -72,6 +77,7 @@ impl Demo {
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame();
             self.tick = f.tick;
+
             let props_this_tick: Vec<(String, f32)> =
                 extract_props(&self.entities, props_names, &self.tick);
             for (k, v) in props_this_tick {
@@ -89,6 +95,7 @@ impl Demo {
             tick: self.read_i32(),
             playerslot: self.read_byte(),
         };
+        //println!("{}", f.tick);
         f
     }
 
@@ -98,7 +105,7 @@ impl Demo {
             2 => self.parse_packet(),
             6 => self.parse_datatable(),
             _ => {
-                println!("CMD {}", cmd) //panic!("UNK CMD")
+                //println!("CMD {}", cmd) //panic!("UNK CMD")
             } //,
         }
     }
@@ -143,6 +150,7 @@ impl Demo {
                 }
                 26 => {
                     if parse_props {
+                        println!("HARAM");
                         let pack_ents = Message::parse_from_bytes(data);
                         match pack_ents {
                             Ok(pe) => {
@@ -158,6 +166,7 @@ impl Demo {
                 }
                 12 => {
                     if parse_props {
+                        println!("HARAM2");
                         let string_table = Message::parse_from_bytes(&data);
                         match string_table {
                             Ok(st) => {

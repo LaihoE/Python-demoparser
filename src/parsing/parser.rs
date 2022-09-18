@@ -52,7 +52,7 @@ pub struct Demo {
     pub bytes: Vec<u8>,
     pub class_bits: u32,
     pub event_list: Option<CSVCMsg_GameEventList>,
-    pub event_vec: Option<Vec<Descriptor_t>>,
+    pub event_map: Option<HashMap<i32, Descriptor_t>>,
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
     pub serverclass_map: HashMap<u16, ServerClass>,
     pub entities: Option<HashMap<u32, Option<Entity>>>,
@@ -150,7 +150,6 @@ impl Demo {
                 }
                 26 => {
                     if parse_props {
-                        println!("HARAM");
                         let pack_ents = Message::parse_from_bytes(data);
                         match pack_ents {
                             Ok(pe) => {
@@ -166,7 +165,6 @@ impl Demo {
                 }
                 12 => {
                     if parse_props {
-                        println!("HARAM2");
                         let string_table = Message::parse_from_bytes(&data);
                         match string_table {
                             Ok(st) => {

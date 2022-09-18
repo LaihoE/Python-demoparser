@@ -30,7 +30,7 @@ pub fn parse_events(
         cmd: 0,
         tick: 0,
         event_list: None,
-        event_vec: None,
+        event_map: None,
         dt_map: Some(HashMap::default()),
         class_bits: 0,
         serverclass_map: HashMap::default(),
@@ -76,7 +76,7 @@ pub fn parse_props(
         cmd: 0,
         tick: 0,
         event_list: None,
-        event_vec: None,
+        event_map: None,
         dt_map: Some(HashMap::default()),
         class_bits: 0,
         serverclass_map: HashMap::default(),
@@ -97,6 +97,7 @@ pub fn parse_props(
     let data = d.parse_frame(&props_names);
     let mut cnt = 0;
     let mut col_len = 1;
+
     props_names.push("tick".to_string());
     for prop_name in &props_names {
         let v = &data[prop_name];

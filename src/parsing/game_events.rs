@@ -5,6 +5,7 @@ use csgoproto::netmessages::csvcmsg_game_event::Key_t;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
+use hashbrown::HashMap;
 use protobuf::Message;
 use pyo3::prelude::*;
 
@@ -124,10 +125,12 @@ pub fn _match_data_to_game_event(
 impl Demo {
     pub fn parse_game_events(&self, game_event: CSVCMsg_GameEvent) -> Vec<GameEvent> {
         let mut game_events: Vec<GameEvent> = Vec::new();
-        for event_desc in self.event_vec.as_ref().unwrap() {
-            if event_desc.eventid() == game_event.eventid() {
-                let name_data_pairs = gen_name_val_pairs(&game_event, event_desc, &self.tick);
-                //println!("{} {:?}", event_desc.name().to_owned(), name_data_pairs);
+
+        let event_desc = &self.event_map;
+        match event_desc {
+            Some(ev_desc_map) => {
+                let event_desc = &ev_desc_map[&game_event.eventid()];
+                let name_data_pairs = gen_name_val_pairs(&game_event, &event_desc, &self.tick);
                 if _match_data_to_game_event(&name_data_pairs, event_desc.name(), &self.event_name)
                 {
                     game_events.push({
@@ -138,11 +141,19 @@ impl Demo {
                     })
                 }
             }
+            None => {
+                panic!("Game event was not found in envent list passed earlier");
+            }
         }
+
         game_events
     }
-
     pub fn parse_game_event_list(&mut self, event_list: CSVCMsg_GameEventList) {
-        self.event_vec = Some(event_list.descriptors);
+        let mut hm: HashMap<i32, Descriptor_t> = HashMap::default();
+
+        for event_desc in event_list.descriptors {
+            hm.insert(event_desc.eventid(), event_desc);
+        }
+        self.event_map = Some(hm);
     }
 }

@@ -3,12 +3,12 @@ use crate::Demo;
 impl Demo {
     pub fn read_varint(&mut self) -> u32 {
         let mut result: u32 = 0;
-        let mut count: i32 = 0;
+        let mut count: u8 = 0;
         let mut b: u32;
 
         loop {
             if count >= 5 {
-                return result.try_into().unwrap();
+                return result as u32;
             }
             b = self.bytes[self.fp].try_into().unwrap();
             self.fp += 1;
@@ -18,7 +18,7 @@ impl Demo {
                 break;
             }
         }
-        return result.try_into().unwrap();
+        return result as u32;
     }
     pub fn read_short(&mut self) -> u16 {
         let s = u16::from_le_bytes(self.bytes[self.fp..self.fp + 2].try_into().unwrap());

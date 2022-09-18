@@ -42,22 +42,21 @@ demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Off
 import glob
 import time
 
-
 prop_names = [
 "m_vecVelocity[0]",
 "m_vecVelocity[1]",
-"m_vecVelocity[2]",
-"m_vecViewOffset[2]",
-"m_angEyeAngles[0]",
-"m_angEyeAngles[1]",
-"m_vecOrigin_X"
-"m_vecOrigin_Y"
-"m_vecOrigin[2]"]
+]
 
-event_name = "round_end"
+event_name = "player_death"
 
+files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
 
-parser = PythonDemoParser(demo_name)
+deaths = []
+rounds_ends = []
 
-game_events = parser.parse_events(event_name)
-df = parser.parse_props(prop_names)
+for file in files:
+    before = time.time()
+    parser = PythonDemoParser(file)
+    deaths = parser.parse_events(event_name)
+    print(time.time() - before)
+    break

@@ -24,7 +24,7 @@ fn main() {
         cmd: 0,
         tick: 0,
         event_list: None,
-        event_vec: None,
+        event_map: None,
         dt_map: Some(HashMap::default()),
         class_bits: 0,
         serverclass_map: HashMap::default(),
@@ -32,20 +32,20 @@ fn main() {
         bad: Vec::new(),
         stringtables: Vec::new(),
         players: Vec::new(),
-        parse_props: false,
+        parse_props: true,
         game_events: Vec::new(),
         event_name: "".to_string(),
         wanted_props: Vec::new(),
         cnt: 0,
     };
-    use std::time::Instant;
-    let now = Instant::now();
 
     let h: Header = d.parse_header();
     let mut event_names: Vec<String> = Vec::new();
-
+    use std::time::Instant;
+    let now = Instant::now();
     let data = d.parse_frame(&props_names);
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
     println!("{}", d.cnt);
+    //println!("{:?}", d.game_events);
 }

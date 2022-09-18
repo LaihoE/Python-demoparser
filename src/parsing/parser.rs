@@ -45,7 +45,7 @@ pub struct Frame {
     pub playerslot: u8,
 }
 
-pub struct Demo {
+pub struct Demo<'a> {
     pub fp: usize,
     pub tick: i32,
     pub cmd: u8,
@@ -54,7 +54,7 @@ pub struct Demo {
     pub event_list: Option<CSVCMsg_GameEventList>,
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
-    pub serverclass_map: HashMap<u16, ServerClass>,
+    pub serverclass_map: HashMap<u16, ServerClass<'a>>,
     pub entities: Option<HashMap<u32, Option<Entity>>>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
@@ -66,7 +66,7 @@ pub struct Demo {
     pub wanted_props: Vec<String>,
 }
 
-impl Demo {
+impl Demo<'_> {
     pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, Vec<f32>> {
         // Main loop
         let mut ticks_props: FxHashMap<String, Vec<f32>> = FxHashMap::default();

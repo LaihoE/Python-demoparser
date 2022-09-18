@@ -1,6 +1,6 @@
 use crate::Demo;
 
-impl Demo {
+impl Demo<'_> {
     pub fn read_varint(&mut self) -> u32 {
         let mut result: u32 = 0;
         let mut count: u8 = 0;

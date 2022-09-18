@@ -28,15 +28,15 @@ pub struct Entity {
 }
 
 #[derive(Debug)]
-pub struct Prop {
-    pub prop: Sendprop_t,
-    pub arr: Option<Sendprop_t>,
-    pub table: CSVCMsg_SendTable,
+pub struct Prop<'a> {
+    pub prop: &'a Sendprop_t,
+    pub arr: Option<&'a Sendprop_t>,
+    pub table: &'a CSVCMsg_SendTable,
     pub col: i32,
     pub data: Option<PropData>,
 }
 
-impl Demo {
+impl Demo<'_> {
     pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities, should_parse: bool) {
         if !should_parse {
             return;
@@ -203,11 +203,11 @@ impl Demo {
         excl
     }
 
-    pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
+    pub fn flatten_dt(self, table: &CSVCMsg_SendTable) -> &'_ Vec<&'_ Prop> {
         let excl = self.get_excl_props(table);
         let mut newp = self.get_props(table, &excl);
         let mut prios = vec![];
-        for p in &newp {
+        for p in newp {
             prios.push(p.prop.priority());
         }
 
@@ -238,7 +238,6 @@ impl Demo {
                 }
             }
         }
-
         newp
     }
 
@@ -257,10 +256,11 @@ impl Demo {
         false
     }
 
-    pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
-        let mut flat: Vec<Prop> = Vec::new();
-        let mut child_props = Vec::new();
+    pub fn get_props(table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> &'_ Vec<&'_ Prop> {
+        let mut flat: &'_ Vec<&'_ Prop> = &Vec::new();
+        let mut child_props: &'_ Vec<&'_ Prop> = &Vec::new();
         let mut cnt = 0;
+
         for prop in &table.props {
             if (prop.flags() & (1 << 8) != 0)
                 || (prop.flags() & (1 << 6) != 0)
@@ -285,22 +285,22 @@ impl Demo {
                 }
             } else if prop.type_() == 5 {
                 let prop_arr = Prop {
-                    prop: prop.clone(),
-                    arr: Some(table.props[cnt].clone()),
-                    table: table.clone(),
+                    prop: prop,
+                    arr: Some(&table.props[cnt]),
+                    table: table,
                     col: 1,
                     data: None,
                 };
-                flat.push(prop_arr);
+                flat.push(&prop_arr);
             } else {
                 let prop = Prop {
-                    prop: prop.clone(),
+                    prop: prop,
                     arr: None,
-                    table: table.clone(),
+                    table: table,
                     col: 1,
                     data: None,
                 };
-                flat.push(prop);
+                flat.push(&prop);
             }
             cnt += 1;
         }

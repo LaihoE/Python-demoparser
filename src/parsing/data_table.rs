@@ -3,15 +3,15 @@ use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf::Message;
 
-pub struct ServerClass {
+pub struct ServerClass<'a> {
     pub id: u16,
     pub name: String,
     pub dt: String,
-    pub fprops: Option<Vec<Prop>>,
+    pub fprops: Option<&'a Vec<&'a Prop<'a>>>,
 }
 
-impl Demo {
-    pub fn parse_datatable(&mut self) {
+impl<'a> Demo<'a> {
+    pub fn parse_datatable(&'a mut self) {
         let _ = self.read_i32();
         loop {
             let _ = self.read_varint();
@@ -48,12 +48,11 @@ impl Demo {
             let dt = self.read_string();
             if self.parse_props {
                 let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt]);
-
                 let server_class = ServerClass {
                     id: my_id,
                     name: name,
                     dt: dt,
-                    fprops: Some(props),
+                    fprops: Some(&props),
                 };
                 self.serverclass_map.insert(my_id, server_class);
             }

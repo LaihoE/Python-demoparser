@@ -37,7 +37,7 @@ pub struct UserInfo {
     pub tbd: u32,
 }
 
-impl Demo {
+impl Demo<'_> {
     pub fn parse_string_table(&mut self) {
         let length = self.read_i32();
         let data = self.read_n_bytes(length.try_into().unwrap());

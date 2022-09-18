@@ -1,6 +1,7 @@
 use crate::parsing::entities::Prop;
 use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_SendTable;
+use hashbrown::HashMap;
 use protobuf::Message;
 
 pub struct ServerClass {
@@ -13,6 +14,7 @@ pub struct ServerClass {
 impl Demo {
     pub fn parse_datatable(&mut self) {
         let _ = self.read_i32();
+        let mut dt_map: HashMap<String, CSVCMsg_SendTable> = HashMap::default();
         loop {
             let _ = self.read_varint();
             let size = self.read_varint();
@@ -25,7 +27,7 @@ impl Demo {
                     if table.is_end() {
                         break;
                     }
-                    self.dt_map.as_mut().unwrap().insert(
+                    dt_map.insert(
                         table.net_table_name.as_ref().unwrap().to_string(),
                         table.clone(),
                     );
@@ -47,7 +49,7 @@ impl Demo {
             let name = self.read_string();
             let dt = self.read_string();
             if self.parse_props {
-                let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt]);
+                let props = self.flatten_dt(&dt_map[&dt], &dt_map);
 
                 let server_class = ServerClass {
                     id: my_id,

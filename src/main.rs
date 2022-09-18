@@ -25,7 +25,6 @@ fn main() {
         tick: 0,
         event_list: None,
         event_map: None,
-        dt_map: Some(HashMap::default()),
         class_bits: 0,
         serverclass_map: HashMap::default(),
         entities: Some(HashMap::default()),

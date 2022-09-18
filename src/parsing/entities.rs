@@ -90,10 +90,10 @@ impl Demo<'_> {
                     let x = ent.as_ref().unwrap().as_ref().unwrap();
                     let data = self.read_new_ent(&x, &mut b);
 
-                    let mut mhm = self.entities.as_mut().unwrap();
+                    let mhm = self.entities.as_mut().unwrap();
                     let mut_ent = mhm.get_mut(&(entity_id as u32));
 
-                    let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
+                    let ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
                     self.cnt += ps.len() as i32;
 
                     for pa in data {
@@ -187,7 +187,11 @@ impl Demo<'_> {
         data
     }
 
-    pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> Vec<Sendprop_t> {
+    pub fn get_excl_props(
+        &self,
+        table: &CSVCMsg_SendTable,
+        dt_map: &HashMap<String, CSVCMsg_SendTable>,
+    ) -> Vec<Sendprop_t> {
         let mut excl = vec![];
 
         for prop in &table.props {
@@ -196,16 +200,20 @@ impl Demo<'_> {
             }
 
             if prop.type_() == 6 {
-                let sub_table = &self.dt_map.as_ref().unwrap()[prop.dt_name()];
-                excl.extend(self.get_excl_props(&sub_table.clone()));
+                let sub_table = &dt_map[prop.dt_name()];
+                excl.extend(self.get_excl_props(&sub_table.clone(), dt_map));
             }
         }
         excl
     }
 
-    pub fn flatten_dt(self, table: &CSVCMsg_SendTable) -> &'_ Vec<&'_ Prop> {
-        let excl = self.get_excl_props(table);
-        let mut newp = self.get_props(table, &excl);
+    pub fn flatten_dt(
+        &self,
+        table: &CSVCMsg_SendTable,
+        dt_map: &HashMap<String, CSVCMsg_SendTable>,
+    ) -> Vec<Prop> {
+        let excl = self.get_excl_props(table, dt_map);
+        let mut newp = self.get_props(table, &excl, &dt_map);
         let mut prios = vec![];
         for p in newp {
             prios.push(p.prop.priority());
@@ -248,6 +256,7 @@ impl Demo<'_> {
         table: &CSVCMsg_SendTable,
         prop: &Sendprop_t,
     ) -> bool {
+        println!("ECX {}", excl.len());
         for item in excl {
             if table.net_table_name() == item.dt_name() && prop.var_name() == item.var_name() {
                 return true;
@@ -256,9 +265,14 @@ impl Demo<'_> {
         false
     }
 
-    pub fn get_props(table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> &'_ Vec<&'_ Prop> {
-        let mut flat: &'_ Vec<&'_ Prop> = &Vec::new();
-        let mut child_props: &'_ Vec<&'_ Prop> = &Vec::new();
+    pub fn get_props(
+        &self,
+        table: &CSVCMsg_SendTable,
+        excl: &Vec<Sendprop_t>,
+        dt_map: &HashMap<String, CSVCMsg_SendTable>,
+    ) -> Vec<Prop> {
+        let mut flat: Vec<Prop> = Vec::new();
+        let mut child_props = Vec::new();
         let mut cnt = 0;
 
         for prop in &table.props {
@@ -270,8 +284,8 @@ impl Demo<'_> {
             }
 
             if prop.type_() == 6 {
-                let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
-                child_props = self.get_props(sub_table, excl);
+                let sub_table = &dt_map[&prop.dt_name().to_string()];
+                child_props = self.get_props(&sub_table, excl, dt_map);
 
                 if (prop.flags() & (1 << 11)) == 0 {
                     for mut p in child_props {
@@ -279,7 +293,7 @@ impl Demo<'_> {
                         flat.push(p);
                     }
                 } else {
-                    for mut p in child_props {
+                    for p in child_props {
                         flat.push(p);
                     }
                 }
@@ -291,7 +305,7 @@ impl Demo<'_> {
                     col: 1,
                     data: None,
                 };
-                flat.push(&prop_arr);
+                flat.push(prop_arr);
             } else {
                 let prop = Prop {
                     prop: prop,
@@ -300,7 +314,7 @@ impl Demo<'_> {
                     col: 1,
                     data: None,
                 };
-                flat.push(&prop);
+                flat.push(prop);
             }
             cnt += 1;
         }

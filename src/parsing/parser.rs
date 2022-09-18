@@ -53,7 +53,6 @@ pub struct Demo<'a> {
     pub class_bits: u32,
     pub event_list: Option<CSVCMsg_GameEventList>,
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
-    pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
     pub serverclass_map: HashMap<u16, ServerClass<'a>>,
     pub entities: Option<HashMap<u32, Option<Entity>>>,
     pub bad: Vec<String>,

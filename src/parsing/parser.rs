@@ -95,7 +95,7 @@ impl Demo {
             tick: self.read_i32(),
             playerslot: self.read_byte(),
         };
-        //println!("{}", f.tick);
+        //println!("{}", f.playerslot);
         f
     }
 
@@ -105,7 +105,7 @@ impl Demo {
             2 => self.parse_packet(),
             6 => self.parse_datatable(),
             _ => {
-                //println!("CMD {}", cmd) //panic!("UNK CMD")
+                println!("CMD {}", cmd); //panic!("UNK CMD")
             } //,
         }
     }
@@ -172,7 +172,22 @@ impl Demo {
                                 self.create_string_table(string_table);
                             }
                             Err(e) => panic!(
-                                "Failed to parse String tables at tick {}. Error: {e}",
+                                "Failed to parse String table at tick {}. Error: {e}",
+                                self.tick
+                            ),
+                        }
+                    }
+                }
+                13 => {
+                    if parse_props {
+                        let data = Message::parse_from_bytes(&data);
+                        match data {
+                            Ok(st) => {
+                                let data = st;
+                                self.update_string_table_msg(data);
+                            }
+                            Err(e) => panic!(
+                                "Failed to parse String table at tick {}. Error: {e}",
                                 self.tick
                             ),
                         }

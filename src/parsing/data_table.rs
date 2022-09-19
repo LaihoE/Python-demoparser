@@ -4,15 +4,15 @@ use csgoproto::netmessages::CSVCMsg_SendTable;
 use hashbrown::HashMap;
 use protobuf::Message;
 
-pub struct ServerClass<'a> {
+pub struct ServerClass {
     pub id: u16,
     pub name: String,
     pub dt: String,
-    pub fprops: Option<&'a Vec<Prop<'a>>>,
+    pub fprops: Option<Vec<Prop>>,
 }
 
-impl<'a> Demo<'a> {
-    pub fn parse_datatable(&'a mut self) {
+impl Demo {
+    pub fn parse_datatable(&mut self) {
         let _ = self.read_i32();
         let mut dt_map: HashMap<String, CSVCMsg_SendTable> = HashMap::default();
         loop {
@@ -55,7 +55,7 @@ impl<'a> Demo<'a> {
                     id: my_id,
                     name: name,
                     dt: dt,
-                    fprops: Some(&props),
+                    fprops: Some(props),
                 };
                 self.serverclass_map.insert(my_id, server_class);
             }

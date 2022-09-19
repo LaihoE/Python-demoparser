@@ -28,15 +28,15 @@ pub struct Entity {
 }
 
 #[derive(Debug)]
-pub struct Prop<'a> {
-    pub prop: &'a Sendprop_t,
-    pub arr: Option<&'a Sendprop_t>,
-    pub table: &'a CSVCMsg_SendTable,
+pub struct Prop {
+    pub prop: Sendprop_t,
+    pub arr: Option<Sendprop_t>,
+    pub table: CSVCMsg_SendTable,
     pub col: i32,
     pub data: Option<PropData>,
 }
 
-impl Demo<'_> {
+impl Demo {
     pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities, should_parse: bool) {
         if !should_parse {
             return;
@@ -299,18 +299,18 @@ impl Demo<'_> {
                 }
             } else if prop.type_() == 5 {
                 let prop_arr = Prop {
-                    prop: prop,
-                    arr: Some(&table.props[cnt]),
-                    table: table,
+                    prop: prop.clone(),
+                    arr: Some(table.props[cnt].clone()),
+                    table: table.clone(),
                     col: 1,
                     data: None,
                 };
                 flat.push(prop_arr);
             } else {
                 let prop = Prop {
-                    prop: prop,
+                    prop: prop.clone(),
                     arr: None,
-                    table: table,
+                    table: table.clone(),
                     col: 1,
                     data: None,
                 };

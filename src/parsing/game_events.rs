@@ -123,7 +123,7 @@ pub fn _match_data_to_game_event(
     }
 }
 
-impl Demo<'_> {
+impl Demo {
     pub fn parse_game_events(&self, game_event: CSVCMsg_GameEvent) -> Vec<GameEvent> {
         let mut game_events: Vec<GameEvent> = Vec::new();
 

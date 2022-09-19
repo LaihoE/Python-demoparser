@@ -27,8 +27,8 @@ class PythonDemoParser:
 
     def parse_props(self, props) -> pd.DataFrame:
         out_arr = np.zeros((10000000), order='F')
-        dims = demoparser.parse_props(self.path, prop_names, out_arr)
-        df = transform_props(dims, out_arr, cols=prop_names)
+        dims = demoparser.parse_props(self.path, props, out_arr)
+        df = transform_props(dims, out_arr, cols=props)
         return df
 
     def parse_events(self, game_events) -> list:
@@ -36,30 +36,28 @@ class PythonDemoParser:
         game_events = clean_events(game_events)
         return game_events
 
+if __name__ == "__main__":
 
-#demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
-demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem"
+    demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
 
-import glob
-import time
+    import glob
+    import time
 
-prop_names = [
-"m_vecVelocity[0]",
-"m_vecVelocity[1]",
-]
+    prop_names = [
+    "m_vecVelocity[0]",
+    "m_vecVelocity[1]",
+    ]
 
-sid = 76561198194694750
-event_name = "player_footstep"
+    event_name = "player_death"
 
-files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
+    files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
 
-deaths = []
-rounds_ends = []
+    deaths = []
+    rounds_ends = []
 
-for file in files:
-    before = time.time()
-    parser = PythonDemoParser(file)
-    deaths = parser.parse_props(event_name)
-    print(deaths)
-    print(time.time() - before)
-    break
+    for file in files:
+        before = time.time()
+        parser = PythonDemoParser(file)
+        deaths = parser.parse_events(event_name)
+        print(time.time() - before)
+        break

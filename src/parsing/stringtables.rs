@@ -1,12 +1,13 @@
+use core::num;
 use std::convert::TryInto;
 
 use csgoproto::cstrike15_gcmessages::score_leaderboard_data::Entry;
-use csgoproto::netmessages::CSVCMsg_SendTable;
+use csgoproto::netmessages::{CSVCMsg_SendTable, CSVCMsg_UpdateStringTable};
 
 use crate::parsing::read_bits::BitReader;
 use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
-
+#[derive(Clone)]
 pub struct StringTable {
     userinfo: bool,
     name: String,
@@ -16,6 +17,7 @@ pub struct StringTable {
     udsb: i32,
     data: Vec<StField>,
 }
+#[derive(Clone)]
 pub struct StField {
     entry: String,
     udata: String,
@@ -42,7 +44,7 @@ impl Demo<'_> {
         let length = self.read_i32();
         let data = self.read_n_bytes(length.try_into().unwrap());
     }
-    pub fn parse_userinfo(&mut self, userdata: [u8; 340]) -> UserInfo {
+    pub fn parse_userinfo(&self, userdata: [u8; 340]) -> UserInfo {
         let ui = UserInfo {
             version: u64::from_be_bytes(userdata[0..8].try_into().unwrap()),
             xuid: u64::from_be_bytes(userdata[8..16].try_into().unwrap()),
@@ -63,14 +65,19 @@ impl Demo<'_> {
 
     pub fn update_string_table(
         &mut self,
-        data: CSVCMsg_CreateStringTable,
+        data: &[u8],
         mut st: StringTable,
+        userinfo: bool,
+        num_entries: i32,
+        max_entries: i32,
+        user_data_size: i32,
+        user_data_fixsize: bool,
     ) -> StringTable {
-        let left_over = (data.string_data().len() % 4) as i32;
-        let mut buf = BitReader::new(data.string_data(), left_over);
+        let left_over = (data.len() % 4) as i32;
+        let mut buf = BitReader::new(data, left_over);
         buf.read_uneven_end_bits();
 
-        let mut entry_bits = (data.max_entries() as f32).log2() as i32;
+        let mut entry_bits = (max_entries as f32).log2() as i32;
         let mut index = 0;
         let mut last_inx: i32 = -1;
         let mut idx = 0;
@@ -84,7 +91,7 @@ impl Demo<'_> {
             history.push("".to_string())
         }
 
-        for i in 0..data.num_entries() {
+        for i in 0..num_entries {
             index = last_inx + 1;
             if buf.read_bool() == false {
                 index = buf
@@ -106,12 +113,12 @@ impl Demo<'_> {
                 st.data[index as usize].entry = entry.to_string()
             }
             if buf.read_bool() {
-                if data.user_data_fixed_size() {
-                    user_data = buf.read_bits_st(data.user_data_size());
+                if user_data_fixsize {
+                    user_data = buf.read_bits_st(user_data_size);
                     //println!("USERDATA 1");
                     if st.userinfo {
                         let ui = self.parse_userinfo(user_data);
-                        self.players.push(ui);
+                        self.players.insert(ui.xuid, ui);
                     }
                 } else {
                     let size = buf.read_nbits(14);
@@ -120,7 +127,7 @@ impl Demo<'_> {
                     if st.userinfo {
                         let mut ui = self.parse_userinfo(user_data);
                         ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
-                        self.players.push(ui);
+                        self.players.insert(ui.xuid, ui);
                     }
                 }
                 if history.len() == 32 {
@@ -134,6 +141,7 @@ impl Demo<'_> {
 
     pub fn create_string_table(&mut self, data: CSVCMsg_CreateStringTable) {
         let mut uinfo = false;
+
         if data.name() == "userinfo" {
             uinfo = true;
         }
@@ -152,7 +160,40 @@ impl Demo<'_> {
                 udata: "".to_string(),
             })
         }
-        st = self.update_string_table(data, st);
-        self.stringtables.push(st);
+        let ui = st.userinfo;
+        let st = &self.update_string_table(
+            data.string_data(),
+            st,
+            ui,
+            data.num_entries(),
+            data.max_entries(),
+            data.user_data_size_bits(),
+            data.user_data_fixed_size(),
+        );
+        self.stringtables.push(st.clone());
+    }
+
+    pub fn update_string_table_msg(&mut self, data: CSVCMsg_UpdateStringTable) {
+        let st = self.stringtables.get(data.table_id() as usize);
+        match st {
+            Some(s) => {
+                let st = s;
+                let st_new = &self.update_string_table(
+                    data.string_data(),
+                    st.clone(),
+                    st.userinfo,
+                    data.num_changed_entries(),
+                    st.max_entries,
+                    st.uds,
+                    st.udfs,
+                );
+                //println!("{}", st_new.name);
+                self.stringtables.push(st_new.clone())
+            }
+            None => panic!(
+                "NO STRINGTABLE FOUND WHEN TRYING TO UPDATE. Tick: {}",
+                self.tick
+            ),
+        }
     }
 }

@@ -1,8 +1,11 @@
 mod parsing;
+use csgoproto::netmessages;
+use csgoproto::steammessages;
 use hashbrown::HashMap;
 use jemallocator;
 use parsing::header::Header;
 use parsing::parser::Demo;
+use protobuf::reflect::MessageDescriptor;
 use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
@@ -14,10 +17,28 @@ use std::time::Instant;
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 fn main() {
-    let demo_path = "/home/laiho/Documents/demos/rclonetest/w.dem";
-    //let demo_path = "/home/laiho/Documents/demos/rclonetest/xx.dem";
-    let props_names = vec!["m_vecOrigin_X".to_string()];
+    //demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
+    let demo_path = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem".to_string();
 
+    //let demo_path = "/home/laiho/Documents/demos/rclonetest/w.dem";
+    //let demo_path = "/home/laiho/Documents/demos/rclonetest/xx.dem";
+    let props_names = vec![];
+    let x = netmessages::file_descriptor();
+    let y = x.messages();
+    let mut v: Vec<MessageDescriptor> = Vec::new();
+    let mut cnt = 0;
+    /*
+    for i in y {
+        println!(
+            "{:?} {:?} {:?} {:?}",
+            i.full_name(),
+            i.name(),
+            i.proto().name(),
+            i.proto().enum_type
+        );
+        cnt += 1;
+    }
+    */
     let mut d = Demo {
         bytes: std::fs::read(demo_path).unwrap(),
         fp: 0,
@@ -30,7 +51,7 @@ fn main() {
         entities: Some(HashMap::default()),
         bad: Vec::new(),
         stringtables: Vec::new(),
-        players: Vec::new(),
+        players: HashMap::new(),
         parse_props: true,
         game_events: Vec::new(),
         event_name: "".to_string(),
@@ -45,6 +66,7 @@ fn main() {
     let data = d.parse_frame(&props_names);
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
+
     println!("{}", d.cnt);
-    //println!("{:?}", d.game_events);
+    println!("{:?}", &d.players.len());
 }

@@ -3,6 +3,7 @@ use std::any::Any;
 use crate::Demo;
 use csgoproto::netmessages::csvcmsg_game_event::Key_t;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
+use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
 use hashbrown::HashMap;
@@ -152,6 +153,7 @@ impl Demo<'_> {
         let mut hm: HashMap<i32, Descriptor_t> = HashMap::default();
 
         for event_desc in event_list.descriptors {
+            //println!("{} {}", event_desc.name(), event_desc.eventid());
             hm.insert(event_desc.eventid(), event_desc);
         }
         self.event_map = Some(hm);

@@ -37,7 +37,7 @@ pub fn parse_events(
         entities: Some(HashMap::default()),
         bad: Vec::new(),
         stringtables: Vec::new(),
-        players: Vec::new(),
+        players: HashMap::new(),
         parse_props: false,
         game_events: Vec::new(),
         event_name: event_name,
@@ -70,6 +70,7 @@ pub fn parse_props(
     mut out_arr: PyReadwriteArrayDyn<f64>,
 ) -> PyResult<Vec<i32>> {
     let mut out_arr = out_arr.as_array_mut();
+
     let mut d = Demo {
         bytes: std::fs::read(demo_name).unwrap(),
         fp: 0,
@@ -83,7 +84,7 @@ pub fn parse_props(
         entities: Some(HashMap::default()),
         bad: Vec::new(),
         stringtables: Vec::new(),
-        players: Vec::new(),
+        players: HashMap::default(),
         parse_props: true,
         wanted_props: props_names.clone(),
         game_events: Vec::new(),
@@ -99,6 +100,7 @@ pub fn parse_props(
     let mut col_len = 1;
 
     props_names.push("tick".to_string());
+    /*
     for prop_name in &props_names {
         let v = &data[prop_name];
         col_len = v.len();
@@ -108,15 +110,12 @@ pub fn parse_props(
             cnt += 1
         }
     }
-
+    */
     let mut result: Vec<i32> = vec![
         cnt.try_into().unwrap(),
         col_len.try_into().unwrap(),
         props_names.len().try_into().unwrap(),
     ];
-    for player in &d.players {
-        println!("{} {:?}", player.entity_id, player.name)
-    }
     Ok(result)
 }
 

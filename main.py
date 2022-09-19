@@ -48,7 +48,8 @@ prop_names = [
 "m_vecVelocity[1]",
 ]
 
-event_name = "player_death"
+sid = 76561198194694750
+event_name = "player_footstep"
 
 files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
 
@@ -58,6 +59,7 @@ rounds_ends = []
 for file in files:
     before = time.time()
     parser = PythonDemoParser(file)
-    deaths = parser.parse_events(event_name)
+    deaths = parser.parse_props(event_name)
+    print(deaths)
     print(time.time() - before)
     break

@@ -118,7 +118,7 @@ impl Demo {
                     //println!("USERDATA 1");
                     if st.userinfo {
                         let ui = self.parse_userinfo(user_data);
-                        self.players.push(ui);
+                        self.players.insert(ui.xuid, ui);
                     }
                 } else {
                     let size = buf.read_nbits(14);
@@ -127,7 +127,7 @@ impl Demo {
                     if st.userinfo {
                         let mut ui = self.parse_userinfo(user_data);
                         ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
-                        self.players.push(ui);
+                        self.players.insert(ui.xuid, ui);
                     }
                 }
                 if history.len() == 32 {
@@ -174,19 +174,20 @@ impl Demo {
     }
 
     pub fn update_string_table_msg(&mut self, data: CSVCMsg_UpdateStringTable) {
-        let st = &self.stringtables.get(data.table_id() as usize);
+        let st = self.stringtables.get(data.table_id() as usize);
         match st {
             Some(s) => {
                 let st = s;
                 let st_new = &self.update_string_table(
                     data.string_data(),
-                    st.clone().clone().clone(),
+                    st.clone(),
                     st.userinfo,
                     data.num_changed_entries(),
                     st.max_entries,
                     st.uds,
                     st.udfs,
                 );
+                //println!("{}", st_new.name);
                 self.stringtables.push(st_new.clone())
             }
             None => panic!(

@@ -58,7 +58,7 @@ pub struct Demo {
     pub entities: Option<HashMap<u32, Option<Entity>>>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
-    pub players: Vec<UserInfo>,
+    pub players: HashMap<u64, UserInfo>,
     pub parse_props: bool,
     pub game_events: Vec<GameEvent>,
     pub event_name: String,
@@ -79,7 +79,7 @@ impl Demo {
             self.tick = f.tick;
 
             let props_this_tick: Vec<(String, f32)> =
-                extract_props(&self.entities, props_names, &self.tick);
+                extract_props(&self.entities, props_names, &self.tick, &self.players);
             for (k, v) in props_this_tick {
                 ticks_props.entry(k).or_insert_with(Vec::new).push(v);
             }
@@ -95,7 +95,6 @@ impl Demo {
             tick: self.read_i32(),
             playerslot: self.read_byte(),
         };
-        //println!("{}", f.playerslot);
         f
     }
 
@@ -164,33 +163,29 @@ impl Demo {
                     }
                 }
                 12 => {
-                    if parse_props {
-                        let string_table = Message::parse_from_bytes(&data);
-                        match string_table {
-                            Ok(st) => {
-                                let string_table = st;
-                                self.create_string_table(string_table);
-                            }
-                            Err(e) => panic!(
-                                "Failed to parse String table at tick {}. Error: {e}",
-                                self.tick
-                            ),
+                    let string_table = Message::parse_from_bytes(&data);
+                    match string_table {
+                        Ok(st) => {
+                            let string_table = st;
+                            self.create_string_table(string_table);
                         }
+                        Err(e) => panic!(
+                            "Failed to parse String table at tick {}. Error: {e}",
+                            self.tick
+                        ),
                     }
                 }
                 13 => {
-                    if parse_props {
-                        let data = Message::parse_from_bytes(&data);
-                        match data {
-                            Ok(st) => {
-                                let data = st;
-                                self.update_string_table_msg(data);
-                            }
-                            Err(e) => panic!(
-                                "Failed to parse String table at tick {}. Error: {e}",
-                                self.tick
-                            ),
+                    let data = Message::parse_from_bytes(&data);
+                    match data {
+                        Ok(st) => {
+                            let data = st;
+                            self.update_string_table_msg(data);
                         }
+                        Err(e) => panic!(
+                            "Failed to parse String table at tick {}. Error: {e}",
+                            self.tick
+                        ),
                     }
                 }
                 _ => {}

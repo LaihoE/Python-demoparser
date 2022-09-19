@@ -22,11 +22,12 @@ fn main() {
 
     //let demo_path = "/home/laiho/Documents/demos/rclonetest/w.dem";
     //let demo_path = "/home/laiho/Documents/demos/rclonetest/xx.dem";
-    let props_names = vec!["m_vecOrigin_X".to_string()];
+    let props_names = vec![];
     let x = netmessages::file_descriptor();
     let y = x.messages();
     let mut v: Vec<MessageDescriptor> = Vec::new();
     let mut cnt = 0;
+    /*
     for i in y {
         println!(
             "{:?} {:?} {:?} {:?}",
@@ -37,7 +38,7 @@ fn main() {
         );
         cnt += 1;
     }
-
+    */
     let mut d = Demo {
         bytes: std::fs::read(demo_path).unwrap(),
         fp: 0,
@@ -51,7 +52,7 @@ fn main() {
         entities: Some(HashMap::default()),
         bad: Vec::new(),
         stringtables: Vec::new(),
-        players: Vec::new(),
+        players: HashMap::new(),
         parse_props: true,
         game_events: Vec::new(),
         event_name: "".to_string(),
@@ -66,9 +67,7 @@ fn main() {
     let data = d.parse_frame(&props_names);
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
+
     println!("{}", d.cnt);
-    for player in &d.players {
-        println!("{} {}", player.entity_id, player.name)
-    }
     println!("{:?}", &d.players.len());
 }

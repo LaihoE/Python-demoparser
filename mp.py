@@ -43,6 +43,7 @@ class PythonDemoParser:
 import glob
 import time
 import multiprocessing as mp
+from collections import Counter
 
 if __name__ == "__main__":
     prop_names = [
@@ -50,13 +51,10 @@ if __name__ == "__main__":
     "m_vecVelocity[1]",
     ]
 
-    event_name = "player_blind"
-
+    event_name = "player_footstep"
     files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
     files.extend(glob.glob("/media/laiho/New Volume/5kcheaters/5/b/*"))
-
     hs = []
-
 
     def parse_file(fileq):
         while fileq.qsize() > 0:
@@ -65,10 +63,10 @@ if __name__ == "__main__":
             before = time.time()
             parser = PythonDemoParser(file)
             hurts = parser.parse_events(event_name)
-            hs.extend(hurts)
-            
-        df = pd.DataFrame(hs)
-        print(df)
+            hs.extend(hurts)           
+            df = pd.DataFrame(hs)
+            print(Counter(df["userid"].to_list()))
+            exit()
         # print(df[df["weapon_originalowner_xuid"] == "76561198194694750"])
         # exit()
 

@@ -10,6 +10,8 @@ use hashbrown::HashMap;
 use protobuf::Message;
 use pyo3::prelude::*;
 
+use super::stringtables::UserInfo;
+
 #[derive(Debug, Default)]
 pub struct HurtEvent {
     pub userid: i32,
@@ -31,6 +33,23 @@ fn parse_key(key: &Key_t) -> KeyData {
         5 => return KeyData::ByteData(key.val_byte().try_into().unwrap()),
         6 => return KeyData::BoolData(key.val_bool()),
         7 => return KeyData::Uint64Data(key.val_uint64()),
+        _ => panic!("KEYDATA FAILED"),
+    }
+}
+
+fn parse_key_steamid(key: &Key_t, players: &Vec<UserInfo>) -> KeyData {
+    let mut ent_id = key.val_short();
+    for player in players {
+        if player.entity_id as i32 == ent_id {
+            let xuid: u64 = player.xuid.try_into().unwrap();
+            match key.type_() {
+                4 => return KeyData::StrData(xuid.to_string()),
+                _ => panic!("KEYDATA FAILED"),
+            }
+        }
+    }
+    match key.type_() {
+        4 => return KeyData::StrData(key.val_short().to_string()),
         _ => panic!("KEYDATA FAILED"),
     }
 }
@@ -91,6 +110,7 @@ pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
     tick: &i32,
+    players: &Vec<UserInfo>,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
     let mut kv_pairs: Vec<NameDataPair> = Vec::new();
@@ -98,7 +118,13 @@ pub fn gen_name_val_pairs(
     for i in 0..game_event.keys.len() {
         let ge = &game_event.keys[i];
         let desc = &event.keys[i];
-        let val = parse_key(ge);
+
+        let mut val = parse_key(ge);
+
+        if (desc.name() == "userid" || desc.name() == "attacker") && ge.type_() == 4 {
+            val = parse_key_steamid(ge, players);
+        }
+
         kv_pairs.push(NameDataPair {
             name: desc.name().to_owned(),
             data: val,
@@ -124,14 +150,19 @@ pub fn _match_data_to_game_event(
 }
 
 impl Demo {
-    pub fn parse_game_events(&self, game_event: CSVCMsg_GameEvent) -> Vec<GameEvent> {
+    pub fn parse_game_events(
+        &self,
+        game_event: CSVCMsg_GameEvent,
+        players: &Vec<UserInfo>,
+    ) -> Vec<GameEvent> {
         let mut game_events: Vec<GameEvent> = Vec::new();
 
         let event_desc = &self.event_map;
         match event_desc {
             Some(ev_desc_map) => {
                 let event_desc = &ev_desc_map[&game_event.eventid()];
-                let name_data_pairs = gen_name_val_pairs(&game_event, &event_desc, &self.tick);
+                let name_data_pairs =
+                    gen_name_val_pairs(&game_event, &event_desc, &self.tick, players);
                 if _match_data_to_game_event(&name_data_pairs, event_desc.name(), &self.event_name)
                 {
                     game_events.push({

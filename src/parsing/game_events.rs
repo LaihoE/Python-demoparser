@@ -41,9 +41,16 @@ fn parse_key_steamid(key: &Key_t, players: &Vec<UserInfo>) -> KeyData {
     let mut ent_id = key.val_short();
     for player in players {
         if player.entity_id as i32 == ent_id {
-            let xuid: u64 = player.xuid.try_into().unwrap();
             match key.type_() {
-                4 => return KeyData::StrData(xuid.to_string()),
+                4 => {
+                    return KeyData::StrData(
+                        player
+                            .name
+                            .to_string()
+                            .trim_matches(char::from(0))
+                            .to_string(),
+                    )
+                }
                 _ => panic!("KEYDATA FAILED"),
             }
         }

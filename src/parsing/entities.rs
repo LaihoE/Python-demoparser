@@ -38,10 +38,11 @@ pub struct Prop {
 
 impl Demo {
     pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities, should_parse: bool) {
+        /*
         if !should_parse {
             return;
         };
-
+        */
         let n_upd_ents = pack_ents.updated_entries();
         let left_over = (pack_ents.entity_data().len() % 4) as i32;
         let mut b = BitReader::new(pack_ents.entity_data(), left_over);
@@ -183,7 +184,7 @@ impl Demo {
         let mut data = vec![];
         let sv_cls = &self.serverclass_map[&(ent.class_id.try_into().unwrap())];
         let props = self.handle_entity_upd(sv_cls, b);
-        //data.extend(props);
+        data.extend(props);
         data
     }
 

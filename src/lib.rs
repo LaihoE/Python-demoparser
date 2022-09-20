@@ -68,9 +68,7 @@ pub fn parse_events(
         }
         game_evs.push(hm);
     }
-    for player in d.players {
-        println!("{}", player.name);
-    }
+
     let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
     Ok(dict)
 }
@@ -80,7 +78,7 @@ pub fn parse_props(
     demo_name: String,
     mut props_names: Vec<String>,
     mut out_arr: PyReadwriteArrayDyn<f64>,
-) -> PyResult<Vec<i32>> {
+) -> PyResult<Vec<u64>> {
     let mut out_arr = out_arr.as_array_mut();
     let mut d = Demo {
         bytes: std::fs::read(demo_name).unwrap(),
@@ -111,6 +109,8 @@ pub fn parse_props(
     let mut col_len = 1;
 
     props_names.push("tick".to_string());
+    props_names.push("ent_id".to_string());
+
     for prop_name in &props_names {
         let v = &data[prop_name];
         col_len = v.len();
@@ -121,11 +121,15 @@ pub fn parse_props(
         }
     }
 
-    let mut result: Vec<i32> = vec![
+    let mut result: Vec<u64> = vec![
         cnt.try_into().unwrap(),
         col_len.try_into().unwrap(),
         props_names.len().try_into().unwrap(),
     ];
+    for player in d.players {
+        result.push(player.xuid);
+        result.push(player.entity_id as u64)
+    }
     Ok(result)
 }
 

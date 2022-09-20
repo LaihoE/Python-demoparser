@@ -18,27 +18,16 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 fn main() {
     //demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
-    let demo_path = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem".to_string();
+    //let demo_path = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem".to_string();
 
     //let demo_path = "/home/laiho/Documents/demos/rclonetest/w.dem";
-    //let demo_path = "/home/laiho/Documents/demos/rclonetest/xx.dem";
-    let props_names = vec![];
+    let demo_path =
+        "/home/laiho/Documents/demos/rclonetest/match730_003449965367076585902_0881240613_184.dem";
+    let props_names = vec!["m_vecOrigin_X".to_string()];
     let x = netmessages::file_descriptor();
     let y = x.messages();
     let mut v: Vec<MessageDescriptor> = Vec::new();
     let mut cnt = 0;
-    /*
-    for i in y {
-        println!(
-            "{:?} {:?} {:?} {:?}",
-            i.full_name(),
-            i.name(),
-            i.proto().name(),
-            i.proto().enum_type
-        );
-        cnt += 1;
-    }
-    */
     let mut d = Demo {
         bytes: std::fs::read(demo_path).unwrap(),
         fp: 0,

@@ -76,6 +76,7 @@ impl Demo {
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame();
             self.tick = f.tick;
+            //println!("{}", self.tick);
 
             let props_this_tick: Vec<(String, f32)> =
                 extract_props(&self.entities, props_names, &self.tick, &self.players);
@@ -103,7 +104,7 @@ impl Demo {
             2 => self.parse_packet(),
             6 => self.parse_datatable(),
             _ => {
-                println!("CMD {}", cmd); //panic!("UNK CMD")
+                //println!("CMD {}", cmd); //panic!("UNK CMD")
             } //,
         }
     }
@@ -124,7 +125,7 @@ impl Demo {
                     match game_event {
                         Ok(ge) => {
                             let game_event = ge;
-                            let game_events = self.parse_game_events(game_event);
+                            let game_events = self.parse_game_events(game_event, &self.players);
                             self.game_events.extend(game_events);
                         }
                         Err(e) => panic!(

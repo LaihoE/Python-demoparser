@@ -27,16 +27,6 @@ fn main() {
     let y = x.messages();
     let mut v: Vec<MessageDescriptor> = Vec::new();
     let mut cnt = 0;
-    for i in y {
-        println!(
-            "{:?} {:?} {:?} {:?}",
-            i.full_name(),
-            i.name(),
-            i.proto().name(),
-            i.proto().enum_type
-        );
-        cnt += 1;
-    }
 
     let mut d = Demo {
         bytes: std::fs::read(demo_path).unwrap(),

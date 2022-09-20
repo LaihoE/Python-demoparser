@@ -50,23 +50,27 @@ if __name__ == "__main__":
     "m_vecVelocity[1]",
     ]
 
-    event_name = "player_death"
+    event_name = "player_blind"
 
     files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
     files.extend(glob.glob("/media/laiho/New Volume/5kcheaters/5/b/*"))
-    deaths = []
-    rounds_ends = []
 
+    hs = []
 
 
     def parse_file(fileq):
         while fileq.qsize() > 0:
+            pairs = []
             file = fileq.get()
             before = time.time()
             parser = PythonDemoParser(file)
-            deaths = parser.parse_events(event_name)
-            print(time.time() - before, deaths[0]["attacker"])
-
+            hurts = parser.parse_events(event_name)
+            hs.extend(hurts)
+            
+        df = pd.DataFrame(hs)
+        print(df)
+        # print(df[df["weapon_originalowner_xuid"] == "76561198194694750"])
+        # exit()
 
     fileq = mp.Queue()
     for file in files:
@@ -75,7 +79,7 @@ if __name__ == "__main__":
     print(len(files))
 
     before = time.time()
-    processes = [mp.Process(target=parse_file, args=(fileq, )) for x in range(24)]
+    processes = [mp.Process(target=parse_file, args=(fileq, )) for x in range(1)]
     for p in processes:
         p.start()
     for p in processes:

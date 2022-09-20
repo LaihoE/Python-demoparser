@@ -105,7 +105,7 @@ impl Demo {
             2 => self.parse_packet(),
             6 => self.parse_datatable(),
             _ => {
-                println!("CMD {}", cmd); //panic!("UNK CMD")
+                //println!("CMD {}", cmd); //panic!("UNK CMD")
             } //,
         }
     }

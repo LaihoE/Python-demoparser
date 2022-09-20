@@ -114,9 +114,6 @@ pub fn parse_props(
         col_len.try_into().unwrap(),
         props_names.len().try_into().unwrap(),
     ];
-    for player in &d.players {
-        println!("{} {:?}", player.entity_id, player.name)
-    }
     Ok(result)
 }
 

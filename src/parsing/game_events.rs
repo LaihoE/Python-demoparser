@@ -153,7 +153,6 @@ impl Demo {
         let mut hm: HashMap<i32, Descriptor_t> = HashMap::default();
 
         for event_desc in event_list.descriptors {
-            println!("{} {}", event_desc.name(), event_desc.eventid());
             hm.insert(event_desc.eventid(), event_desc);
         }
         self.event_map = Some(hm);

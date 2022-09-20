@@ -38,30 +38,46 @@ class PythonDemoParser:
 
 
 #demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
-demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem"
+#demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem"
 
 import glob
 import time
+import multiprocessing as mp
 
-prop_names = [
-"m_vecVelocity[0]",
-"m_vecVelocity[1]",
-]
+if __name__ == "__main__":
+    prop_names = [
+    "m_vecVelocity[0]",
+    "m_vecVelocity[1]",
+    ]
 
-event_name = "player_death"
+    event_name = "player_death"
 
-files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
+    files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
+    files.extend(glob.glob("/media/laiho/New Volume/5kcheaters/5/b/*"))
+    deaths = []
+    rounds_ends = []
 
-deaths = []
-rounds_ends = []
 
 
-for file in files:
+    def parse_file(fileq):
+        while fileq.qsize() > 0:
+            file = fileq.get()
+            before = time.time()
+            parser = PythonDemoParser(file)
+            deaths = parser.parse_events(event_name)
+            print(time.time() - before, deaths[0]["attacker"])
+
+
+    fileq = mp.Queue()
+    for file in files:
+        fileq.put(file)
+
+    print(len(files))
+
     before = time.time()
-    parser = PythonDemoParser(file)
-    deaths = parser.parse_events(event_name)
-    print(time.time() - before)
-
-
-
-processes = [mp.Process(target=_parse_parallel_worker, args=(q, out_dir)) for x in range(n_processes)]
+    processes = [mp.Process(target=parse_file, args=(fileq, )) for x in range(24)]
+    for p in processes:
+        p.start()
+    for p in processes:
+        p.join()
+    print(100 / (time.time() - before), "DEMOS PER SECOND", time.time() - before)

@@ -42,6 +42,22 @@ fn parse_key_steamid(key: &Key_t, players: &Vec<UserInfo>) -> KeyData {
     for player in players {
         if player.entity_id as i32 == ent_id {
             match key.type_() {
+                4 => return KeyData::StrData(player.xuid.to_string()),
+                _ => panic!("KEYDATA FAILED"),
+            }
+        }
+    }
+    match key.type_() {
+        4 => return KeyData::StrData(key.val_short().to_string()),
+        _ => panic!("KEYDATA FAILED"),
+    }
+}
+
+fn parse_key_steam_name(key: &Key_t, players: &Vec<UserInfo>) -> KeyData {
+    let mut ent_id = key.val_short();
+    for player in players {
+        if player.entity_id as i32 == ent_id {
+            match key.type_() {
                 4 => {
                     return KeyData::StrData(
                         player
@@ -126,16 +142,39 @@ pub fn gen_name_val_pairs(
         let ge = &game_event.keys[i];
         let desc = &event.keys[i];
 
-        let mut val = parse_key(ge);
-
-        if (desc.name() == "userid" || desc.name() == "attacker") && ge.type_() == 4 {
-            val = parse_key_steamid(ge, players);
+        match desc.name() {
+            "userid" => {
+                let steamid = parse_key_steamid(ge, players);
+                kv_pairs.push(NameDataPair {
+                    name: "player_id".to_string(),
+                    data: steamid,
+                });
+                let steam_name = parse_key_steam_name(ge, players);
+                kv_pairs.push(NameDataPair {
+                    name: "player_name".to_string(),
+                    data: steam_name,
+                });
+            }
+            "attacker" => {
+                let steamid = parse_key_steamid(ge, players);
+                kv_pairs.push(NameDataPair {
+                    name: "attacker_id".to_string(),
+                    data: steamid,
+                });
+                let steam_name = parse_key_steam_name(ge, players);
+                kv_pairs.push(NameDataPair {
+                    name: "attacker_name".to_string(),
+                    data: steam_name,
+                });
+            }
+            _ => {
+                let mut val = parse_key(ge);
+                kv_pairs.push(NameDataPair {
+                    name: desc.name().to_owned(),
+                    data: val,
+                })
+            }
         }
-
-        kv_pairs.push(NameDataPair {
-            name: desc.name().to_owned(),
-            data: val,
-        })
     }
     kv_pairs.push(NameDataPair {
         name: "tick".to_owned(),

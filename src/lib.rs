@@ -54,16 +54,6 @@ pub fn parse_events(
         let mut hm: FxHashMap<String, Vec<PyObject>> = FxHashMap::default();
         let tuples = ge.to_py_tuples(py);
         for (k, v) in tuples {
-            /*
-            if k.contains("id") {
-                for p in &d.players {
-                    if p.entity_id.to_string() == v.to_string() {
-                        println!("MATCH");
-                    }
-                }
-                println!("{} {}", k, v);
-            }
-            */
             hm.entry(k).or_insert_with(Vec::new).push(v);
         }
         game_evs.push(hm);

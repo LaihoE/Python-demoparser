@@ -44,6 +44,8 @@ import glob
 import time
 import multiprocessing as mp
 from collections import Counter
+import uuid
+
 
 if __name__ == "__main__":
     prop_names = [
@@ -51,35 +53,72 @@ if __name__ == "__main__":
     "m_vecVelocity[1]",
     ]
 
-    event_name = "player_footstep"
-    files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
-    files.extend(glob.glob("/media/laiho/New Volume/5kcheaters/5/b/*"))
+    event_name = "player_hurt"
+    files = glob.glob("/home/laiho/Documents/demos/mm/*")
+    #files.extend(glob.glob("/media/laiho/New Volume/5kcheaters/5/b/*"))
     hs = []
 
-    def parse_file(fileq):
+    def parse_file(fileq, dataq):
         while fileq.qsize() > 0:
-            pairs = []
+
             file = fileq.get()
-            before = time.time()
+            print(file)
+
             parser = PythonDemoParser(file)
             hurts = parser.parse_events(event_name)
-            hs.extend(hurts)           
-            df = pd.DataFrame(hs)
-            print(Counter(df["userid"].to_list()))
-            exit()
-        # print(df[df["weapon_originalowner_xuid"] == "76561198194694750"])
-        # exit()
+            df = pd.DataFrame(hurts)
+            df.to_csv(f"data/{uuid.uuid4()}.csv")
+            #dataq.put(df)
+            #print(df)
 
-    fileq = mp.Queue()
-    for file in files:
-        fileq.put(file)
 
-    print(len(files))
+        """
+        df = pd.DataFrame(hs)
+        df = df[df["weapon"] == "p90"]
+        d = Counter(df["attacker"])
+        df = pd.DataFrame.from_records(d.most_common(), columns=['name','count'])
+        df = df[df["name"] != "23"]
+        print(df.iloc[:50, :])
+        """
 
-    before = time.time()
-    processes = [mp.Process(target=parse_file, args=(fileq, )) for x in range(1)]
-    for p in processes:
-        p.start()
-    for p in processes:
-        p.join()
-    print(100 / (time.time() - before), "DEMOS PER SECOND", time.time() - before)
+    def parse():
+        import os
+        old_files = glob.glob("data/*")
+        for old_file in old_files:
+            os.remove(old_file)
+
+        fileq = mp.Queue()
+        for file in files:
+            if file[-1] != "o" and file != "/home/laiho/Documents/demos/mm/match730_003535786327695949955_1269260600_190.dem":
+                if file != "/home/laiho/Documents/demos/mm/match730_003533265574882705732_0879717267_183.dem":
+                    if file != "/home/laiho/Documents/demos/mm/match730_003451971608577573241_0748266049_188.dem":
+                        if file != "/home/laiho/Documents/demos/mm/match730_003431375114384441554_0028193074_190.dem":
+                            if file != "/home/laiho/Documents/demos/mm/match730_003536129379618783361_1932237007_182.dem":
+                                fileq.put(file)
+
+        print(len(files))
+
+        before = time.time()
+        dataq = mp.Queue()
+        processes = [mp.Process(target=parse_file, args=(fileq, dataq)) for x in range(24)]
+        for p in processes:
+            p.start()
+        for p in processes:
+            p.join()
+
+        print(100 / (time.time() - before), "DEMOS PER SECOND", time.time() - before)
+
+    parse()
+
+    df = pd.concat([pd.read_csv(f) for f in glob.glob("data/*")])
+    
+    #df = df["userid"].str.split("7", expand=True)
+    print(df["player_name"])
+    """z = Counter(df["userid"])
+    teammates = []
+    for k,v in z.items():
+        if v > 100:
+            if len(k) > 2 and k != "GOTV":
+                teammates.append(k)
+    print(teammates)"""
+    

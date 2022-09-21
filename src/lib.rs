@@ -53,23 +53,11 @@ pub fn parse_events(
         let mut hm: FxHashMap<String, Vec<PyObject>> = FxHashMap::default();
         let tuples = ge.to_py_tuples(py);
         for (k, v) in tuples {
-            /*
-            if k.contains("id") {
-                for p in &d.players {
-                    if p.entity_id.to_string() == v.to_string() {
-                        println!("MATCH");
-                    }
-                }
-                println!("{} {}", k, v);
-            }
-            */
             hm.entry(k).or_insert_with(Vec::new).push(v);
         }
         game_evs.push(hm);
     }
-    for player in d.players {
-        println!("{}", player.name);
-    }
+
     let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
     Ok(dict)
 }
@@ -79,7 +67,7 @@ pub fn parse_props(
     demo_name: String,
     mut props_names: Vec<String>,
     mut out_arr: PyReadwriteArrayDyn<f64>,
-) -> PyResult<Vec<i32>> {
+) -> PyResult<Vec<u64>> {
     let mut out_arr = out_arr.as_array_mut();
 
     let mut d = Demo {
@@ -110,7 +98,12 @@ pub fn parse_props(
     let mut col_len = 1;
 
     props_names.push("tick".to_string());
+<<<<<<< HEAD
     /*
+=======
+    props_names.push("ent_id".to_string());
+
+>>>>>>> no_lifetimes_stringtable
     for prop_name in &props_names {
         let v = &data[prop_name];
         col_len = v.len();
@@ -120,12 +113,21 @@ pub fn parse_props(
             cnt += 1
         }
     }
+<<<<<<< HEAD
     */
     let mut result: Vec<i32> = vec![
+=======
+
+    let mut result: Vec<u64> = vec![
+>>>>>>> no_lifetimes_stringtable
         cnt.try_into().unwrap(),
         col_len.try_into().unwrap(),
         props_names.len().try_into().unwrap(),
     ];
+    for player in d.players {
+        result.push(player.xuid);
+        result.push(player.entity_id as u64)
+    }
     Ok(result)
 }
 

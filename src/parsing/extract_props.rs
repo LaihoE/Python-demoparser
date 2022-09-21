@@ -7,11 +7,14 @@ pub fn extract_props(
     entities: &Option<HashMap<u32, Option<Entity>>>,
     props_names: &Vec<String>,
     tick: &i32,
-    players: &HashMap<u64, UserInfo>,
+    wanted_id: u32,
 ) -> Vec<(String, f32)> {
     let mut tick_props: Vec<(String, f32)> = Vec::new();
 
-    // let wanted_ent = players.get(&76561198194694750);
+    if entities.is_some() {
+        if entities.as_ref().unwrap().contains_key(&wanted_id) {
+            if entities.as_ref().unwrap()[&wanted_id].is_some() {
+                let x = entities.as_ref().unwrap()[&wanted_id].as_ref().unwrap();
 
     match players.get(&76561198194694750) {
         Some(e) => {
@@ -37,6 +40,8 @@ pub fn extract_props(
                         tick_props.push(("tick".to_string(), *tick as f32))
                     }
                 }
+                tick_props.push(("tick".to_string(), *tick as f32));
+                tick_props.push(("ent_id".to_string(), wanted_id as f32));
             }
         }
         None => {}

@@ -8,9 +8,23 @@ import pandas as pd
 
 def transform_props(dims, arr, cols):
     cols.append("tick")
+    cols.append("entid")
     arr = arr[:dims[0]]
     arr = arr.reshape(dims[1], dims[2], order='F')
-    return pd.DataFrame(arr, columns=cols)
+    d = {}
+    k = ""
+    v = ""
+    for i in range(3, len(dims)):
+        if i % 2 == 0:
+            k = dims[i]
+        else:
+            v = dims[i]
+            d[k] = v
+    df = pd.DataFrame(arr, columns=cols)
+    df = df.replace({"entid": d})
+    df["entid"].astype("int64")
+    df["tick"].astype("int64")
+    return df
 
 def clean_events(events):
     cleaned_events = []
@@ -49,11 +63,15 @@ prop_names = [
 ]
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 sid = 76561198194694750
 event_name = "player_footstep"
 
 =======
 event_name = "player_footstep"
+>>>>>>> no_lifetimes_stringtable
+=======
+event_name = "round_start"
 >>>>>>> no_lifetimes_stringtable
 files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
 deaths = []
@@ -75,8 +93,29 @@ from collections import Counter
 
 before = time.time()
 parser = PythonDemoParser(demo_name)
+<<<<<<< HEAD
 deaths = parser.parse_events(event_name)
 df = pd.DataFrame(deaths)
 print(Counter(df["userid"].to_list()))
 print(time.time() - before)
+>>>>>>> no_lifetimes_stringtable
+=======
+
+deaths = parser.parse_events("player_death")
+
+
+
+"""df = parser.parse_props(prop_names)
+#df = pd.DataFrame(deaths)
+
+
+
+xvels = df[df["entid"] == 76561198087429545]["m_vecVelocity[0]"]
+xvels = xvels.abs()
+print(xvels.sum() / len(xvels))
+"""
+plt.plot(xvels)
+#plt.show()
+#print(Counter(df["userid"].to_list()))
+#print(time.time() - before)
 >>>>>>> no_lifetimes_stringtable

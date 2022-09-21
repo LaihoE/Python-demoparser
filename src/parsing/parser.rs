@@ -77,11 +77,20 @@ impl Demo {
             let f = self.read_frame();
             self.tick = f.tick;
             //println!("{}", self.tick);
+<<<<<<< HEAD
 
             let props_this_tick: Vec<(String, f32)> =
                 extract_props(&self.entities, props_names, &self.tick, &self.players);
             for (k, v) in props_this_tick {
                 ticks_props.entry(k).or_insert_with(Vec::new).push(v);
+=======
+            for player in &self.players {
+                let props_this_tick: Vec<(String, f32)> =
+                    extract_props(&self.entities, props_names, &self.tick, player.entity_id);
+                for (k, v) in props_this_tick {
+                    ticks_props.entry(k).or_insert_with(Vec::new).push(v);
+                }
+>>>>>>> no_lifetimes_stringtable
             }
 
             self.parse_cmd(f.cmd);

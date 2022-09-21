@@ -88,7 +88,7 @@ impl Demo {
         let mut user_data: [u8; 340] = [0; 340];
         buf.read_bool();
 
-        for i in 1..20000 {
+        for i in 1..50000 {
             history.push("".to_string())
         }
 
@@ -127,8 +127,13 @@ impl Demo {
 
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
+<<<<<<< HEAD
                         ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
                         self.players.insert(ui.xuid, ui);
+=======
+                        ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
+                        self.players.push(ui);
+>>>>>>> no_lifetimes_stringtable
                     }
                 }
                 if history.len() == 32 {
@@ -155,7 +160,7 @@ impl Demo {
             udsb: data.user_data_size_bits(),
             data: Vec::new(),
         };
-        for i in 1..20000 {
+        for i in 1..50000 {
             st.data.push(StField {
                 entry: "".to_string(),
                 udata: "".to_string(),
@@ -195,7 +200,7 @@ impl Demo {
         let mut user_data: [u8; 340] = [0; 340];
         buf.read_bool();
 
-        for i in 1..20000 {
+        for i in 1..50000 {
             history.push("".to_string())
         }
 
@@ -226,7 +231,10 @@ impl Demo {
                     //println!("USERDATA 1");
                     if st.userinfo {
                         let ui = Demo::parse_userinfo(user_data);
-                        self.players.push(ui);
+                        println!("NAMELEN {}", ui.xuid);
+                        if ui.xuid != 0 {
+                            self.players.push(ui);
+                        }
                     }
                 } else {
                     let size = buf.read_nbits(14);
@@ -234,8 +242,14 @@ impl Demo {
 
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
-                        ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
-                        self.players.push(ui);
+                        if st.data[index as usize].entry != "" {
+                            ui.entity_id =
+                                (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
+                        }
+
+                        if ui.xuid != 0 {
+                            self.players.push(ui);
+                        }
                     }
                 }
                 if history.len() == 32 {

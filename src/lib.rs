@@ -14,6 +14,9 @@ use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
 use pyo3::types::PyList;
 use std::convert::TryInto;
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
 use std::time::Instant;
 
 #[pyfunction]
@@ -23,9 +26,13 @@ pub fn parse_events(
     event_name: String,
     //mut out_arr: ArrayViewMutD<'_, f64>,
 ) -> PyResult<(Py<PyAny>)> {
-    let now = Instant::now();
+    let mut f = File::open("/home/laiho/Documents/demos/rclonetest/1.zip").unwrap();
+    println!("HERERE");
+    let mut buffer = Vec::new();
+    // read the whole file
+    f.read_to_end(&mut buffer).unwrap();
     let mut d = Demo {
-        bytes: std::fs::read(demo_name).unwrap(),
+        bytes: buffer, //std::fs::read(demo_name).unwrap(),
         fp: 0,
         cmd: 0,
         tick: 0,
@@ -44,6 +51,7 @@ pub fn parse_events(
         wanted_props: Vec::new(),
         cnt: 0,
     };
+    let now = Instant::now();
     let props_names = vec!["".to_owned()];
     let h: Header = d.parse_header();
     let data = d.parse_frame(&props_names);
@@ -58,6 +66,8 @@ pub fn parse_events(
         }
         game_evs.push(hm);
     }
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
 
     let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
     Ok(dict)

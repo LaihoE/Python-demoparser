@@ -226,7 +226,7 @@ impl Demo {
 
         game_events
     }
-    pub fn parse_game_event_list(&mut self, event_list: CSVCMsg_GameEventList) {
+    pub fn parse_game_event_map(&mut self, event_list: CSVCMsg_GameEventList) {
         let mut hm: HashMap<i32, Descriptor_t> = HashMap::default();
 
         for event_desc in event_list.descriptors {

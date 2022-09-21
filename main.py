@@ -71,12 +71,14 @@ from collections import Counter
 
 #file = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem"
 
+import time
 
-before = time.time()
+
+
 parser = PythonDemoParser(demo_name)
-
+before = time.time()
 deaths = parser.parse_events("player_death")
-
+print(time.time() - before)
 
 
 """df = parser.parse_props(prop_names)
@@ -88,7 +90,6 @@ xvels = df[df["entid"] == 76561198087429545]["m_vecVelocity[0]"]
 xvels = xvels.abs()
 print(xvels.sum() / len(xvels))
 """
-plt.plot(xvels)
 #plt.show()
 #print(Counter(df["userid"].to_list()))
 #print(time.time() - before)

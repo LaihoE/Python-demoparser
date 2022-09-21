@@ -142,7 +142,7 @@ impl Demo {
                     match event_list {
                         Ok(ev) => {
                             let event_list = ev;
-                            self.parse_game_event_list(event_list)
+                            self.parse_game_event_map(event_list)
                         }
                         Err(e) => panic!(
                             "Failed to parse game event LIST at tick {}. Error: {e}",

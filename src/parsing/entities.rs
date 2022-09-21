@@ -28,15 +28,15 @@ pub struct Entity {
 }
 
 #[derive(Debug)]
-pub struct Prop {
-    pub prop: Sendprop_t,
-    pub arr: Option<Sendprop_t>,
-    pub table: CSVCMsg_SendTable,
+pub struct Prop<'a> {
+    pub prop: &'a Sendprop_t,
+    pub arr: Option<&'a Sendprop_t>,
+    pub table: &'a CSVCMsg_SendTable,
     pub col: i32,
-    pub data: Option<PropData>,
+    pub data: Option<&'a PropData>,
 }
 
-impl Demo {
+impl<'a> Demo<'a> {
     pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities, should_parse: bool) {
         /*
         if !should_parse {
@@ -188,7 +188,10 @@ impl Demo {
         data
     }
 
-    pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> Vec<Sendprop_t> {
+    pub fn get_excl_props(
+        table: &CSVCMsg_SendTable,
+        table_map: &HashMap<String, CSVCMsg_SendTable>,
+    ) -> Vec<Sendprop_t> {
         let mut excl = vec![];
 
         for prop in &table.props {
@@ -197,16 +200,19 @@ impl Demo {
             }
 
             if prop.type_() == 6 {
-                let sub_table = &self.dt_map.as_ref().unwrap()[prop.dt_name()];
-                excl.extend(self.get_excl_props(&sub_table.clone()));
+                let sub_table = &table_map[prop.dt_name()];
+                excl.extend(Demo::get_excl_props(&sub_table.clone(), table_map));
             }
         }
         excl
     }
 
-    pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
-        let excl = self.get_excl_props(table);
-        let mut newp = self.get_props(table, &excl);
+    pub fn flatten_dt<'b>(
+        table: &'a CSVCMsg_SendTable,
+        table_map: &'a HashMap<String, CSVCMsg_SendTable>,
+    ) -> Vec<Prop<'a>> {
+        let excl = Demo::get_excl_props(table, table_map);
+        let mut newp = Demo::get_props(table, excl, table_map);
         let mut prios = vec![];
         for p in &newp {
             prios.push(p.prop.priority());
@@ -239,14 +245,12 @@ impl Demo {
                 }
             }
         }
-
         newp
     }
 
     #[inline]
     pub fn is_prop_excl(
-        &self,
-        excl: &Vec<Sendprop_t>,
+        excl: Vec<Sendprop_t>,
         table: &CSVCMsg_SendTable,
         prop: &Sendprop_t,
     ) -> bool {
@@ -258,21 +262,26 @@ impl Demo {
         false
     }
 
-    pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
+    pub fn get_props<'b>(
+        table: &'a CSVCMsg_SendTable,
+        excl: Vec<Sendprop_t>,
+        table_map: &'a HashMap<String, CSVCMsg_SendTable>,
+    ) -> Vec<Prop<'a>> {
         let mut flat: Vec<Prop> = Vec::new();
         let mut child_props = Vec::new();
         let mut cnt = 0;
         for prop in &table.props {
             if (prop.flags() & (1 << 8) != 0)
                 || (prop.flags() & (1 << 6) != 0)
-                || self.is_prop_excl(excl, &table, prop)
+                || Demo::is_prop_excl(excl.clone(), &table, prop)
             {
                 continue;
             }
 
             if prop.type_() == 6 {
-                let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
-                child_props = self.get_props(sub_table, excl);
+                //let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
+                let sub_table = &table_map[&prop.dt_name().to_string()];
+                child_props = Demo::get_props(sub_table, excl.clone(), table_map);
 
                 if (prop.flags() & (1 << 11)) == 0 {
                     for mut p in child_props {
@@ -286,18 +295,18 @@ impl Demo {
                 }
             } else if prop.type_() == 5 {
                 let prop_arr = Prop {
-                    prop: prop.clone(),
-                    arr: Some(table.props[cnt].clone()),
-                    table: table.clone(),
+                    prop: prop,
+                    arr: Some(&table.props[cnt]),
+                    table: table,
                     col: 1,
                     data: None,
                 };
                 flat.push(prop_arr);
             } else {
                 let prop = Prop {
-                    prop: prop.clone(),
+                    prop: prop,
                     arr: None,
-                    table: table.clone(),
+                    table: table,
                     col: 1,
                     data: None,
                 };

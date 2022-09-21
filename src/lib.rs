@@ -54,7 +54,7 @@ pub fn parse_events(
     let now = Instant::now();
     let props_names = vec!["".to_owned()];
     let h: Header = d.parse_header();
-    let data = d.parse_frame(&props_names);
+    let data = d.parse_demo(&props_names);
     let mut cnt = 0;
     let mut game_evs: Vec<FxHashMap<String, Vec<PyObject>>> = Vec::new();
 
@@ -104,7 +104,7 @@ pub fn parse_props(
     let h: Header = d.parse_header();
     let mut event_names: Vec<String> = Vec::new();
 
-    let data = d.parse_frame(&props_names);
+    let data = d.parse_demo(&props_names);
     let mut cnt = 0;
     let mut col_len = 1;
 

@@ -54,12 +54,5 @@ fn main() {
     let mut event_names: Vec<String> = Vec::new();
     use std::time::Instant;
     let now = Instant::now();
-    let data = d.parse_frame(&props_names);
-    let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
-    println!("{}", d.cnt);
-    for player in &d.players {
-        println!("{} {}", player.entity_id, player.name)
-    }
     println!("{:?}", &d.players.len());
 }

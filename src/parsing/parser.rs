@@ -45,7 +45,7 @@ pub struct Frame {
     pub playerslot: u8,
 }
 
-pub struct Demo {
+pub struct Demo<'a> {
     pub fp: usize,
     pub tick: i32,
     pub cmd: u8,
@@ -54,7 +54,7 @@ pub struct Demo {
     pub event_list: Option<CSVCMsg_GameEventList>,
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
-    pub serverclass_map: HashMap<u16, ServerClass>,
+    pub serverclass_map: HashMap<u16, ServerClass<'a>>,
     pub entities: Option<HashMap<u32, Option<Entity>>>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
@@ -66,27 +66,19 @@ pub struct Demo {
     pub wanted_props: Vec<String>,
 }
 
-impl Demo {
+impl<'a> Demo<'a> {
     pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, Vec<f32>> {
         // Main loop
         let mut ticks_props: FxHashMap<String, Vec<f32>> = FxHashMap::default();
         for name in props_names {
             ticks_props.insert(name.to_string(), Vec::new());
         }
+        let max_fp = self.bytes.len() as usize;
 
-        while self.fp < self.bytes.len() as usize {
-            let f = self.read_frame();
+        while self.fp < max_fp {
+            let f = &self.read_frame();
             self.tick = f.tick;
-            //println!("{}", self.tick);
-            for player in &self.players {
-                let props_this_tick: Vec<(String, f32)> =
-                    extract_props(&self.entities, props_names, &self.tick, player.entity_id);
-                for (k, v) in props_this_tick {
-                    ticks_props.entry(k).or_insert_with(Vec::new).push(v);
-                }
-            }
-
-            self.parse_cmd(f.cmd);
+            let t = self.parse_cmd(f.cmd);
         }
         ticks_props
     }
@@ -101,12 +93,26 @@ impl Demo {
         f
     }
 
-    pub fn parse_cmd(&mut self, cmd: u8) {
+    pub fn parse_cmd(&mut self, cmd: u8) -> Option<Vec<ServerClass>> {
         match cmd {
-            1 => self.parse_packet(),
-            2 => self.parse_packet(),
-            6 => self.parse_datatable(),
+            1 => {
+                self.parse_packet();
+                None
+            }
+            2 => {
+                self.parse_packet();
+                None
+            }
+            6 => {
+                // Mutating
+                let servclsinstructs = self.parse_datatable();
+                // Static
+                let serverclasses =
+                    Demo::create_serverclasses(servclsinstructs, &self.dt_map.as_ref().unwrap());
+                return Some(serverclasses);
+            }
             _ => {
+                None
                 //println!("CMD {}", cmd); //panic!("UNK CMD")
             } //,
         }

@@ -195,7 +195,7 @@ pub fn _match_data_to_game_event(
     }
 }
 
-impl Demo {
+impl<'a> Demo<'a> {
     pub fn parse_game_events(
         &self,
         game_event: CSVCMsg_GameEvent,

@@ -54,6 +54,8 @@ impl<'a> Demo<'a> {
             let id = self.read_short();
             let name = self.read_string();
             let dt = self.read_string();
+            if self.parse_props {
+                let props = Demo::flatten_dt(&self.dt_map.as_ref().unwrap()[&dt], &self.dt_map);
 
             if self.parse_props {
                 let sci = ServerClassInstructions {

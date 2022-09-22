@@ -83,11 +83,12 @@ impl Demo {
             tick: self.read_i32(),
             playerslot: self.read_byte(),
         };
-        println!("{}", f.tick);
+        //println!("{}", f.tick);
         f
     }
 
     pub fn parse_cmd(&mut self, cmd: u8) {
+        //println!("{}", cmd);
         match cmd {
             1 => self.parse_packet(),
             2 => self.parse_packet(),
@@ -155,17 +156,17 @@ impl Demo {
                             Ok(pe) => {
                                 let pack_ents = pe;
                                 // LOL
-
-                                let new = Demo::parse_packet_entities(
-                                    &pack_ents,
-                                    parse_props.clone(),
-                                    self.class_bits.clone(),
-                                    self.entities.clone(),
-                                    self.dt_map.clone(),
-                                    self.tick.clone(),
-                                    self.serverclass_map.clone(),
-                                );
-
+                                thread::spawn(move || {
+                                    let new = Demo::parse_packet_entities(
+                                        &pack_ents,
+                                        parse_props.clone(),
+                                        self.class_bits.clone(),
+                                        self.entities.clone(),
+                                        self.dt_map.clone(),
+                                        self.tick.clone(),
+                                        self.serverclass_map.clone(),
+                                    );
+                                });
                                 self.entities.lock().unwrap().as_mut().unwrap().extend(new);
                                 //for (k, v) in &new {
                                 //println!("{} {:?}", k, v);

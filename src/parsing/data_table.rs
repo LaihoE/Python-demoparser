@@ -44,23 +44,25 @@ impl Demo {
         let class_count = self.read_short();
         self.class_bits = (class_count as f32 + 1.).log2().ceil() as u32;
 
-        for _ in 0..class_count {
+        for x in 0..class_count {
+            println!("CLS COUNT {}", x);
             let my_id = self.read_short();
             let name = self.read_string();
             let dt = self.read_string();
             let dt_map_clone = Arc::clone(&self.dt_map);
 
             if self.parse_props {
-                let props = Demo::flatten_dt(
-                    dt_map_clone.lock().unwrap().as_ref().unwrap()[&dt].clone(),
-                    dt_map_clone.clone(),
-                );
+                let g = dt_map_clone.lock().unwrap();
+                let table = g.as_ref().unwrap()[&dt].clone();
+                drop(g);
+                let props = Demo::flatten_dt(table, dt_map_clone.clone());
 
+                println!("FLATTEN OK");
                 let server_class = ServerClass {
                     id: my_id,
                     name: name,
                     dt: dt,
-                    fprops: None,
+                    fprops: Some(props),
                 };
 
                 self.serverclass_map

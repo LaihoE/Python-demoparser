@@ -189,13 +189,13 @@ impl Demo {
         dt_map: Arc<Mutex<Option<HashMap<String, CSVCMsg_SendTable>>>>,
     ) -> Vec<Sendprop_t> {
         let mut excl = vec![];
-
+        let mut cnt = 0;
         for prop in &table.props {
+            cnt += 1;
             let cloned_dt_map = Arc::clone(&dt_map);
             if prop.flags() & (1 << 6) != 0 {
                 excl.push(prop.clone());
             }
-
             if prop.type_() == 6 {
                 let sub_table =
                     cloned_dt_map.lock().unwrap().as_ref().unwrap()[prop.dt_name()].clone();
@@ -211,7 +211,6 @@ impl Demo {
     ) -> Vec<Prop> {
         let temp = Arc::clone(&dt_map);
         let excl = Demo::get_excl_props(table.clone(), dt_map);
-
         let mut newp = Demo::get_props(table, &excl, temp);
         let mut prios = vec![];
         for p in &newp {

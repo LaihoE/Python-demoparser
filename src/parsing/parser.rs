@@ -9,6 +9,7 @@ use crate::parsing::read_bits::PropAtom;
 use crate::parsing::read_bits::PropData;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
+use crossbeam::thread;
 use csgoproto::netmessages;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
@@ -23,7 +24,6 @@ use protobuf::Message;
 use pyo3::prelude::*;
 use std::any::Any;
 use std::convert::TryInto;
-use std::thread;
 use std::time::Instant;
 use std::vec;
 
@@ -97,7 +97,7 @@ impl Demo {
             tick: self.read_i32(),
             playerslot: self.read_byte(),
         };
-        println!("{}", f.tick);
+        //println!("{}", f.tick);
         f
     }
 
@@ -168,7 +168,9 @@ impl Demo {
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;
-                                Demo::parse_packet_entities(
+                                // LOL
+
+                                let new = Demo::parse_packet_entities(
                                     &pack_ents,
                                     &parse_props,
                                     &self.class_bits,
@@ -177,6 +179,12 @@ impl Demo {
                                     &self.tick,
                                     &self.serverclass_map,
                                 );
+
+                                //self.entities.as_mut().unwrap().extend(new);
+                                //for (k, v) in &new {
+                                //println!("{} {:?}", k, v);
+                                //}
+                                //println!("LEN {}", new.len());
                             }
                             Err(e) => panic!(
                                 "Failed to parse Packet entities at tick {}. Error: {e}",

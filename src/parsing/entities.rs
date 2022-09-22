@@ -45,7 +45,8 @@ impl Demo {
         dt_map: &Option<HashMap<String, CSVCMsg_SendTable>>,
         tick: &i32,
         serverclass_map: &HashMap<u16, ServerClass>,
-    ) {
+    ) -> Vec<(u32, Option<Entity>)> {
+        let mut new_ents = vec![];
         let n_upd_ents = pack_ents.updated_entries();
         let left_over = (pack_ents.entity_data().len() % 4) as i32;
         let mut b = BitReader::new(pack_ents.entity_data(), left_over);
@@ -61,17 +62,13 @@ impl Demo {
                 let cls_id = b.read_nbits(*class_bits as usize);
                 let serial = b.read_nbits(10);
 
-                let new_entitiy = Entity {
+                let e = Entity {
                     class_id: cls_id,
                     entity_id: entity_id.try_into().unwrap(),
                     serial: serial,
                     props: HashMap::default(),
                 };
-                /*
-                entities
-                    .unwrap()
-                    .insert(entity_id.try_into().unwrap(), Some(new_entitiy));
-                */
+                new_ents.push((entity_id as u32, Some(e)));
                 let mut e = Entity {
                     class_id: cls_id,
                     entity_id: entity_id.try_into().unwrap(),
@@ -83,7 +80,6 @@ impl Demo {
             } else {
                 let hm = entities.as_ref().unwrap();
                 let ent = hm.get(&(entity_id.try_into().unwrap()));
-
                 if ent.as_ref().unwrap().is_some() {
                     let x = ent.as_ref().unwrap().as_ref().unwrap();
                     let data = Demo::read_new_ent(&x, &mut b, tick, serverclass_map, dt_map);
@@ -98,6 +94,7 @@ impl Demo {
                 }
             }
         }
+        new_ents
     }
 
     pub fn handle_entity_upd(

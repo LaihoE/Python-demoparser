@@ -37,12 +37,15 @@ pub struct Prop {
 }
 
 impl Demo {
-    pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities, should_parse: bool) {
-        /*
-        if !should_parse {
-            return;
-        };
-        */
+    pub fn parse_packet_entities(
+        pack_ents: &CSVCMsg_PacketEntities,
+        should_parse: &bool,
+        class_bits: &u32,
+        entities: &Option<HashMap<u32, Option<Entity>>>,
+        dt_map: &Option<HashMap<String, CSVCMsg_SendTable>>,
+        tick: &i32,
+        serverclass_map: &HashMap<u16, ServerClass>,
+    ) {
         let n_upd_ents = pack_ents.updated_entries();
         let left_over = (pack_ents.entity_data().len() % 4) as i32;
         let mut b = BitReader::new(pack_ents.entity_data(), left_over);
@@ -55,7 +58,7 @@ impl Demo {
             if b.read_bool() {
                 b.read_bool();
             } else if b.read_bool() {
-                let cls_id = b.read_nbits(self.class_bits.try_into().unwrap());
+                let cls_id = b.read_nbits(*class_bits as usize);
                 let serial = b.read_nbits(10);
 
                 let new_entitiy = Entity {
@@ -64,12 +67,11 @@ impl Demo {
                     serial: serial,
                     props: HashMap::default(),
                 };
-
-                self.entities
-                    .as_mut()
+                /*
+                entities
                     .unwrap()
                     .insert(entity_id.try_into().unwrap(), Some(new_entitiy));
-
+                */
                 let mut e = Entity {
                     class_id: cls_id,
                     entity_id: entity_id.try_into().unwrap(),
@@ -77,31 +79,19 @@ impl Demo {
                     props: HashMap::default(),
                 };
 
-                let data = self.read_new_ent(&e, &mut b);
-                for pa in data {
-                    if self.wanted_props.contains(&pa.prop_name) {
-                        e.props.insert(pa.prop_name.clone(), pa);
-                    }
-                }
+                let data = Demo::read_new_ent(&e, &mut b, tick, serverclass_map, dt_map);
             } else {
-                let hm = self.entities.as_ref().unwrap();
+                let hm = entities.as_ref().unwrap();
                 let ent = hm.get(&(entity_id.try_into().unwrap()));
 
                 if ent.as_ref().unwrap().is_some() {
                     let x = ent.as_ref().unwrap().as_ref().unwrap();
-                    let data = self.read_new_ent(&x, &mut b);
-
-                    let mut mhm = self.entities.as_mut().unwrap();
+                    let data = Demo::read_new_ent(&x, &mut b, tick, serverclass_map, dt_map);
+                    /*
+                    let mut mhm = entities.as_ref().unwrap();
                     let mut_ent = mhm.get_mut(&(entity_id as u32));
-
                     let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
-                    self.cnt += ps.len() as i32;
-
-                    for pa in data {
-                        if self.wanted_props.contains(&pa.prop_name) {
-                            ps.insert(pa.prop_name.clone(), pa);
-                        }
-                    }
+                    */
                 } else {
                     println!("ENTITY: {} NOT FOUND!", entity_id);
                     panic!("f");
@@ -111,9 +101,9 @@ impl Demo {
     }
 
     pub fn handle_entity_upd(
-        &self,
         sv_cls: &ServerClass,
         b: &mut BitReader<&[u8]>,
+        tick: &i32,
     ) -> Vec<PropAtom> {
         let mut val = -1;
         let new_way = b.read_bool();
@@ -132,12 +122,7 @@ impl Demo {
         for inx in indicies {
             let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
             let pdata = b.decode(prop);
-            if !self
-                .wanted_props
-                .contains(&prop.prop.var_name().to_string())
-            {
-                continue;
-            }
+
             match pdata {
                 PropData::VecXY(v) => {
                     let endings = ["_X", "_Y"];
@@ -147,7 +132,7 @@ impl Demo {
                         let atom = PropAtom {
                             prop_name: name,
                             data: data,
-                            tick: self.tick,
+                            tick: *tick,
                         };
                         props.push(atom);
                     }
@@ -160,7 +145,7 @@ impl Demo {
                         let atom = PropAtom {
                             prop_name: name,
                             data: data,
-                            tick: self.tick,
+                            tick: *tick,
                         };
                         props.push(atom);
                     }
@@ -171,7 +156,7 @@ impl Demo {
                     let atom = PropAtom {
                         prop_name: prop.prop.var_name().to_string(),
                         data: pdata,
-                        tick: self.tick,
+                        tick: *tick,
                     };
                     props.push(atom);
                 }
@@ -180,15 +165,24 @@ impl Demo {
         props
     }
 
-    pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) -> Vec<PropAtom> {
+    pub fn read_new_ent(
+        ent: &Entity,
+        b: &mut BitReader<&[u8]>,
+        tick: &i32,
+        serverclass_map: &HashMap<u16, ServerClass>,
+        dt_map: &Option<HashMap<String, CSVCMsg_SendTable>>,
+    ) -> Vec<PropAtom> {
         let mut data = vec![];
-        let sv_cls = &self.serverclass_map[&(ent.class_id.try_into().unwrap())];
-        let props = self.handle_entity_upd(sv_cls, b);
+        let sv_cls = &serverclass_map[&(ent.class_id.try_into().unwrap())];
+        let props = Demo::handle_entity_upd(&sv_cls, b, tick);
         data.extend(props);
         data
     }
 
-    pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> Vec<Sendprop_t> {
+    pub fn get_excl_props(
+        table: &CSVCMsg_SendTable,
+        dt_map: &Option<HashMap<String, CSVCMsg_SendTable>>,
+    ) -> Vec<Sendprop_t> {
         let mut excl = vec![];
 
         for prop in &table.props {
@@ -197,16 +191,19 @@ impl Demo {
             }
 
             if prop.type_() == 6 {
-                let sub_table = &self.dt_map.as_ref().unwrap()[prop.dt_name()];
-                excl.extend(self.get_excl_props(&sub_table.clone()));
+                let sub_table = &dt_map.as_ref().unwrap()[prop.dt_name()];
+                excl.extend(Demo::get_excl_props(&sub_table.clone(), dt_map));
             }
         }
         excl
     }
 
-    pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
-        let excl = self.get_excl_props(table);
-        let mut newp = self.get_props(table, &excl);
+    pub fn flatten_dt(
+        table: &CSVCMsg_SendTable,
+        dt_map: &Option<HashMap<String, CSVCMsg_SendTable>>,
+    ) -> Vec<Prop> {
+        let excl = Demo::get_excl_props(table, &dt_map);
+        let mut newp = Demo::get_props(table, &excl, &dt_map);
         let mut prios = vec![];
         for p in &newp {
             prios.push(p.prop.priority());
@@ -245,7 +242,6 @@ impl Demo {
 
     #[inline]
     pub fn is_prop_excl(
-        &self,
         excl: &Vec<Sendprop_t>,
         table: &CSVCMsg_SendTable,
         prop: &Sendprop_t,
@@ -258,21 +254,25 @@ impl Demo {
         false
     }
 
-    pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
+    pub fn get_props(
+        table: &CSVCMsg_SendTable,
+        excl: &Vec<Sendprop_t>,
+        dt_map: &Option<HashMap<String, CSVCMsg_SendTable>>,
+    ) -> Vec<Prop> {
         let mut flat: Vec<Prop> = Vec::new();
         let mut child_props = Vec::new();
         let mut cnt = 0;
         for prop in &table.props {
             if (prop.flags() & (1 << 8) != 0)
                 || (prop.flags() & (1 << 6) != 0)
-                || self.is_prop_excl(excl, &table, prop)
+                || Demo::is_prop_excl(excl, &table, prop)
             {
                 continue;
             }
 
             if prop.type_() == 6 {
-                let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
-                child_props = self.get_props(sub_table, excl);
+                let sub_table = &dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
+                child_props = Demo::get_props(&sub_table, excl, dt_map);
 
                 if (prop.flags() & (1 << 11)) == 0 {
                     for mut p in child_props {

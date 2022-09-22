@@ -97,7 +97,7 @@ impl Demo {
             tick: self.read_i32(),
             playerslot: self.read_byte(),
         };
-        //println!("{}", f.playerslot);
+        println!("{}", f.tick);
         f
     }
 
@@ -123,6 +123,7 @@ impl Demo {
             let data = self.read_n_bytes(size);
 
             match msg as i32 {
+                // GAME EVENT
                 25 => {
                     let game_event = Message::parse_from_bytes(&data);
                     match game_event {
@@ -137,6 +138,7 @@ impl Demo {
                         ),
                     }
                 }
+                // GAME EVENT LIST
                 30 => {
                     let event_list = Message::parse_from_bytes(&data);
                     match event_list {
@@ -150,13 +152,31 @@ impl Demo {
                         ),
                     }
                 }
+                //PACKET ENTITIES
+                /*
+                pack_ents: CSVCMsg_PacketEntities,
+                should_parse: bool,
+                class_bits: u32,
+                entities: Option<HashMap<u32, Option<Entity>>>,
+                dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
+                tick: i32,
+                serverclass_map: HashMap<u16, ServerClass>,
+                */
                 26 => {
                     if parse_props {
-                        let pack_ents = Message::parse_from_bytes(data);
+                        let pack_ents = Message::parse_from_bytes(&data);
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;
-                                self.parse_packet_entities(pack_ents, parse_props);
+                                Demo::parse_packet_entities(
+                                    &pack_ents,
+                                    &parse_props,
+                                    &self.class_bits,
+                                    &self.entities,
+                                    &self.dt_map,
+                                    &self.tick,
+                                    &self.serverclass_map,
+                                );
                             }
                             Err(e) => panic!(
                                 "Failed to parse Packet entities at tick {}. Error: {e}",
@@ -165,6 +185,7 @@ impl Demo {
                         }
                     }
                 }
+                // CREATE STRING TABLE
                 12 => {
                     let string_table = Message::parse_from_bytes(&data);
                     match string_table {
@@ -178,6 +199,7 @@ impl Demo {
                         ),
                     }
                 }
+                // UPDATE STRING TABLE
                 13 => {
                     let data = Message::parse_from_bytes(&data);
                     match data {

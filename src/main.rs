@@ -11,6 +11,8 @@ use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
 use pyo3::types::PyList;
 use std::convert::TryInto;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 
 #[global_allocator]
@@ -36,10 +38,10 @@ fn main() {
         tick: 0,
         event_list: None,
         event_map: None,
-        dt_map: Some(HashMap::default()),
+        dt_map: Arc::new(Mutex::new(Some(HashMap::new()))),
         class_bits: 0,
-        serverclass_map: HashMap::default(),
-        entities: Some(HashMap::default()),
+        serverclass_map: Arc::new(Mutex::new(HashMap::new())),
+        entities: Arc::new(Mutex::new(Some(HashMap::new()))),
         bad: Vec::new(),
         stringtables: Vec::new(),
         players: Vec::new(),

@@ -14,6 +14,8 @@ use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
 use pyo3::types::PyList;
 use std::convert::TryInto;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 
 #[pyfunction]
@@ -31,16 +33,16 @@ pub fn parse_events(
         tick: 0,
         event_list: None,
         event_map: None,
-        dt_map: Some(HashMap::default()),
+        dt_map: Arc::new(Mutex::new(Some(HashMap::new()))),
         class_bits: 0,
-        serverclass_map: HashMap::default(),
-        entities: Some(HashMap::default()),
+        serverclass_map: Arc::new(Mutex::new(HashMap::new())),
+        entities: Arc::new(Mutex::new(Some(HashMap::new()))),
         bad: Vec::new(),
         stringtables: Vec::new(),
         players: Vec::new(),
-        parse_props: false,
+        parse_props: true,
         game_events: Vec::new(),
-        event_name: event_name,
+        event_name: "".to_string(),
         wanted_props: Vec::new(),
         cnt: 0,
     };
@@ -77,17 +79,17 @@ pub fn parse_props(
         tick: 0,
         event_list: None,
         event_map: None,
-        dt_map: Some(HashMap::default()),
+        dt_map: Arc::new(Mutex::new(Some(HashMap::new()))),
         class_bits: 0,
-        serverclass_map: HashMap::default(),
-        entities: Some(HashMap::default()),
+        serverclass_map: Arc::new(Mutex::new(HashMap::new())),
+        entities: Arc::new(Mutex::new(Some(HashMap::new()))),
         bad: Vec::new(),
         stringtables: Vec::new(),
         players: Vec::new(),
         parse_props: true,
-        wanted_props: props_names.clone(),
         game_events: Vec::new(),
         event_name: "".to_string(),
+        wanted_props: Vec::new(),
         cnt: 0,
     };
 
@@ -100,7 +102,7 @@ pub fn parse_props(
 
     props_names.push("tick".to_string());
     props_names.push("ent_id".to_string());
-
+    /*
     for prop_name in &props_names {
         let v = &data[prop_name];
         col_len = v.len();
@@ -110,7 +112,7 @@ pub fn parse_props(
             cnt += 1
         }
     }
-
+    */
     let mut result: Vec<u64> = vec![
         cnt.try_into().unwrap(),
         col_len.try_into().unwrap(),

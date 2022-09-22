@@ -24,6 +24,7 @@ use protobuf::Message;
 use pyo3::prelude::*;
 use std::any::Any;
 use std::convert::TryInto;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::vec;
 
@@ -53,9 +54,9 @@ pub struct Demo {
     pub class_bits: u32,
     pub event_list: Option<CSVCMsg_GameEventList>,
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
-    pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
-    pub serverclass_map: HashMap<u16, ServerClass>,
-    pub entities: Option<HashMap<u32, Option<Entity>>>,
+    pub dt_map: Arc<Mutex<Option<HashMap<String, CSVCMsg_SendTable>>>>,
+    pub serverclass_map: Arc<Mutex<HashMap<u16, ServerClass>>>,
+    pub entities: Arc<Mutex<Option<HashMap<u32, Option<Entity>>>>>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
     pub players: Vec<UserInfo>,
@@ -67,28 +68,13 @@ pub struct Demo {
 }
 
 impl Demo {
-    pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, Vec<f32>> {
+    pub fn parse_frame(&mut self, props_names: &Vec<String>) {
         // Main loop
-        let mut ticks_props: FxHashMap<String, Vec<f32>> = FxHashMap::default();
-        for name in props_names {
-            ticks_props.insert(name.to_string(), Vec::new());
-        }
-
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame();
             self.tick = f.tick;
-            //println!("{}", self.tick);
-            for player in &self.players {
-                let props_this_tick: Vec<(String, f32)> =
-                    extract_props(&self.entities, props_names, &self.tick, player.entity_id);
-                for (k, v) in props_this_tick {
-                    ticks_props.entry(k).or_insert_with(Vec::new).push(v);
-                }
-            }
-
             self.parse_cmd(f.cmd);
         }
-        ticks_props
     }
 
     pub fn read_frame(&mut self) -> Frame {
@@ -97,7 +83,7 @@ impl Demo {
             tick: self.read_i32(),
             playerslot: self.read_byte(),
         };
-        //println!("{}", f.tick);
+        println!("{}", f.tick);
         f
     }
 
@@ -172,15 +158,15 @@ impl Demo {
 
                                 let new = Demo::parse_packet_entities(
                                     &pack_ents,
-                                    &parse_props,
-                                    &self.class_bits,
-                                    &self.entities,
-                                    &self.dt_map,
-                                    &self.tick,
-                                    &self.serverclass_map,
+                                    parse_props.clone(),
+                                    self.class_bits.clone(),
+                                    self.entities.clone(),
+                                    self.dt_map.clone(),
+                                    self.tick.clone(),
+                                    self.serverclass_map.clone(),
                                 );
 
-                                //self.entities.as_mut().unwrap().extend(new);
+                                self.entities.lock().unwrap().as_mut().unwrap().extend(new);
                                 //for (k, v) in &new {
                                 //println!("{} {:?}", k, v);
                                 //}

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::parsing::entities::Prop;
 use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_SendTable;
@@ -25,7 +27,7 @@ impl Demo {
                     if table.is_end() {
                         break;
                     }
-                    self.dt_map.as_mut().unwrap().insert(
+                    self.dt_map.lock().unwrap().as_mut().unwrap().insert(
                         table.net_table_name.as_ref().unwrap().to_string(),
                         table.clone(),
                     );
@@ -46,16 +48,25 @@ impl Demo {
             let my_id = self.read_short();
             let name = self.read_string();
             let dt = self.read_string();
+            let dt_map_clone = Arc::clone(&self.dt_map);
+
             if self.parse_props {
-                let props = Demo::flatten_dt(&self.dt_map.as_ref().unwrap()[&dt], &self.dt_map);
+                let props = Demo::flatten_dt(
+                    dt_map_clone.lock().unwrap().as_ref().unwrap()[&dt].clone(),
+                    dt_map_clone.clone(),
+                );
 
                 let server_class = ServerClass {
                     id: my_id,
                     name: name,
                     dt: dt,
-                    fprops: Some(props),
+                    fprops: None,
                 };
-                self.serverclass_map.insert(my_id, server_class);
+
+                self.serverclass_map
+                    .lock()
+                    .unwrap()
+                    .insert(server_class.id, server_class);
             }
         }
     }

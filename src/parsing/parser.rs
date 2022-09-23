@@ -179,6 +179,7 @@ impl Demo {
 
                         self.threads_spawned += 1;
                         //println!("BEFORE");
+
                         self.pool2.spawn(move || {
                             Demo::parse_packet_entities(
                                 pack_ents,
@@ -190,6 +191,7 @@ impl Demo {
                                 serverclass_map.clone(),
                             )
                         });
+
                         //self.pool2.join(oper_a, oper_b)
                         //println!("AFTER");
                         //rayon::join(oper_a, oper_b)

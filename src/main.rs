@@ -54,12 +54,13 @@ fn main() {
         handles: Vec::new(),
         threads_spawned: 0,
         closed_handles: 0,
+
         pool: rayon::ThreadPoolBuilder::new()
-            .num_threads(1)
+            .num_threads(2)
             .build()
             .unwrap(),
         pool2: rayon::ThreadPoolBuilder::new()
-            .num_threads(1)
+            .num_threads(24)
             .build()
             .unwrap(),
         last_pool: false,

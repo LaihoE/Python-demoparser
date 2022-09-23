@@ -67,7 +67,9 @@ impl Demo {
             //println!("ENTPLUS {}", entplus);
 
             entity_id += 1 + (entplus);
-
+            if entity_id > 100 {
+                break;
+            }
             if b.read_bool() {
                 b.read_bool();
             } else if b.read_bool() {
@@ -116,11 +118,10 @@ impl Demo {
                         None => {
                             drop(ent);
                             drop(hm);
-                            /*
-                            let ten_millis = time::Duration::from_nanos(10);
+
+                            let ten_millis = time::Duration::from_nanos(1000);
                             let now = time::Instant::now();
                             thread::sleep(ten_millis);
-                            */
                         }
                         _ => {
                             panic!("WTF")
@@ -129,11 +130,11 @@ impl Demo {
                 }
             }
         }
-
+        let ll = new_ents.len().clone();
         entities.lock().unwrap().extend(new_ents);
         drop(entities);
-        if tick % 100 == 0 {
-            println!("{}", tick);
+        if tick % 2 == 0 {
+            println!("{} {}", tick, ll);
         }
 
         //new_ents
@@ -161,7 +162,7 @@ impl Demo {
         for inx in indicies {
             let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
             let pdata = b.decode(prop);
-            //println!("{:?}", tick);
+            //println!("{:?}", pdata);
 
             match pdata {
                 PropData::VecXY(v) => {
@@ -233,11 +234,9 @@ impl Demo {
 
                     drop(mtx);
                     drop(sv_cls_opt);
-                    /*
-                    let ten_millis = time::Duration::from_nanos(10);
+                    let ten_millis = time::Duration::from_nanos(1000);
                     let now = time::Instant::now();
                     thread::sleep(ten_millis);
-                    */
                 }
                 _ => {
                     panic!("WTF");

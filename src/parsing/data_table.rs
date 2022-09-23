@@ -72,7 +72,7 @@ impl Demo {
                 let table = map.as_ref().unwrap()[&blueprint.dt].clone();
                 drop(map);
 
-                self.pool.install(move || {
+                self.pool.spawn(move || {
                     Demo::flatten_dt_data_table(
                         table,
                         dt_map_clone.clone(),

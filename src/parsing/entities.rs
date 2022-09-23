@@ -1,3 +1,4 @@
+use super::data_table::server_class_blueprint;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::game_events::HurtEvent;
 use crate::parsing::newbitreader::Bitr;
@@ -19,6 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time;
 use std::vec;
+
 #[derive(Debug)]
 pub struct Entity {
     pub class_id: u32,
@@ -41,11 +43,13 @@ impl Demo {
         pack_ents: CSVCMsg_PacketEntities,
         should_parse: bool,
         class_bits: u32,
-        entities: Arc<Mutex<Option<HashMap<u32, Option<Entity>>>>>,
+        entities: Arc<Mutex<HashMap<u32, Option<Entity>>>>,
         dt_map: Arc<Mutex<Option<HashMap<String, CSVCMsg_SendTable>>>>,
         tick: i32,
         serverclass_map: Arc<Mutex<HashMap<u16, ServerClass>>>,
     ) {
+        // println!("INSIDE");
+        // println!("HERERERE");
         // Vec<(u32, Option<Entity>)>
         let mut new_ents = vec![];
         let n_upd_ents = pack_ents.updated_entries();
@@ -59,11 +63,9 @@ impl Demo {
             let sc_map_clone = Arc::clone(&serverclass_map);
             let dt_map_clone = Arc::clone(&dt_map);
             let entities_clone = Arc::clone(&entities);
-            let entplus = b.read_u_bit_var() as i32;
+            let entplus: i32 = b.read_u_bit_var().try_into().unwrap();
             //println!("ENTPLUS {}", entplus);
-            if entplus > 10 || entplus < 0 {
-                break;
-            }
+
             entity_id += 1 + (entplus);
 
             if b.read_bool() {
@@ -91,32 +93,34 @@ impl Demo {
             } else {
                 loop {
                     let hm = entities_clone.lock().unwrap();
-                    let ent = hm.as_ref().unwrap().get(&(entity_id.try_into().unwrap()));
-
+                    let ent = hm.get(&(entity_id.try_into().unwrap()));
                     match ent {
-                        Some(x) => {
-                            //println!("BEFORE1");
-                            let x = ent.as_ref().unwrap().as_ref().unwrap();
-                            let data = Demo::read_new_ent(&x, &mut b, tick, sc_map_clone);
-                            //println!("DATA LEN {}", data.len());
-                            //println!("AFTER1");
-                            let e = Entity {
-                                class_id: x.class_id,
-                                entity_id: x.entity_id.try_into().unwrap(),
-                                serial: x.serial,
-                                props: HashMap::default(),
-                            };
-                            new_ents.push((e.entity_id.try_into().unwrap(), Some(e)));
-                            drop(ent);
-                            drop(hm);
-                            break;
-                        }
+                        Some(x) => match x {
+                            Some(x) => {
+                                let ent = x;
+                                let data = Demo::read_new_ent(ent, &mut b, tick, sc_map_clone);
+                                let e = Entity {
+                                    class_id: x.class_id,
+                                    entity_id: x.entity_id.try_into().unwrap(),
+                                    serial: x.serial,
+                                    props: HashMap::default(),
+                                };
+                                new_ents.push((e.entity_id.try_into().unwrap(), Some(e)));
+                                break;
+                            }
+                            None => {
+                                drop(ent);
+                                drop(hm);
+                            }
+                        },
                         None => {
                             drop(ent);
                             drop(hm);
+                            /*
                             let ten_millis = time::Duration::from_nanos(10);
                             let now = time::Instant::now();
                             thread::sleep(ten_millis);
+                            */
                         }
                         _ => {
                             panic!("WTF")
@@ -126,8 +130,12 @@ impl Demo {
             }
         }
 
-        entities.lock().unwrap().as_mut().unwrap().extend(new_ents);
+        entities.lock().unwrap().extend(new_ents);
         drop(entities);
+        if tick % 100 == 0 {
+            println!("{}", tick);
+        }
+
         //new_ents
     }
 
@@ -153,6 +161,7 @@ impl Demo {
         for inx in indicies {
             let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
             let pdata = b.decode(prop);
+            //println!("{:?}", tick);
 
             match pdata {
                 PropData::VecXY(v) => {
@@ -224,9 +233,11 @@ impl Demo {
 
                     drop(mtx);
                     drop(sv_cls_opt);
+                    /*
                     let ten_millis = time::Duration::from_nanos(10);
                     let now = time::Instant::now();
                     thread::sleep(ten_millis);
+                    */
                 }
                 _ => {
                     panic!("WTF");
@@ -298,6 +309,60 @@ impl Demo {
             }
         }
         newp
+    }
+
+    pub fn flatten_dt_data_table(
+        table: CSVCMsg_SendTable,
+        dt_map: Arc<Mutex<Option<HashMap<String, CSVCMsg_SendTable>>>>,
+        blueprint: server_class_blueprint,
+        serverclass_map_clone: Arc<Mutex<HashMap<u16, ServerClass>>>,
+    ) {
+        let temp = Arc::clone(&dt_map);
+        let excl = Demo::get_excl_props(table.clone(), dt_map);
+        let mut newp = Demo::get_props(table, &excl, temp);
+        let mut prios = vec![];
+        for p in &newp {
+            prios.push(p.prop.priority());
+        }
+
+        let set: HashSet<_> = prios.drain(..).collect();
+        prios.extend(set.into_iter());
+        prios.push(64);
+        prios.sort();
+        let mut start = 0;
+
+        for prio_inx in 0..prios.len() {
+            let priority = prios[prio_inx];
+            loop {
+                let mut currentprop = start;
+                while currentprop < newp.len() {
+                    let prop = newp[currentprop].prop.clone();
+                    if prop.priority() == priority
+                        || priority == 64 && ((prop.flags() & (1 << 18)) != 0)
+                    {
+                        if start != currentprop {
+                            newp.swap(start, currentprop);
+                        }
+                        start += 1;
+                    }
+                    currentprop += 1;
+                }
+                if currentprop == newp.len() {
+                    break;
+                }
+            }
+        }
+
+        let server_class = ServerClass {
+            id: blueprint.id,
+            name: blueprint.name.clone(),
+            dt: blueprint.dt.clone(),
+            fprops: Some(newp),
+        };
+        serverclass_map_clone
+            .lock()
+            .unwrap()
+            .insert(server_class.id, server_class);
     }
 
     #[inline]

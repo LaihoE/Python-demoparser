@@ -58,7 +58,7 @@ pub struct Demo {
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
     pub dt_map: Arc<Mutex<Option<HashMap<String, CSVCMsg_SendTable>>>>,
     pub serverclass_map: Arc<Mutex<HashMap<u16, ServerClass>>>,
-    pub entities: Arc<Mutex<Option<HashMap<u32, Option<Entity>>>>>,
+    pub entities: Arc<Mutex<HashMap<u32, Option<Entity>>>>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
     pub players: Vec<UserInfo>,
@@ -71,6 +71,9 @@ pub struct Demo {
     pub threads_spawned: i32,
     pub closed_handles: i32,
     pub pool: rayon::ThreadPool,
+    pub pool2: rayon::ThreadPool,
+    pub last_pool: bool,
+    pub pcnt: Arc<Mutex<i64>>,
 }
 
 impl Demo {
@@ -89,7 +92,7 @@ impl Demo {
             tick: self.read_i32(),
             playerslot: self.read_byte(),
         };
-
+        //println!("{}", self.class_bits);
         //println!("TICK: {}, HANDLES: {}", f.tick, self.handles.len());
         f
     }
@@ -175,37 +178,10 @@ impl Demo {
                         let elapsed = now.elapsed();
 
                         self.threads_spawned += 1;
-                        /*
-                        let handle = thread::spawn(move || {
-                            let y = pack_ents.clone();
-                            let new = Demo::parse_packet_entities(
-                                y,
-                                parse_props.clone(),
-                                clsbits,
-                                cloned_ents,
-                                cloned_dt_map,
-                                tick,
-                                serverclass_map,
-                            );
-                        });
-                        */
-                        //handle.join();
-                        /*
-                        let y = pack_ents.clone();
-                        let new = Demo::parse_packet_entities(
-                            y,
-                            parse_props.clone(),
-                            clsbits,
-                            cloned_ents,
-                            cloned_dt_map,
-                            tick,
-                            serverclass_map,
-                        );
-                        */
-                        //let y = pack_ents.clone();
-                        self.pool.spawn(move || {
+                        //println!("BEFORE");
+                        self.pool2.spawn(move || {
                             Demo::parse_packet_entities(
-                                pack_ents.clone(),
+                                pack_ents,
                                 parse_props.clone(),
                                 clsbits,
                                 cloned_ents.clone(),
@@ -214,45 +190,10 @@ impl Demo {
                                 serverclass_map.clone(),
                             )
                         });
-                        /*
-                        self.handles.push(Some(handle));
-                        if self.threads_spawned - self.closed_handles > 20 {
-                            /*
-                            println!(
-                                "SPAWNED: {}  KILLED: {}",
-                                self.threads_spawned, self.closed_handles
-                            );
-                            */
-                            self.join_handles();
-                        }
-                        */
-                        /*
-                        while self.handles.len() > 0 {
-                            let handle = self.handles.remove(0);
-                            match handle {
-                                Some(x) => {
-                                    let err = x.join();
-                                    match err {
-                                        Err(e) => {
-                                            println!("{:?}", e);
-                                            panic!("BOO");
-                                        }
-                                        Result::Ok(x) => {}
-                                    }
-                                    //println!("ERRROOOORRR {:?}", err.err());
-                                }
-                                None => {}
-                            }
-                        }
-                        */
-
-                        let mut cnt = 0;
-
-                        //self.entities.lock().unwrap().as_mut().unwrap().extend(new);
-
-                        //for (k, v) in &new {
-                        //println!("{} {:?}", k, v);
-                        //}
+                        //self.pool2.join(oper_a, oper_b)
+                        //println!("AFTER");
+                        //rayon::join(oper_a, oper_b)
+                        //println!("{}", self.threads_spawned);
                     }
                 }
                 // CREATE STRING TABLE

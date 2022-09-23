@@ -36,7 +36,7 @@ pub fn parse_events(
         dt_map: Arc::new(Mutex::new(Some(HashMap::new()))),
         class_bits: 0,
         serverclass_map: Arc::new(Mutex::new(HashMap::new())),
-        entities: Arc::new(Mutex::new(Some(HashMap::new()))),
+        entities: Arc::new(Mutex::new(HashMap::new())),
         bad: Vec::new(),
         stringtables: Vec::new(),
         players: Vec::new(),
@@ -52,6 +52,12 @@ pub fn parse_events(
             .num_threads(8)
             .build()
             .unwrap(),
+        pool2: rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build()
+            .unwrap(),
+        last_pool: false,
+        pcnt: Arc::new(Mutex::new(0)),
     };
     let props_names = vec!["".to_owned()];
     let h: Header = d.parse_header();
@@ -89,7 +95,7 @@ pub fn parse_props(
         dt_map: Arc::new(Mutex::new(Some(HashMap::new()))),
         class_bits: 0,
         serverclass_map: Arc::new(Mutex::new(HashMap::new())),
-        entities: Arc::new(Mutex::new(Some(HashMap::new()))),
+        entities: Arc::new(Mutex::new(HashMap::new())),
         bad: Vec::new(),
         stringtables: Vec::new(),
         players: Vec::new(),
@@ -105,6 +111,12 @@ pub fn parse_props(
             .num_threads(8)
             .build()
             .unwrap(),
+        pool2: rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build()
+            .unwrap(),
+        last_pool: false,
+        pcnt: Arc::new(Mutex::new(0)),
     };
 
     let h: Header = d.parse_header();

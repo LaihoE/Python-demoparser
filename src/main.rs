@@ -13,7 +13,8 @@ use pyo3::types::PyList;
 use std::convert::TryInto;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Instant;
+use std::thread;
+use std::time::Duration;
 
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
@@ -41,7 +42,7 @@ fn main() {
         dt_map: Arc::new(Mutex::new(Some(HashMap::new()))),
         class_bits: 0,
         serverclass_map: Arc::new(Mutex::new(HashMap::new())),
-        entities: Arc::new(Mutex::new(Some(HashMap::new()))),
+        entities: Arc::new(Mutex::new(HashMap::new())),
         bad: Vec::new(),
         stringtables: Vec::new(),
         players: Vec::new(),
@@ -54,9 +55,15 @@ fn main() {
         threads_spawned: 0,
         closed_handles: 0,
         pool: rayon::ThreadPoolBuilder::new()
-            .num_threads(20)
+            .num_threads(1)
             .build()
             .unwrap(),
+        pool2: rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .unwrap(),
+        last_pool: false,
+        pcnt: Arc::new(Mutex::new(0)),
     };
 
     let h: Header = d.parse_header();
@@ -64,6 +71,9 @@ fn main() {
     use std::time::Instant;
     let now = Instant::now();
     let data = d.parse_frame(&props_names);
+
+    //d.pool2.join();
+
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
     println!("{}", d.cnt);
@@ -71,4 +81,8 @@ fn main() {
         println!("{} {}", player.entity_id, player.name)
     }
     println!("{:?}", &d.players.len());
+    let ten_millis = Duration::from_secs(10);
+    let now = Instant::now();
+    thread::sleep(ten_millis);
+    println!("POOL {}", d.pool.current_num_threads());
 }

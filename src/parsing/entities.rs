@@ -55,7 +55,7 @@ impl Demo {
         let mut entity_id: i32 = -1;
 
         for xx in 0..n_upd_ents {
-            //println!("CNT {}", xx);
+            //println!("CNT {}", n_upd_ents);
             let sc_map_clone = Arc::clone(&serverclass_map);
             let dt_map_clone = Arc::clone(&dt_map);
             let entities_clone = Arc::clone(&entities);
@@ -87,6 +87,7 @@ impl Demo {
                 };
 
                 let data = Demo::read_new_ent(&e, &mut b, tick, sc_map_clone);
+                //println!("DATA LEN {}", data.len());
             } else {
                 loop {
                     let hm = entities_clone.lock().unwrap();
@@ -97,6 +98,7 @@ impl Demo {
                             //println!("BEFORE1");
                             let x = ent.as_ref().unwrap().as_ref().unwrap();
                             let data = Demo::read_new_ent(&x, &mut b, tick, sc_map_clone);
+                            //println!("DATA LEN {}", data.len());
                             //println!("AFTER1");
                             let e = Entity {
                                 class_id: x.class_id,

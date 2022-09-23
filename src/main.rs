@@ -53,6 +53,10 @@ fn main() {
         handles: Vec::new(),
         threads_spawned: 0,
         closed_handles: 0,
+        pool: rayon::ThreadPoolBuilder::new()
+            .num_threads(20)
+            .build()
+            .unwrap(),
     };
 
     let h: Header = d.parse_header();

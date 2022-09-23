@@ -22,6 +22,7 @@ use protobuf;
 use protobuf::reflect::MessageDescriptor;
 use protobuf::Message;
 use pyo3::prelude::*;
+use rayon;
 use std::any::Any;
 use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
@@ -69,6 +70,7 @@ pub struct Demo {
     pub handles: Vec<Option<JoinHandle<()>>>,
     pub threads_spawned: i32,
     pub closed_handles: i32,
+    pub pool: rayon::ThreadPool,
 }
 
 impl Demo {
@@ -173,7 +175,7 @@ impl Demo {
                         let elapsed = now.elapsed();
 
                         self.threads_spawned += 1;
-
+                        /*
                         let handle = thread::spawn(move || {
                             let y = pack_ents.clone();
                             let new = Demo::parse_packet_entities(
@@ -186,7 +188,33 @@ impl Demo {
                                 serverclass_map,
                             );
                         });
+                        */
                         //handle.join();
+                        /*
+                        let y = pack_ents.clone();
+                        let new = Demo::parse_packet_entities(
+                            y,
+                            parse_props.clone(),
+                            clsbits,
+                            cloned_ents,
+                            cloned_dt_map,
+                            tick,
+                            serverclass_map,
+                        );
+                        */
+                        //let y = pack_ents.clone();
+                        self.pool.spawn(move || {
+                            Demo::parse_packet_entities(
+                                pack_ents.clone(),
+                                parse_props.clone(),
+                                clsbits,
+                                cloned_ents.clone(),
+                                cloned_dt_map.clone(),
+                                tick.clone(),
+                                serverclass_map.clone(),
+                            )
+                        });
+                        /*
                         self.handles.push(Some(handle));
                         if self.threads_spawned - self.closed_handles > 20 {
                             /*
@@ -197,7 +225,7 @@ impl Demo {
                             */
                             self.join_handles();
                         }
-
+                        */
                         /*
                         while self.handles.len() > 0 {
                             let handle = self.handles.remove(0);

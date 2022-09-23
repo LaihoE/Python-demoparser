@@ -48,6 +48,10 @@ pub fn parse_events(
         handles: Vec::new(),
         threads_spawned: 0,
         closed_handles: 0,
+        pool: rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build()
+            .unwrap(),
     };
     let props_names = vec!["".to_owned()];
     let h: Header = d.parse_header();
@@ -97,6 +101,10 @@ pub fn parse_props(
         handles: Vec::new(),
         threads_spawned: 0,
         closed_handles: 0,
+        pool: rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build()
+            .unwrap(),
     };
 
     let h: Header = d.parse_header();

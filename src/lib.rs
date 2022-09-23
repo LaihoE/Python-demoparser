@@ -45,6 +45,9 @@ pub fn parse_events(
         event_name: "".to_string(),
         wanted_props: Vec::new(),
         cnt: 0,
+        handles: Vec::new(),
+        threads_spawned: 0,
+        closed_handles: 0,
     };
     let props_names = vec!["".to_owned()];
     let h: Header = d.parse_header();
@@ -91,6 +94,9 @@ pub fn parse_props(
         event_name: "".to_string(),
         wanted_props: Vec::new(),
         cnt: 0,
+        handles: Vec::new(),
+        threads_spawned: 0,
+        closed_handles: 0,
     };
 
     let h: Header = d.parse_header();

@@ -9,7 +9,6 @@ use crate::parsing::read_bits::PropAtom;
 use crate::parsing::read_bits::PropData;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
-use crossbeam::thread;
 use csgoproto::netmessages;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
@@ -17,6 +16,7 @@ use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use fxhash::FxHashMap;
+use hashbrown::HashMap;
 use netmessages::CSVCMsg_PacketEntities;
 use protobuf;
 use protobuf::reflect::MessageDescriptor;
@@ -25,10 +25,11 @@ use pyo3::prelude::*;
 use std::any::Any;
 use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::thread::JoinHandle;
+use std::time;
 use std::time::Instant;
 use std::vec;
-
-use hashbrown::HashMap;
 
 use numpy::ndarray::{Array1, ArrayD, ArrayView1, ArrayViewD, ArrayViewMutD, Zip};
 use numpy::{
@@ -65,6 +66,9 @@ pub struct Demo {
     pub event_name: String,
     pub cnt: i32,
     pub wanted_props: Vec<String>,
+    pub handles: Vec<Option<JoinHandle<()>>>,
+    pub threads_spawned: i32,
+    pub closed_handles: i32,
 }
 
 impl Demo {
@@ -83,8 +87,22 @@ impl Demo {
             tick: self.read_i32(),
             playerslot: self.read_byte(),
         };
-        //println!("{}", f.tick);
+
+        //println!("TICK: {}, HANDLES: {}", f.tick, self.handles.len());
         f
+    }
+
+    pub fn join_handles(&mut self) {
+        for handle in &mut self.handles {
+            let h = handle.take();
+            match h {
+                Some(handle) => {
+                    self.closed_handles += 1;
+                    handle.join().unwrap();
+                }
+                None => {}
+            }
+        }
     }
 
     pub fn parse_cmd(&mut self, cmd: u8) {
@@ -140,44 +158,73 @@ impl Demo {
                     }
                 }
                 //PACKET ENTITIES
-                /*
-                pack_ents: CSVCMsg_PacketEntities,
-                should_parse: bool,
-                class_bits: u32,
-                entities: Option<HashMap<u32, Option<Entity>>>,
-                dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
-                tick: i32,
-                serverclass_map: HashMap<u16, ServerClass>,
-                */
                 26 => {
                     if parse_props {
-                        let pack_ents = Message::parse_from_bytes(&data);
-                        match pack_ents {
-                            Ok(pe) => {
-                                let pack_ents = pe;
-                                // LOL
-                                thread::spawn(move || {
-                                    let new = Demo::parse_packet_entities(
-                                        &pack_ents,
-                                        parse_props.clone(),
-                                        self.class_bits.clone(),
-                                        self.entities.clone(),
-                                        self.dt_map.clone(),
-                                        self.tick.clone(),
-                                        self.serverclass_map.clone(),
-                                    );
-                                });
-                                self.entities.lock().unwrap().as_mut().unwrap().extend(new);
-                                //for (k, v) in &new {
-                                //println!("{} {:?}", k, v);
-                                //}
-                                //println!("LEN {}", new.len());
-                            }
-                            Err(e) => panic!(
-                                "Failed to parse Packet entities at tick {}. Error: {e}",
-                                self.tick
-                            ),
+                        let pack_ents: CSVCMsg_PacketEntities =
+                            Message::parse_from_bytes(data).unwrap();
+
+                        let now = Instant::now();
+
+                        let cloned_ents = Arc::clone(&self.entities);
+                        let cloned_dt_map = Arc::clone(&self.dt_map);
+                        let serverclass_map = Arc::clone(&self.serverclass_map);
+                        let clsbits = self.class_bits.clone();
+                        let tick = self.tick.clone();
+                        let elapsed = now.elapsed();
+
+                        self.threads_spawned += 1;
+
+                        let handle = thread::spawn(move || {
+                            let y = pack_ents.clone();
+                            let new = Demo::parse_packet_entities(
+                                y,
+                                parse_props.clone(),
+                                clsbits,
+                                cloned_ents,
+                                cloned_dt_map,
+                                tick,
+                                serverclass_map,
+                            );
+                        });
+                        //handle.join();
+                        self.handles.push(Some(handle));
+                        if self.threads_spawned - self.closed_handles > 20 {
+                            /*
+                            println!(
+                                "SPAWNED: {}  KILLED: {}",
+                                self.threads_spawned, self.closed_handles
+                            );
+                            */
+                            self.join_handles();
                         }
+
+                        /*
+                        while self.handles.len() > 0 {
+                            let handle = self.handles.remove(0);
+                            match handle {
+                                Some(x) => {
+                                    let err = x.join();
+                                    match err {
+                                        Err(e) => {
+                                            println!("{:?}", e);
+                                            panic!("BOO");
+                                        }
+                                        Result::Ok(x) => {}
+                                    }
+                                    //println!("ERRROOOORRR {:?}", err.err());
+                                }
+                                None => {}
+                            }
+                        }
+                        */
+
+                        let mut cnt = 0;
+
+                        //self.entities.lock().unwrap().as_mut().unwrap().extend(new);
+
+                        //for (k, v) in &new {
+                        //println!("{} {:?}", k, v);
+                        //}
                     }
                 }
                 // CREATE STRING TABLE

@@ -16,14 +16,14 @@ use std::collections::HashSet;
 use std::convert::TryInto;
 use std::io;
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time;
 use std::vec;
-
 #[derive(Debug)]
 pub struct Entity {
     pub class_id: u32,
     pub entity_id: u32,
     pub serial: u32,
-    //pub props: HashMap<String, PropAtom>,
     pub props: HashMap<String, PropAtom>,
 }
 
@@ -38,14 +38,15 @@ pub struct Prop {
 
 impl Demo {
     pub fn parse_packet_entities(
-        pack_ents: &CSVCMsg_PacketEntities,
+        pack_ents: CSVCMsg_PacketEntities,
         should_parse: bool,
         class_bits: u32,
         entities: Arc<Mutex<Option<HashMap<u32, Option<Entity>>>>>,
         dt_map: Arc<Mutex<Option<HashMap<String, CSVCMsg_SendTable>>>>,
         tick: i32,
         serverclass_map: Arc<Mutex<HashMap<u16, ServerClass>>>,
-    ) -> Vec<(u32, Option<Entity>)> {
+    ) {
+        // Vec<(u32, Option<Entity>)>
         let mut new_ents = vec![];
         let n_upd_ents = pack_ents.updated_entries();
         let left_over = (pack_ents.entity_data().len() % 4) as i32;
@@ -53,11 +54,17 @@ impl Demo {
         b.read_uneven_end_bits();
         let mut entity_id: i32 = -1;
 
-        for _ in 0..n_upd_ents {
+        for xx in 0..n_upd_ents {
+            //println!("CNT {}", xx);
             let sc_map_clone = Arc::clone(&serverclass_map);
             let dt_map_clone = Arc::clone(&dt_map);
             let entities_clone = Arc::clone(&entities);
-            entity_id += 1 + (b.read_u_bit_var() as i32);
+            let entplus = b.read_u_bit_var() as i32;
+            //println!("ENTPLUS {}", entplus);
+            if entplus > 10 || entplus < 0 {
+                break;
+            }
+            entity_id += 1 + (entplus);
 
             if b.read_bool() {
                 b.read_bool();
@@ -71,7 +78,7 @@ impl Demo {
                     serial: serial,
                     props: HashMap::default(),
                 };
-                new_ents.push((entity_id as u32, Some(e)));
+                new_ents.push((entity_id.try_into().unwrap(), Some(e)));
                 let mut e = Entity {
                     class_id: cls_id,
                     entity_id: entity_id.try_into().unwrap(),
@@ -79,30 +86,47 @@ impl Demo {
                     props: HashMap::default(),
                 };
 
-                let data =
-                    Demo::read_new_ent(&e, &mut b, tick, serverclass_map.clone(), dt_map_clone);
+                let data = Demo::read_new_ent(&e, &mut b, tick, sc_map_clone);
             } else {
-                let hm = entities_clone.lock().unwrap();
-                let ent = hm
-                    .as_ref()
-                    .unwrap()
-                    .get(&(entity_id.try_into().unwrap()))
-                    .clone();
-                if ent.as_ref().unwrap().is_some() {
-                    let x = ent.as_ref().unwrap().as_ref().unwrap();
-                    let data = Demo::read_new_ent(&x, &mut b, tick, sc_map_clone, dt_map_clone);
-                    /*
-                    let mut mhm = entities.as_ref().unwrap();
-                    let mut_ent = mhm.get_mut(&(entity_id as u32));
-                    let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
-                    */
-                } else {
-                    println!("ENTITY: {} NOT FOUND!", entity_id);
-                    panic!("f");
+                loop {
+                    let hm = entities_clone.lock().unwrap();
+                    let ent = hm.as_ref().unwrap().get(&(entity_id.try_into().unwrap()));
+
+                    match ent {
+                        Some(x) => {
+                            //println!("BEFORE1");
+                            let x = ent.as_ref().unwrap().as_ref().unwrap();
+                            let data = Demo::read_new_ent(&x, &mut b, tick, sc_map_clone);
+                            //println!("AFTER1");
+                            let e = Entity {
+                                class_id: x.class_id,
+                                entity_id: x.entity_id.try_into().unwrap(),
+                                serial: x.serial,
+                                props: HashMap::default(),
+                            };
+                            new_ents.push((e.entity_id.try_into().unwrap(), Some(e)));
+                            drop(ent);
+                            drop(hm);
+                            break;
+                        }
+                        None => {
+                            drop(ent);
+                            drop(hm);
+                            let ten_millis = time::Duration::from_nanos(10);
+                            let now = time::Instant::now();
+                            thread::sleep(ten_millis);
+                        }
+                        _ => {
+                            panic!("WTF")
+                        }
+                    }
                 }
             }
         }
-        new_ents
+
+        entities.lock().unwrap().as_mut().unwrap().extend(new_ents);
+        drop(entities);
+        //new_ents
     }
 
     pub fn handle_entity_upd(
@@ -175,12 +199,39 @@ impl Demo {
         b: &mut BitReader<&[u8]>,
         tick: i32,
         serverclass_map: Arc<Mutex<HashMap<u16, ServerClass>>>,
-        dt_map: Arc<Mutex<Option<HashMap<String, CSVCMsg_SendTable>>>>,
     ) -> Vec<PropAtom> {
         let mut data = vec![];
-        let sv_cls = &serverclass_map.lock().unwrap()[&(ent.class_id.try_into().unwrap())];
-        let props = Demo::handle_entity_upd(&sv_cls, b, tick);
-        data.extend(props);
+        let mut cnt = 0;
+        loop {
+            cnt += 1;
+
+            let mtx = &serverclass_map.lock().unwrap();
+            let sv_cls_opt = mtx.get(&(ent.class_id as u16));
+            match sv_cls_opt {
+                Some(svcls) => {
+                    let props = Demo::handle_entity_upd(svcls, b, tick);
+
+                    data.extend(props);
+                    drop(mtx);
+                    drop(sv_cls_opt);
+
+                    break;
+                }
+                None => {
+                    // MAYBE ENT CHANGE MID PARSING
+
+                    drop(mtx);
+                    drop(sv_cls_opt);
+                    let ten_millis = time::Duration::from_nanos(10);
+                    let now = time::Instant::now();
+                    thread::sleep(ten_millis);
+                }
+                _ => {
+                    panic!("WTF");
+                }
+            }
+        }
+
         data
     }
 

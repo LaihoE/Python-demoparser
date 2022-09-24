@@ -48,6 +48,7 @@ fn main() {
         event_name: "".to_string(),
         wanted_props: Vec::new(),
         cnt: 0,
+        round: 0,
     };
 
     let h: Header = d.parse_header();

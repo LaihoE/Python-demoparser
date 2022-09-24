@@ -39,10 +39,10 @@ class PythonDemoParser:
     def __init__(self, file: str) -> None:
         self.path = file
 
-    def parse_props(self, props) -> pd.DataFrame:
+    def parse_props(self, props_names) -> pd.DataFrame:
         out_arr = np.zeros((10000000), order='F')
-        dims = demoparser.parse_props(self.path, prop_names, out_arr)
-        df = transform_props(dims, out_arr, cols=prop_names)
+        dims = demoparser.parse_props(self.path, props_names, out_arr)
+        df = transform_props(dims, out_arr, cols=props_names)
         return df
 
     def parse_events(self, game_events) -> list:
@@ -57,12 +57,9 @@ demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Off
 import glob
 import time
 
-prop_names = [
-"m_vecVelocity[0]",
-"m_vecVelocity[1]",
-]
 
-event_name = "round_start"
+
+event_name = "round_stadftgsrt"
 files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
 deaths = []
 rounds_ends = []
@@ -73,23 +70,14 @@ from collections import Counter
 
 import time
 
-
+# BENU 76561198134270402
+# EMIL 76561198194694750
 
 parser = PythonDemoParser(demo_name)
 before = time.time()
-deaths = parser.parse_events("player_death")
+game_events = parser.parse_events("bomb_planted")
+for event in game_events:
+    print(event)
+
 print(time.time() - before)
-
-
-"""df = parser.parse_props(prop_names)
-#df = pd.DataFrame(deaths)
-
-
-
-xvels = df[df["entid"] == 76561198087429545]["m_vecVelocity[0]"]
-xvels = xvels.abs()
-print(xvels.sum() / len(xvels))
-"""
-#plt.show()
-#print(Counter(df["userid"].to_list()))
-#print(time.time() - before)
+print("HERE")

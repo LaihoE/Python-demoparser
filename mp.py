@@ -1,10 +1,11 @@
 from asyncio import events
 from typing import List
+from unittest import result
 import demoparser
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
+import multiprocessing
 
 def transform_props(dims, arr, cols):
     cols.append("tick")
@@ -22,8 +23,8 @@ def clean_events(events):
     return cleaned_events
 
 class PythonDemoParser:
-    def __init__(self, file: str) -> None:
-        self.path = file
+    def __init__(self) -> None:
+        pass
 
     def parse_props(self, props) -> pd.DataFrame:
         out_arr = np.zeros((10000000), order='F')
@@ -31,14 +32,20 @@ class PythonDemoParser:
         df = transform_props(dims, out_arr, cols=prop_names)
         return df
 
-    def parse_events(self, game_events) -> list:
-        game_events = demoparser.parse_events(self.path, game_events)
+    def parse_events(self, game_events, path) -> list:
+        game_events = demoparser.parse_events(path, game_events)
         game_events = clean_events(game_events)
-        return game_events
+        return pd.DataFrame(game_events)
+
+    def parallel_events(self, game_events, files: List[str]):
+        jobs = [(game_events, file) for file in files]
+        with multiprocessing.Pool(processes=24) as pool:
+            results = pool.starmap(self.parse_events, jobs)
+        return pd.concat(results)
 
 
-#demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
-#demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem"
+# demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
+# demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem"
 
 import glob
 import time
@@ -48,77 +55,12 @@ import uuid
 
 
 if __name__ == "__main__":
-    prop_names = [
-    "m_vecVelocity[0]",
-    "m_vecVelocity[1]",
-    ]
-
-    event_name = "player_hurt"
     files = glob.glob("/home/laiho/Documents/demos/mm/*")
-    #files.extend(glob.glob("/media/laiho/New Volume/5kcheaters/5/b/*"))
-    hs = []
-
-    def parse_file(fileq, dataq):
-        while fileq.qsize() > 0:
-
-            file = fileq.get()
-            print(file)
-
-            parser = PythonDemoParser(file)
-            hurts = parser.parse_events(event_name)
-            df = pd.DataFrame(hurts)
-            df.to_csv(f"data/{uuid.uuid4()}.csv")
-            #dataq.put(df)
-            #print(df)
-
-
-        """
-        df = pd.DataFrame(hs)
-        df = df[df["weapon"] == "p90"]
-        d = Counter(df["attacker"])
-        df = pd.DataFrame.from_records(d.most_common(), columns=['name','count'])
-        df = df[df["name"] != "23"]
-        print(df.iloc[:50, :])
-        """
-
-    def parse():
-        import os
-        old_files = glob.glob("data/*")
-        for old_file in old_files:
-            os.remove(old_file)
-
-        fileq = mp.Queue()
-        for file in files:
-            if file[-1] != "o" and file != "/home/laiho/Documents/demos/mm/match730_003535786327695949955_1269260600_190.dem":
-                if file != "/home/laiho/Documents/demos/mm/match730_003533265574882705732_0879717267_183.dem":
-                    if file != "/home/laiho/Documents/demos/mm/match730_003451971608577573241_0748266049_188.dem":
-                        if file != "/home/laiho/Documents/demos/mm/match730_003431375114384441554_0028193074_190.dem":
-                            if file != "/home/laiho/Documents/demos/mm/match730_003536129379618783361_1932237007_182.dem":
-                                fileq.put(file)
-
-        print(len(files))
-
-        before = time.time()
-        dataq = mp.Queue()
-        processes = [mp.Process(target=parse_file, args=(fileq, dataq)) for x in range(24)]
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
-
-        print(100 / (time.time() - before), "DEMOS PER SECOND", time.time() - before)
-
-    parse()
-
-    df = pd.concat([pd.read_csv(f) for f in glob.glob("data/*")])
-    
-    #df = df["userid"].str.split("7", expand=True)
-    print(df["player_name"])
-    """z = Counter(df["userid"])
-    teammates = []
-    for k,v in z.items():
-        if v > 100:
-            if len(k) > 2 and k != "GOTV":
-                teammates.append(k)
-    print(teammates)"""
-    
+    okfiles = []
+    for file in files:
+        if "info" not in file:
+            okfiles.append(file)
+    d = PythonDemoParser()
+    df = d.parallel_events("bomb_abortplant", okfiles[:200])
+    print(df)
+    print(Counter(df["player_id"]))

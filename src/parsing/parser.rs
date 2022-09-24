@@ -64,6 +64,7 @@ pub struct Demo {
     pub event_name: String,
     pub cnt: i32,
     pub wanted_props: Vec<String>,
+    pub round: i32,
 }
 
 impl Demo {
@@ -97,7 +98,7 @@ impl Demo {
             tick: self.read_i32(),
             playerslot: self.read_byte(),
         };
-        //println!("{}", f.playerslot);
+        //println!("{} {}", f.tick, self.round);
         f
     }
 
@@ -128,7 +129,7 @@ impl Demo {
                     match game_event {
                         Ok(ge) => {
                             let game_event = ge;
-                            let game_events = self.parse_game_events(game_event, &self.players);
+                            let game_events = self.parse_game_events(game_event);
                             self.game_events.extend(game_events);
                         }
                         Err(e) => panic!(

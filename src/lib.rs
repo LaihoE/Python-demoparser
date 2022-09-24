@@ -26,13 +26,8 @@ pub fn parse_events(
     event_name: String,
     //mut out_arr: ArrayViewMutD<'_, f64>,
 ) -> PyResult<(Py<PyAny>)> {
-    let mut f = File::open("/home/laiho/Documents/demos/rclonetest/1.zip").unwrap();
-    println!("HERERE");
-    let mut buffer = Vec::new();
-    // read the whole file
-    f.read_to_end(&mut buffer).unwrap();
     let mut d = Demo {
-        bytes: buffer, //std::fs::read(demo_name).unwrap(),
+        bytes: std::fs::read(demo_name).unwrap(),
         fp: 0,
         cmd: 0,
         tick: 0,
@@ -50,6 +45,7 @@ pub fn parse_events(
         event_name: event_name,
         wanted_props: Vec::new(),
         cnt: 0,
+        round: 0,
     };
     let now = Instant::now();
     let props_names = vec!["".to_owned()];
@@ -99,6 +95,7 @@ pub fn parse_props(
         game_events: Vec::new(),
         event_name: "".to_string(),
         cnt: 0,
+        round: 0,
     };
 
     let h: Header = d.parse_header();

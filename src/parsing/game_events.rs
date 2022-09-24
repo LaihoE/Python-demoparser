@@ -134,6 +134,7 @@ pub fn gen_name_val_pairs(
     event: &Descriptor_t,
     tick: &i32,
     players: &Vec<UserInfo>,
+    round: i32,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
     let mut kv_pairs: Vec<NameDataPair> = Vec::new();
@@ -180,15 +181,34 @@ pub fn gen_name_val_pairs(
         name: "tick".to_owned(),
         data: KeyData::LongData(*tick),
     });
+
+    kv_pairs.push(NameDataPair {
+        name: "event_name".to_string(),
+        data: KeyData::StrData(event.name().to_string()),
+    });
+
+    kv_pairs.push(NameDataPair {
+        name: "round".to_string(),
+        data: KeyData::StrData(round.to_string()),
+    });
+
     kv_pairs
 }
 
-pub fn _match_data_to_game_event(
+pub fn match_data_to_game_event(
     namedatavec: &Vec<NameDataPair>,
     event_name: &str,
-    wanted_event: &String,
+    wanted: &String,
 ) -> bool {
-    if event_name.contains(wanted_event) {
+    if event_name.contains(wanted) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+pub fn is_round_changed(event_name: &str) -> bool {
+    if event_name == "round_start" {
         return true;
     } else {
         return false;
@@ -196,27 +216,30 @@ pub fn _match_data_to_game_event(
 }
 
 impl Demo {
-    pub fn parse_game_events(
-        &self,
-        game_event: CSVCMsg_GameEvent,
-        players: &Vec<UserInfo>,
-    ) -> Vec<GameEvent> {
+    pub fn parse_game_events(&mut self, game_event: CSVCMsg_GameEvent) -> Vec<GameEvent> {
         let mut game_events: Vec<GameEvent> = Vec::new();
-
         let event_desc = &self.event_map;
         match event_desc {
             Some(ev_desc_map) => {
                 let event_desc = &ev_desc_map[&game_event.eventid()];
-                let name_data_pairs =
-                    gen_name_val_pairs(&game_event, &event_desc, &self.tick, players);
-                if _match_data_to_game_event(&name_data_pairs, event_desc.name(), &self.event_name)
-                {
+                let name_data_pairs = gen_name_val_pairs(
+                    &game_event,
+                    &event_desc,
+                    &self.tick,
+                    &self.players,
+                    self.round,
+                );
+
+                if match_data_to_game_event(&name_data_pairs, event_desc.name(), &self.event_name) {
                     game_events.push({
                         GameEvent {
                             name: event_desc.name().to_owned(),
                             fields: name_data_pairs,
                         }
                     })
+                }
+                if is_round_changed(event_desc.name()) {
+                    self.round += 1;
                 }
             }
             None => {

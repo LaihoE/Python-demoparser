@@ -4,17 +4,17 @@ use std::str;
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct Header<'a> {
-    header_magic: &'a str,
-    protocol: i32,
-    network_protocol: u32,
-    server_name: &'a str,
-    client_name: &'a str,
-    map_name: &'a str,
-    game_dir: &'a str,
-    playback_time: f32,
-    playback_ticks: i32,
-    playback_frames: i32,
-    signon_length: i32,
+    pub header_magic: &'a str,
+    pub protocol: i32,
+    pub network_protocol: u32,
+    pub server_name: &'a str,
+    pub client_name: &'a str,
+    pub map_name: &'a str,
+    pub game_dir: &'a str,
+    pub playback_time: f32,
+    pub playback_ticks: i32,
+    pub playback_frames: i32,
+    pub signon_length: i32,
 }
 
 impl Demo {

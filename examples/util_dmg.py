@@ -1,5 +1,6 @@
 from asyncio import events
 from typing import List
+from unicodedata import name
 import demoparser
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,23 +40,20 @@ class PythonDemoParser:
     def __init__(self, file: str) -> None:
         self.path = file
 
-    def parse_props(self, props_names, ticks, steamids) -> pd.DataFrame:
+    def parse_props(self, props_names) -> pd.DataFrame:
         out_arr = np.zeros((10000000), order='F')
-        dims = demoparser.parse_props(self.path, props_names, out_arr, ticks, steamids)
+        dims = demoparser.parse_props(self.path, props_names, out_arr)
         df = transform_props(dims, out_arr, cols=props_names)
         return df
 
-    def parse_events(self, game_events, format="") -> list:
+    def parse_events(self, game_events) -> list:
         game_events = demoparser.parse_events(self.path, game_events)
         game_events = clean_events(game_events)
-        if format == "df":
-            return pd.DataFrame(game_events)
         return game_events
 
 
-
 demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
-# demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem"
+#demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem"
 
 import glob
 import time
@@ -75,15 +73,56 @@ import time
 
 # BENU 76561198134270402
 # EMIL 76561198194694750
+
+total_attackers = []
+total_victims = []
+
+files = glob.glob("/home/laiho/Documents/demos/mm/*")
+okfiles = []
 for file in files:
+        if "info" not in file:
+            okfiles.append(file)
+
+name_map = {
+    "76561198134270402": "benu",
+    "76561198194694750": "laiho",
+    "76561198073049527": "osku",
+    "76561198048924300": "make",
+    "76561198258044111": "juuso",
+    "76561198193238934": "lari",
+}
+
+
+ok = ["76561198134270402",
+    "76561198194694750",
+    "76561198073049527",
+    "76561198048924300",
+    "76561198258044111",
+    "76561198193238934",]
+
+
+def util_dmg(file):
     parser = PythonDemoParser(file)
-    before = time.time()
-    df = parser.parse_props(["m_vecOrigin_X", "m_vecOrigin_Y"],
-                                        [x for x in range(100000)],
-                                        [76561198194694750])
+    game_events = parser.parse_events("player_hurt")
+    df = pd.DataFrame(game_events)
+    return df
+    
 
-    plt.scatter(df["m_vecOrigin_Y"], df["m_vecOrigin_X"])
-    plt.show()
-
-    print(time.time() - before)
-    print("HERE")
+if __name__ == "__main__":
+    import multiprocessing
+    with multiprocessing.Pool(processes=24) as pool:
+        results = pool.map(util_dmg, okfiles[:200])
+    
+    df = pd.concat(results)
+    weapons = df["weapon"].unique()
+    for weapon in weapons:
+        print(weapon)
+        filtered = df[df["weapon"] == weapon]
+        filtered = filtered.astype({"dmg_health": int})
+        res = filtered.groupby(["attacker_id"], as_index=False).sum().sort_values("dmg_health")
+        res = res[res["attacker_id"].isin(ok)]
+        res = res.replace({"attacker_id": name_map})
+        plt.title(weapon)
+        plt.bar(res["attacker_id"], res["dmg_health"])
+        plt.savefig(f"all_weapons_last_200/{weapon}.png")
+        plt.show()

@@ -1,14 +1,14 @@
 # CSGO demo parser for Python
 
 
-## Example use
+## Game events
 
 ```python
 parser = PythonDemoParser("demo.dem")
 events = parser.parse_events("weapon_fire")
 ```
 
-Returns a list of dictionaries with following shape:
+Returns a list of dictionaries where each dictionary is one event:
 ```python
 {
 'player_name': 'flusha',
@@ -27,29 +27,9 @@ parser = PythonDemoParser("demo.dem")
 df = parser.parse_events("weapon_fire", format="df")
 ```
 
-Returns something like this:
-```python
-    player_name  event_name round silenced    weapon       tick   player_id
-0     flusha  weapon_fire     0    false     weapon_m4a1     146  76561197991348083
-1     flusha  weapon_fire     0    false     weapon_m4a1     152  76561197991348083
-2     flusha  weapon_fire     0    false     weapon_m4a1     158  76561197991348083
-3     flusha  weapon_fire     0    false     weapon_m4a1     164  76561197991348083
-4     flusha  weapon_fire     0    false     weapon_m4a1     170  76561197991348083
-```
 
 
-
-### Game events are only a small part of what is available
-Props are values that players can have. For example "m_vecOrigin_X" gives the players X coordinate at a given tick.
-
-```python
-props_wanted = ["m_vecOrigin", "m_iHealth"]
-parser = PythonDemoParser("demo.dem")
-df = parser.parse_props(props_wanted)
-```
-List of available props can be found here
-
-parse_props also allows optional filtering of steamids and ticks:
+## Getting player data at specified tick
 ```python
 wanted_props = ["m_vecOrigin", "m_iHealth"]
 wanted_players = [76561197991348083]
@@ -60,6 +40,8 @@ df = parser.parse_props(props_wanted,
                         players=wanted_players,
                         ticks=wanted_ticks)
 ```
+Remove the optional arguments "players" and "ticks" if you want all players and all ticks.
+
 
 
 

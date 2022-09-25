@@ -15,6 +15,7 @@ protobuf = "3.1.0"
 numpy = "0.17.1"
 fxhash = "0.2.1"
 hashbrown = "0.12.3"
+polars = "0.24.1"
 
 [dependencies.csgoproto]
 path = "./csgoproto"
@@ -22,12 +23,13 @@ path = "./csgoproto"
 jemallocator = "0.3.2"
 
 
+
 [profile.dev]
 overflow-checks = false
 
 [profile.release]
 opt-level = 3
-lto = "fat"
-codegen-units = 1
-panic = "abort"
-jemallocator = "0.3.2"
+#lto = "fat"
+#codegen-units = 1
+#panic = "abort"
+#jemallocator = "0.3.2"

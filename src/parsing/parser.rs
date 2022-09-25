@@ -16,6 +16,7 @@ use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use fxhash::FxHashMap;
+use hashbrown::HashSet;
 use netmessages::CSVCMsg_PacketEntities;
 use protobuf;
 use protobuf::reflect::MessageDescriptor;
@@ -64,6 +65,8 @@ pub struct Demo {
     pub event_name: String,
     pub cnt: i32,
     pub wanted_props: Vec<String>,
+    pub wanted_ticks: HashSet<i32>,
+    pub wanted_players: Vec<u64>,
     pub round: i32,
 }
 
@@ -78,12 +81,21 @@ impl Demo {
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame();
             self.tick = f.tick;
-            //println!("{}", self.tick);
+
             for player in &self.players {
-                let props_this_tick: Vec<(String, f32)> =
-                    extract_props(&self.entities, props_names, &self.tick, player.entity_id);
-                for (k, v) in props_this_tick {
-                    ticks_props.entry(k).or_insert_with(Vec::new).push(v);
+                if self.wanted_ticks.contains(&self.tick) {
+                    if self.wanted_players.contains(&player.xuid) {
+                        let props_this_tick: Vec<(String, f32)> = extract_props(
+                            &self.entities,
+                            props_names,
+                            &self.tick,
+                            player.entity_id,
+                        );
+
+                        for (k, v) in props_this_tick {
+                            ticks_props.entry(k).or_insert_with(Vec::new).push(v);
+                        }
+                    }
                 }
             }
 

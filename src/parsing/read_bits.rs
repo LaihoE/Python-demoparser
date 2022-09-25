@@ -386,11 +386,11 @@ impl<R: io::Read> BitReader<R> {
                 }
             }
             if low_pres {
-                let lp = (1.0 / (1 << 3) as f64);
+                let lp = 1.0 / (1 << 3) as f64;
                 let frac_val = self.read_nbits(3);
                 let result = int_val as i32 as f64 + frac_val as f64 * lp;
             } else {
-                let cr: f64 = (1.0 / (1 << 5) as f64);
+                let cr: f64 = 1.0 / (1 << 5) as f64;
                 let frac_val = self.read_nbits(5);
                 let result = int_val as i32 as f64 + frac_val as f64 * cr;
             }

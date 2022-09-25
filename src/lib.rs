@@ -6,9 +6,11 @@ use numpy::{
 };
 mod parsing;
 use fxhash::FxHashMap;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use parsing::header::Header;
 use parsing::parser::Demo;
+use polars::prelude::*;
+use polars::series::Series;
 use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
@@ -46,10 +48,14 @@ pub fn parse_events(
         wanted_props: Vec::new(),
         cnt: 0,
         round: 0,
+        wanted_players: Vec::new(),
+        wanted_ticks: HashSet::default(),
     };
     let now = Instant::now();
     let props_names = vec!["".to_owned()];
     let h: Header = d.parse_header();
+    println!("{}", h.map_name);
+
     let data = d.parse_frame(&props_names);
     let mut cnt = 0;
     let mut game_evs: Vec<FxHashMap<String, Vec<PyObject>>> = Vec::new();
@@ -63,7 +69,7 @@ pub fn parse_events(
         game_evs.push(hm);
     }
     let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
+    //println!("Elapsed: {:.2?}", elapsed);
 
     let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
     Ok(dict)
@@ -74,6 +80,8 @@ pub fn parse_props(
     demo_name: String,
     mut props_names: Vec<String>,
     mut out_arr: PyReadwriteArrayDyn<f64>,
+    wanted_ticks: Vec<i32>,
+    wanted_ids: Vec<u64>,
 ) -> PyResult<Vec<u64>> {
     let mut out_arr = out_arr.as_array_mut();
     let mut d = Demo {
@@ -96,9 +104,12 @@ pub fn parse_props(
         event_name: "".to_string(),
         cnt: 0,
         round: 0,
+        wanted_players: wanted_ids,
+        wanted_ticks: HashSet::from_iter(wanted_ticks),
     };
 
     let h: Header = d.parse_header();
+    println!("{:?}", h);
     let mut event_names: Vec<String> = Vec::new();
 
     let data = d.parse_frame(&props_names);
@@ -108,13 +119,28 @@ pub fn parse_props(
     props_names.push("tick".to_string());
     props_names.push("ent_id".to_string());
 
-    for prop_name in &props_names {
-        let v = &data[prop_name];
-        col_len = v.len();
+    /*
+    let mut all_series: Vec<Series> = Vec::new();
 
-        for prop in v {
-            out_arr[cnt] = *prop as f64;
-            cnt += 1
+    for prop_name in &props_names {
+        if data.contains_key(prop_name) {
+            let s = Series::new(prop_name, &data[prop_name]);
+            all_series.push(s);
+        }
+    }
+
+    let df = DataFrame::new(all_series).unwrap();
+    println!("{:?}", df);
+    */
+    for prop_name in &props_names {
+        if data.contains_key(prop_name) {
+            let v = &data[prop_name];
+            col_len = v.len();
+
+            for prop in v {
+                out_arr[cnt] = *prop as f64;
+                cnt += 1
+            }
         }
     }
 
@@ -123,10 +149,12 @@ pub fn parse_props(
         col_len.try_into().unwrap(),
         props_names.len().try_into().unwrap(),
     ];
+
     for player in d.players {
         result.push(player.xuid);
-        result.push(player.entity_id as u64)
+        result.push(player.entity_id as u64);
     }
+
     Ok(result)
 }
 

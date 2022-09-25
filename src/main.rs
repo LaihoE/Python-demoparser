@@ -2,6 +2,7 @@ mod parsing;
 use csgoproto::netmessages;
 use csgoproto::steammessages;
 use hashbrown::HashMap;
+use hashbrown::HashSet;
 use jemallocator;
 use parsing::header::Header;
 use parsing::parser::Demo;
@@ -49,6 +50,8 @@ fn main() {
         wanted_props: Vec::new(),
         cnt: 0,
         round: 0,
+        wanted_players: Vec::new(),
+        wanted_ticks: HashSet::new(),
     };
 
     let h: Header = d.parse_header();

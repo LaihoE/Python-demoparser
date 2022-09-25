@@ -237,11 +237,16 @@ impl Demo {
 
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
+                        println!("U {}", st.data[index as usize].entry);
                         if st.data[index as usize].entry != "" {
-                            ui.entity_id =
-                                (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
+                            let temp_id = (st.data[index as usize].entry).parse::<u32>();
+                            match temp_id {
+                                Err(e) => ui.entity_id = 99999,
+                                Ok(ok) => {
+                                    ui.entity_id = ok + 2;
+                                }
+                            }
                         }
-
                         if ui.xuid != 0 {
                             self.players.push(ui);
                         }

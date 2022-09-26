@@ -15,7 +15,9 @@ use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
 use csgoproto::netmessages::CSVCMsg_SendTable;
+use flate2::read::GzDecoder;
 use fxhash::FxHashMap;
+use hashbrown::HashMap;
 use hashbrown::HashSet;
 use netmessages::CSVCMsg_PacketEntities;
 use protobuf;
@@ -24,12 +26,11 @@ use protobuf::Message;
 use pyo3::prelude::*;
 use std::any::Any;
 use std::convert::TryInto;
+use std::io::Read;
 use std::path::Path;
 use std::thread;
 use std::time::Instant;
 use std::vec;
-
-use hashbrown::HashMap;
 
 use numpy::ndarray::{Array1, ArrayD, ArrayView1, ArrayViewD, ArrayViewMutD, Zip};
 use numpy::{
@@ -72,12 +73,22 @@ pub struct Demo {
 }
 
 impl Demo {
-    pub fn decompress_bytes() {}
+    pub fn decompress_gz(bytes: Vec<u8>) -> Vec<u8> {
+        let mut gz = GzDecoder::new(&bytes[..]);
+        let mut out: Vec<u8> = vec![];
+        gz.read_to_end(&mut out).unwrap();
+        out
+    }
 
     pub fn read_file(demo_path: String) -> Vec<u8> {
         let extension = Path::new(&demo_path).extension().unwrap();
+        let mut bytes = std::fs::read(&demo_path).unwrap();
         println!("EXTENSION {:?}", extension);
-        let bytes = std::fs::read(demo_path).unwrap();
+
+        match extension.to_str().unwrap() {
+            "gz" => bytes = Demo::decompress_gz(bytes),
+            _ => {}
+        }
         bytes
     }
 
@@ -114,40 +125,6 @@ impl Demo {
             wanted_ticks: HashSet::from_iter(wanted_ticks),
         }
     }
-}
-
-pub fn create_parser(
-    demo_path: String,
-    wanted_ticks: Vec<i32>,
-    wanted_players: Vec<u64>,
-    wanted_props: Vec<String>,
-    event_name: String,
-    props_names: Vec<String>,
-) {
-    let mut d = Demo {
-        bytes: std::fs::read(demo_path).unwrap(),
-        fp: 0,
-        cmd: 0,
-        tick: 0,
-        cnt: 0,
-        round: 0,
-        event_list: None,
-        event_map: None,
-        class_bits: 0,
-        parse_props: false,
-        event_name: event_name,
-        bad: Vec::new(),
-        dt_map: Some(HashMap::default()),
-        serverclass_map: HashMap::default(),
-        entities: Some(HashMap::default()),
-        stringtables: Vec::new(),
-        players: Vec::new(),
-        // changing ones
-        wanted_props: Vec::new(),
-        game_events: Vec::new(),
-        wanted_players: wanted_players,
-        wanted_ticks: HashSet::from_iter(wanted_ticks),
-    };
 }
 
 impl Demo {

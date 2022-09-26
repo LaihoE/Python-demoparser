@@ -76,7 +76,8 @@ import time
 # BENU 76561198134270402
 # EMIL 76561198194694750
 for file in files:
-    parser = PythonDemoParser(file)
+    parser = PythonDemoParser("/home/laiho/Documents/programming/rust/ziptest/t/src/demo.dem")
     before = time.time()
     game_events = parser.parse_events("player_hurt")
-    print(game_events)
+    print(game_events[-1]["tick"])
+    break

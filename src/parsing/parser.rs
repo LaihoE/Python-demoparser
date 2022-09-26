@@ -24,6 +24,7 @@ use protobuf::Message;
 use pyo3::prelude::*;
 use std::any::Any;
 use std::convert::TryInto;
+use std::path::Path;
 use std::thread;
 use std::time::Instant;
 use std::vec;
@@ -68,6 +69,85 @@ pub struct Demo {
     pub wanted_ticks: HashSet<i32>,
     pub wanted_players: Vec<u64>,
     pub round: i32,
+}
+
+impl Demo {
+    pub fn decompress_bytes() {}
+
+    pub fn read_file(demo_path: String) -> Vec<u8> {
+        let extension = Path::new(&demo_path).extension().unwrap();
+        println!("EXTENSION {:?}", extension);
+        let bytes = std::fs::read(demo_path).unwrap();
+        bytes
+    }
+
+    pub fn new(
+        demo_path: String,
+        wanted_ticks: Vec<i32>,
+        wanted_players: Vec<u64>,
+        wanted_props: Vec<String>,
+        event_name: String,
+    ) -> Self {
+        let bytes = Demo::read_file(demo_path);
+        Self {
+            bytes: bytes,
+            fp: 0,
+            cmd: 0,
+            tick: 0,
+            cnt: 0,
+            round: 0,
+            event_list: None,
+            event_map: None,
+            class_bits: 0,
+            parse_props: false,
+            event_name: event_name,
+            bad: Vec::new(),
+            dt_map: Some(HashMap::default()),
+            serverclass_map: HashMap::default(),
+            entities: Some(HashMap::default()),
+            stringtables: Vec::new(),
+            players: Vec::new(),
+            // changing ones
+            wanted_props: wanted_props,
+            game_events: Vec::new(),
+            wanted_players: wanted_players,
+            wanted_ticks: HashSet::from_iter(wanted_ticks),
+        }
+    }
+}
+
+pub fn create_parser(
+    demo_path: String,
+    wanted_ticks: Vec<i32>,
+    wanted_players: Vec<u64>,
+    wanted_props: Vec<String>,
+    event_name: String,
+    props_names: Vec<String>,
+) {
+    let mut d = Demo {
+        bytes: std::fs::read(demo_path).unwrap(),
+        fp: 0,
+        cmd: 0,
+        tick: 0,
+        cnt: 0,
+        round: 0,
+        event_list: None,
+        event_map: None,
+        class_bits: 0,
+        parse_props: false,
+        event_name: event_name,
+        bad: Vec::new(),
+        dt_map: Some(HashMap::default()),
+        serverclass_map: HashMap::default(),
+        entities: Some(HashMap::default()),
+        stringtables: Vec::new(),
+        players: Vec::new(),
+        // changing ones
+        wanted_props: Vec::new(),
+        game_events: Vec::new(),
+        wanted_players: wanted_players,
+        wanted_ticks: HashSet::from_iter(wanted_ticks),
+    };
 }
 
 impl Demo {

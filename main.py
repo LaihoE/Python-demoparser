@@ -78,12 +78,5 @@ import time
 for file in files:
     parser = PythonDemoParser(file)
     before = time.time()
-    df = parser.parse_props(["m_vecOrigin_X", "m_vecOrigin_Y"],
-                                        [x for x in range(100000)],
-                                        [76561198194694750])
-
-    plt.scatter(df["m_vecOrigin_Y"], df["m_vecOrigin_X"])
-    plt.show()
-
-    print(time.time() - before)
-    print("HERE")
+    game_events = parser.parse_events("player_hurt")
+    print(game_events)

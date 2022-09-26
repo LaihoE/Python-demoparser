@@ -30,13 +30,16 @@ def first_bloods(file):
     parser = PythonDemoParser(file)
     game_events = parser.parse_props(["m_vecOrigin_X", "m_vecOrigin_Y"])
     df = pd.DataFrame(game_events)
+    plt.scatter(df["m_vecOrigin_X"], df["m_vecOrigin_Y"])
+    plt.show()
+    print(df)
 
 
 
 if __name__ == "__main__":
     import multiprocessing
     print(len(okfiles))
-    with multiprocessing.Pool(processes=2) as pool:
+    with multiprocessing.Pool(processes=1) as pool:
         results = pool.map(first_bloods, okfiles)
     print(results)
     #df = pd.concat(results)

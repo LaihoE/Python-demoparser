@@ -17,48 +17,26 @@ use pyo3::types::PyDict;
 use pyo3::types::PyList;
 use std::convert::TryInto;
 use std::fs::File;
-use std::io;
 use std::io::prelude::*;
 use std::time::Instant;
+use std::{io, vec};
 
 #[pyfunction]
 pub fn parse_events(
     py: Python<'_>,
-    demo_name: String,
+    demo_path: String,
     event_name: String,
-    //mut out_arr: ArrayViewMutD<'_, f64>,
 ) -> PyResult<(Py<PyAny>)> {
-    let mut d = Demo {
-        bytes: std::fs::read(demo_name).unwrap(),
-        fp: 0,
-        cmd: 0,
-        tick: 0,
-        event_list: None,
-        event_map: None,
-        dt_map: Some(HashMap::default()),
-        class_bits: 0,
-        serverclass_map: HashMap::default(),
-        entities: Some(HashMap::default()),
-        bad: Vec::new(),
-        stringtables: Vec::new(),
-        players: Vec::new(),
-        parse_props: false,
-        game_events: Vec::new(),
-        event_name: event_name,
-        wanted_props: Vec::new(),
-        cnt: 0,
-        round: 0,
-        wanted_players: Vec::new(),
-        wanted_ticks: HashSet::default(),
-    };
     let now = Instant::now();
-    let props_names = vec!["".to_owned()];
-    let h: Header = d.parse_header();
 
-    let data = d.parse_frame(&props_names);
+    let mut d = Demo::new(demo_path, Vec::new(), Vec::new(), Vec::new(), event_name);
+
+    let h: Header = d.parse_header();
+    let data = d.parse_frame(&vec!["".to_owned()]);
     let mut cnt = 0;
     let mut game_evs: Vec<FxHashMap<String, Vec<PyObject>>> = Vec::new();
 
+    // Create Hashmap with <string, pyobject> to be able to convert to python dict
     for ge in d.game_events {
         let mut hm: FxHashMap<String, Vec<PyObject>> = FxHashMap::default();
         let tuples = ge.to_py_tuples(py);
@@ -74,47 +52,31 @@ pub fn parse_events(
 
 #[pyfunction]
 pub fn parse_props(
-    demo_name: String,
-    mut props_names: Vec<String>,
+    demo_path: String,
+    mut wanted_props: Vec<String>,
     mut out_arr: PyReadwriteArrayDyn<f64>,
     wanted_ticks: Vec<i32>,
-    wanted_ids: Vec<u64>,
+    wanted_players: Vec<u64>,
 ) -> PyResult<Vec<u64>> {
     let mut out_arr = out_arr.as_array_mut();
-    let mut d = Demo {
-        bytes: std::fs::read(demo_name).unwrap(),
-        fp: 0,
-        cmd: 0,
-        tick: 0,
-        event_list: None,
-        event_map: None,
-        dt_map: Some(HashMap::default()),
-        class_bits: 0,
-        serverclass_map: HashMap::default(),
-        entities: Some(HashMap::default()),
-        bad: Vec::new(),
-        stringtables: Vec::new(),
-        players: Vec::new(),
-        parse_props: true,
-        wanted_props: props_names.clone(),
-        game_events: Vec::new(),
-        event_name: "".to_string(),
-        cnt: 0,
-        round: 0,
-        wanted_players: wanted_ids,
-        wanted_ticks: HashSet::from_iter(wanted_ticks),
-    };
+
+    let mut d = Demo::new(
+        demo_path,
+        wanted_ticks,
+        wanted_players,
+        wanted_props.clone(),
+        "".to_string(),
+    );
 
     let h: Header = d.parse_header();
-    println!("{:?}", h);
     let mut event_names: Vec<String> = Vec::new();
 
-    let data = d.parse_frame(&props_names);
+    let data = d.parse_frame(&wanted_props);
     let mut cnt = 0;
     let mut col_len = 1;
 
-    props_names.push("tick".to_string());
-    props_names.push("ent_id".to_string());
+    wanted_props.push("tick".to_string());
+    wanted_props.push("ent_id".to_string());
 
     /*
     let mut all_series: Vec<Series> = Vec::new();
@@ -129,7 +91,7 @@ pub fn parse_props(
     let df = DataFrame::new(all_series).unwrap();
     println!("{:?}", df);
     */
-    for prop_name in &props_names {
+    for prop_name in &wanted_props {
         if data.contains_key(prop_name) {
             let v = &data[prop_name];
             col_len = v.len();
@@ -144,7 +106,7 @@ pub fn parse_props(
     let mut result: Vec<u64> = vec![
         cnt.try_into().unwrap(),
         col_len.try_into().unwrap(),
-        props_names.len().try_into().unwrap(),
+        wanted_props.len().try_into().unwrap(),
     ];
 
     for player in d.players {

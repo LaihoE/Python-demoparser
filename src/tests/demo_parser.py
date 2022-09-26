@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import demoparser
 
+
 def transform_props(dims, arr, cols):
     cols.append("tick")
     cols.append("entid")
@@ -35,9 +36,9 @@ class PythonDemoParser:
     def __init__(self, file: str) -> None:
         self.path = file
 
-    def parse_props(self, props_names, ticks=[], players=[]) -> pd.DataFrame:
+    def parse_props(self, props_names) -> pd.DataFrame:
         out_arr = np.zeros((10000000), order='F')
-        dims = demoparser.parse_props(self.path, props_names, out_arr, ticks, players)
+        dims = demoparser.parse_props(self.path, props_names, out_arr)
         df = transform_props(dims, out_arr, cols=props_names)
         return df
 

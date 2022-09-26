@@ -83,8 +83,9 @@ impl Demo {
             self.tick = f.tick;
 
             for player in &self.players {
-                if self.wanted_ticks.contains(&self.tick) {
-                    if self.wanted_players.contains(&player.xuid) {
+                if self.wanted_ticks.contains(&self.tick) || self.wanted_ticks.len() == 0 {
+                    if self.wanted_players.contains(&player.xuid) || self.wanted_players.len() == 0
+                    {
                         let props_this_tick: Vec<(String, f32)> = extract_props(
                             &self.entities,
                             props_names,

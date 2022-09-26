@@ -28,18 +28,9 @@ for file in files:
 
 def first_bloods(file):
     parser = PythonDemoParser(file)
-    game_events = parser.parse_events("player_death")
+    game_events = parser.parse_props(["m_vecOrigin_X", "m_vecOrigin_Y"])
     df = pd.DataFrame(game_events)
-    #df = df[df["weapon"] == "m4a1"]
-    df = df[df["attacker_id"] == "76561198194694750"]
-    df = df[df["round"] != "0"]
-    try:
-        # SELECT sum(*) group by round
-        # x = df.groupby("round").size().values.max()
-        print(len(df))
-    except Exception as e:
-        pass
-    return df, file
+
 
 
 if __name__ == "__main__":

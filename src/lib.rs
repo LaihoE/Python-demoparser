@@ -54,7 +54,6 @@ pub fn parse_events(
     let now = Instant::now();
     let props_names = vec!["".to_owned()];
     let h: Header = d.parse_header();
-    println!("{}", h.map_name);
 
     let data = d.parse_frame(&props_names);
     let mut cnt = 0;
@@ -68,8 +67,6 @@ pub fn parse_events(
         }
         game_evs.push(hm);
     }
-    let elapsed = now.elapsed();
-    //println!("Elapsed: {:.2?}", elapsed);
 
     let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
     Ok(dict)

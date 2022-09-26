@@ -181,12 +181,10 @@ pub fn gen_name_val_pairs(
         name: "tick".to_owned(),
         data: KeyData::LongData(*tick),
     });
-
     kv_pairs.push(NameDataPair {
         name: "event_name".to_string(),
         data: KeyData::StrData(event.name().to_string()),
     });
-
     kv_pairs.push(NameDataPair {
         name: "round".to_string(),
         data: KeyData::StrData(round.to_string()),

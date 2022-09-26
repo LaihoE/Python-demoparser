@@ -226,7 +226,7 @@ impl Demo {
                     //println!("USERDATA 1");
                     if st.userinfo {
                         let ui = Demo::parse_userinfo(user_data);
-                        println!("NAMELEN {}", ui.xuid);
+                        //println!("NAMELEN {}", ui.xuid);
                         if ui.xuid != 0 {
                             self.players.push(ui);
                         }
@@ -237,7 +237,7 @@ impl Demo {
 
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
-                        println!("U {}", st.data[index as usize].entry);
+                        //println!("U {}", st.data[index as usize].entry);
                         if st.data[index as usize].entry != "" {
                             let temp_id = (st.data[index as usize].entry).parse::<u32>();
                             match temp_id {

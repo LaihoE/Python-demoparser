@@ -28,8 +28,8 @@ jobs:
       with:
         maturin-version: latest
         command: build
-        args: --release
-
+        args: --release --out dist -m python/Cargo.toml
+        
     - name: Set up Python 3.10
       uses: actions/setup-python@v3
       with:

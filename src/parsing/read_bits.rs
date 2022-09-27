@@ -100,19 +100,19 @@ impl<R: io::Read> BitReader<R> {
             0 => {}
             1 => {
                 let mut buf = [0; 8 / 8];
-                self.inner.read_exact(&mut buf);
+                self.inner.read_exact(&mut buf).unwrap();
                 self.available = 8;
                 self.bits = u32::from(buf[0]);
             }
             2 => {
                 let mut buf = [0; 16 / 8];
-                self.inner.read_exact(&mut buf);
+                self.inner.read_exact(&mut buf).unwrap();
                 self.available = 16;
                 self.bits = u32::from(buf[0]) + (u32::from(buf[1]) << 8);
             }
             3 => {
                 let mut buf = [0; 24 / 8];
-                self.inner.read_exact(&mut buf);
+                self.inner.read_exact(&mut buf).unwrap();
                 self.available = 24;
                 self.bits =
                     u32::from(buf[0]) + (u32::from(buf[1]) << 8) + (u32::from(buf[2]) << 16);
@@ -124,8 +124,7 @@ impl<R: io::Read> BitReader<R> {
     #[inline]
     pub fn ensure_bits(&mut self) -> io::Result<()> {
         let mut buf = [0; NBITS / 8];
-        let had_enough = self.inner.read_exact(&mut buf);
-
+        self.inner.read_exact(&mut buf).unwrap();
         self.bits = unsafe { mem::transmute(buf) };
         self.available = NBITS;
 
@@ -160,7 +159,7 @@ impl<R: io::Read> BitReader<R> {
             let in_buf = self.bits;
             let consumed = self.available;
             let remaining = n - consumed;
-            self.ensure_bits();
+            self.ensure_bits().unwrap();
             let ret = in_buf | ((self.bits & MASKS[remaining]) << consumed);
             self.consume(remaining);
             ret.to_le()

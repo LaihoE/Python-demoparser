@@ -1,5 +1,8 @@
 # CSGO demo parser for Python
 
+```python
+pip install demoparser
+```
 
 ## Game events
 

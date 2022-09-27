@@ -31,17 +31,6 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
-    - uses: messense/maturin-action@v1
-      with:
-        maturin-version: latest
-        command: build
-        args: --release --out dist
-        
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    
 
     - name: Build Wheels
       uses: messense/maturin-action@v1
@@ -49,6 +38,11 @@ jobs:
         target: ${{ matrix.target }}
         manylinux: auto
         args: -i ${{ matrix.python-version }} --release --out dist
+        
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
     
     - name: Install dependencies
       run: |

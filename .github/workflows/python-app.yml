@@ -15,77 +15,78 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    linux:
-      runs-on: ubuntu-latest
-      strategy:
-        matrix:
-          python-version: ['3.8']
-          target: [x86_64]
+  linux:
 
-      steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10']
+        target: [x86_64]
 
-      - name: Build Wheels
-        uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: -i ${{ matrix.python-version }} --release --out dist
-          
-      - name: Set up Python 3.8
-        uses: actions/setup-python@v3
-        with:
-          python-version: ${{ matrix.python-version }}
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install dist/*.whl --force-reinstall
-      
-      - name: Upload wheels
-        uses: actions/upload-artifact@v2
-        with:
-          name: wheels
-          path: dist
-  
-    windows:
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build Wheels
+      uses: messense/maturin-action@v1
+      with:
+        target: ${{ matrix.target }}
+        args: -i ${{ matrix.python-version }} --release --out dist
+        
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install dist/*.whl --force-reinstall
+    
+    - name: Upload wheels
+      uses: actions/upload-artifact@v2
+      with:
+        name: wheels
+        path: dist
+
+  windows:
+
     runs-on: windows-latest
-      strategy:
-        matrix:
-          python-version: ['3.8']
-          target: [x86_64]
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10']
+        target: [x86_64]
 
-      steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
 
-      - name: Build Wheels
-        uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: -i ${{ matrix.python-version }} --release --out dist
-          
-      - name: Set up Python 3.8
-        uses: actions/setup-python@v3
-        with:
-          python-version: ${{ matrix.python-version }}
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install dist/*.whl --force-reinstall
-      
-      - name: Upload wheels
-        uses: actions/upload-artifact@v2
-        with:
-          name: wheels
-          path: dist
+    - name: Build Wheels
+      uses: messense/maturin-action@v1
+      with:
+        target: ${{ matrix.target }}
+        args: -i ${{ matrix.python-version }} --release --out dist
+        
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install dist/*.whl --force-reinstall
+    
+    - name: Upload wheels
+      uses: actions/upload-artifact@v2
+      with:
+        name: wheels
+        path: dist

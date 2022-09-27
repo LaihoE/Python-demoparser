@@ -124,7 +124,7 @@ impl<R: io::Read> BitReader<R> {
     #[inline]
     pub fn ensure_bits(&mut self) -> io::Result<()> {
         let mut buf = [0; NBITS / 8];
-        self.inner.read_exact(&mut buf).unwrap();
+        self.inner.read_exact(&mut buf);
         self.bits = unsafe { mem::transmute(buf) };
         self.available = NBITS;
 

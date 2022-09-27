@@ -10,8 +10,19 @@ pip install demoparser
 parser = PythonDemoParser("demo.dem")
 events = parser.parse_events("weapon_fire")
 ```
+## Player data
+```python
+wanted_props = ["m_vecOrigin", "m_iHealth"]
+wanted_players = [76561197991348083]
+wanted_ticks = [44, 88, 132]
 
-Returns a list of dictionaries where each dictionary is one event:
+parser = PythonDemoParser("demo.dem")
+df = parser.parse_props(props_wanted,
+                        players=wanted_players,
+                        ticks=wanted_ticks)
+```
+
+Example game event
 ```python
 {
 'player_name': 'flusha',
@@ -30,20 +41,6 @@ parser = PythonDemoParser("demo.dem")
 df = parser.parse_events("weapon_fire", format="df")
 ```
 
-
-
-## Player data at ticks
-```python
-wanted_props = ["m_vecOrigin", "m_iHealth"]
-wanted_players = [76561197991348083]
-wanted_ticks = [44, 88, 132]
-
-parser = PythonDemoParser("demo.dem")
-df = parser.parse_props(props_wanted,
-                        players=wanted_players,
-                        ticks=wanted_ticks)
-```
-Remove the optional arguments "players" and "ticks" if you want all players and all ticks.
 
 
 

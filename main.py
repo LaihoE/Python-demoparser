@@ -81,6 +81,5 @@ import time
 for file in files:
     parser = PythonDemoParser(file)
     before = time.time()
-    game_events = parser.parse_props(["m_vecVelocity[0]"])
-    print(game_events)
-    break
+    game_events = parser.parse_events("player_hurt")
+    print(game_events[0]["round"])

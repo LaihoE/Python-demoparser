@@ -36,10 +36,9 @@ jobs:
       uses: messense/maturin-action@v1
       with:
         target: ${{ matrix.target }}
-        manylinux: auto
         args: -i ${{ matrix.python-version }} --release --out dist
         
-    - name: Set up Python 3.10
+    - name: Set up Python 3.8
       uses: actions/setup-python@v3
       with:
         python-version: ${{ matrix.python-version }}

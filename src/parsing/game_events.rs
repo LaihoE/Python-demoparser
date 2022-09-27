@@ -228,14 +228,30 @@ impl Demo {
                     self.round,
                 );
 
-                if match_data_to_game_event(&name_data_pairs, event_desc.name(), &self.event_name) {
-                    game_events.push({
-                        GameEvent {
-                            name: event_desc.name().to_owned(),
-                            fields: name_data_pairs,
-                        }
-                    })
+                if self.event_name.len() > 0 {
+                    if match_data_to_game_event(
+                        &name_data_pairs,
+                        event_desc.name(),
+                        &self.event_name,
+                    ) {
+                        game_events.push({
+                            GameEvent {
+                                name: event_desc.name().to_owned(),
+                                fields: name_data_pairs,
+                            }
+                        })
+                    }
+                } else {
+                    {
+                        game_events.push({
+                            GameEvent {
+                                name: event_desc.name().to_owned(),
+                                fields: name_data_pairs,
+                            }
+                        })
+                    }
                 }
+
                 if is_round_changed(event_desc.name()) {
                     self.round += 1;
                 }

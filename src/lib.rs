@@ -11,10 +11,12 @@ use parsing::header::Header;
 use parsing::parser::Demo;
 //use polars::prelude::*;
 //use polars::series::Series;
+use pyo3::exceptions::PyFileNotFoundError;
 use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
 use pyo3::types::PyList;
+use pyo3::{PyErr, Python};
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
@@ -29,25 +31,29 @@ pub fn parse_events(
 ) -> PyResult<(Py<PyAny>)> {
     let now = Instant::now();
 
-    let mut d = Demo::new(demo_path, Vec::new(), Vec::new(), Vec::new(), event_name);
+    let parser = Demo::new(demo_path, Vec::new(), Vec::new(), Vec::new(), event_name);
+    match parser {
+        Err(e) => Err(PyFileNotFoundError::new_err("FILE NOT FOUND")),
+        Ok(mut parser) => {
+            let h: Header = parser.parse_header();
+            let data = parser.parse_frame(&vec!["".to_owned()]);
+            let mut cnt = 0;
+            let mut game_evs: Vec<FxHashMap<String, Vec<PyObject>>> = Vec::new();
 
-    let h: Header = d.parse_header();
-    let data = d.parse_frame(&vec!["".to_owned()]);
-    let mut cnt = 0;
-    let mut game_evs: Vec<FxHashMap<String, Vec<PyObject>>> = Vec::new();
+            // Create Hashmap with <string, pyobject> to be able to convert to python dict
+            for ge in parser.game_events {
+                let mut hm: FxHashMap<String, Vec<PyObject>> = FxHashMap::default();
+                let tuples = ge.to_py_tuples(py);
+                for (k, v) in tuples {
+                    hm.entry(k).or_insert_with(Vec::new).push(v);
+                }
+                game_evs.push(hm);
+            }
 
-    // Create Hashmap with <string, pyobject> to be able to convert to python dict
-    for ge in d.game_events {
-        let mut hm: FxHashMap<String, Vec<PyObject>> = FxHashMap::default();
-        let tuples = ge.to_py_tuples(py);
-        for (k, v) in tuples {
-            hm.entry(k).or_insert_with(Vec::new).push(v);
+            let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
+            Ok(dict)
         }
-        game_evs.push(hm);
     }
-
-    let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
-    Ok(dict)
 }
 
 #[pyfunction]
@@ -60,61 +66,64 @@ pub fn parse_props(
 ) -> PyResult<Vec<u64>> {
     let mut out_arr = out_arr.as_array_mut();
 
-    let mut d = Demo::new(
+    let mut parser = Demo::new(
         demo_path,
         wanted_ticks,
         wanted_players,
         wanted_props.clone(),
         "".to_string(),
     );
+    match parser {
+        Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
+        Ok(mut parser) => {
+            let h: Header = parser.parse_header();
+            let mut event_names: Vec<String> = Vec::new();
 
-    let h: Header = d.parse_header();
-    let mut event_names: Vec<String> = Vec::new();
+            let data = parser.parse_frame(&wanted_props);
+            let mut cnt = 0;
+            let mut col_len = 1;
 
-    let data = d.parse_frame(&wanted_props);
-    let mut cnt = 0;
-    let mut col_len = 1;
+            wanted_props.push("tick".to_string());
+            wanted_props.push("ent_id".to_string());
+            /*
+            let mut all_series: Vec<Series> = Vec::new();
 
-    wanted_props.push("tick".to_string());
-    wanted_props.push("ent_id".to_string());
-
-    /*
-    let mut all_series: Vec<Series> = Vec::new();
-
-    for prop_name in &props_names {
-        if data.contains_key(prop_name) {
-            let s = Series::new(prop_name, &data[prop_name]);
-            all_series.push(s);
-        }
-    }
-
-    let df = DataFrame::new(all_series).unwrap();
-    println!("{:?}", df);
-    */
-    for prop_name in &wanted_props {
-        if data.contains_key(prop_name) {
-            let v = &data[prop_name];
-            col_len = v.len();
-
-            for prop in v {
-                out_arr[cnt] = *prop as f64;
-                cnt += 1
+            for prop_name in &props_names {
+                if data.contains_key(prop_name) {
+                    let s = Series::new(prop_name, &data[prop_name]);
+                    all_series.push(s);
+                }
             }
+
+            let df = DataFrame::new(all_series).unwrap();
+            println!("{:?}", df);
+            */
+            for prop_name in &wanted_props {
+                if data.contains_key(prop_name) {
+                    let v = &data[prop_name];
+                    col_len = v.len();
+
+                    for prop in v {
+                        out_arr[cnt] = *prop as f64;
+                        cnt += 1
+                    }
+                }
+            }
+
+            let mut result: Vec<u64> = vec![
+                cnt.try_into().unwrap(),
+                col_len.try_into().unwrap(),
+                wanted_props.len().try_into().unwrap(),
+            ];
+
+            for player in parser.players {
+                result.push(player.xuid);
+                result.push(player.entity_id as u64);
+            }
+
+            Ok(result)
         }
     }
-
-    let mut result: Vec<u64> = vec![
-        cnt.try_into().unwrap(),
-        col_len.try_into().unwrap(),
-        wanted_props.len().try_into().unwrap(),
-    ];
-
-    for player in d.players {
-        result.push(player.xuid);
-        result.push(player.entity_id as u64);
-    }
-
-    Ok(result)
 }
 
 #[pymodule]

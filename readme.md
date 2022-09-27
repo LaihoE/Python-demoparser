@@ -29,7 +29,7 @@ df = parser.parse_events("weapon_fire", format="df")
 
 
 
-## Getting player data at specified tick
+## Player data at ticks
 ```python
 wanted_props = ["m_vecOrigin", "m_iHealth"]
 wanted_players = [76561197991348083]

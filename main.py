@@ -6,6 +6,11 @@ import numpy as np
 import pandas as pd
 
 
+import pandas as pd
+import numpy as np
+import demoparser
+
+
 def transform_props(dims, arr, cols):
     cols.append("tick")
     cols.append("entid")
@@ -39,17 +44,15 @@ class PythonDemoParser:
     def __init__(self, file: str) -> None:
         self.path = file
 
-    def parse_props(self, props_names, ticks, steamids) -> pd.DataFrame:
+    def parse_props(self, props_names, ticks=[], players=[]) -> pd.DataFrame:
         out_arr = np.zeros((10000000), order='F')
-        dims = demoparser.parse_props(self.path, props_names, out_arr, ticks, steamids)
+        dims = demoparser.parse_props(self.path, props_names, out_arr, ticks, players)
         df = transform_props(dims, out_arr, cols=props_names)
         return df
 
-    def parse_events(self, game_events, format="") -> list:
+    def parse_events(self, game_events) -> list:
         game_events = demoparser.parse_events(self.path, game_events)
         game_events = clean_events(game_events)
-        if format == "df":
-            return pd.DataFrame(game_events)
         return game_events
 
 
@@ -73,11 +76,11 @@ from collections import Counter
 
 import time
 
-# BENU 76561198134270402
+# BENU 76561198134270402item_found
 # EMIL 76561198194694750
 for file in files:
-    parser = PythonDemoParser("/home/laiho/Documents/programming/rust/ziptest/t/src/demo.dem")
+    parser = PythonDemoParser(file)
     before = time.time()
-    game_events = parser.parse_events("player_hurt")
-    print(game_events[-1]["tick"])
+    game_events = parser.parse_props(["m_vecVelocity[0]"])
+    print(game_events)
     break

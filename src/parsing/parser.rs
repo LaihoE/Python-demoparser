@@ -80,16 +80,19 @@ impl Demo {
         out
     }
 
-    pub fn read_file(demo_path: String) -> Vec<u8> {
-        let extension = Path::new(&demo_path).extension().unwrap();
-        let mut bytes = std::fs::read(&demo_path).unwrap();
-        println!("EXTENSION {:?}", extension);
-
-        match extension.to_str().unwrap() {
-            "gz" => bytes = Demo::decompress_gz(bytes),
-            _ => {}
+    pub fn read_file(demo_path: String) -> Result<Vec<u8>, std::io::Error> {
+        let result = std::fs::read(&demo_path);
+        match result {
+            // FILE COULD NOT BE READ
+            Err(e) => Err(e), //panic!("The demo could not be found. Error: {}", e),
+            Ok(bytes) => {
+                let extension = Path::new(&demo_path).extension().unwrap();
+                match extension.to_str().unwrap() {
+                    "gz" => Ok(Demo::decompress_gz(bytes)),
+                    _ => Ok(bytes),
+                }
+            }
         }
-        bytes
     }
 
     pub fn new(
@@ -98,31 +101,36 @@ impl Demo {
         wanted_players: Vec<u64>,
         wanted_props: Vec<String>,
         event_name: String,
-    ) -> Self {
+    ) -> Result<Self, std::io::Error> {
         let bytes = Demo::read_file(demo_path);
-        Self {
-            bytes: bytes,
-            fp: 0,
-            cmd: 0,
-            tick: 0,
-            cnt: 0,
-            round: 0,
-            event_list: None,
-            event_map: None,
-            class_bits: 0,
-            parse_props: false,
-            event_name: event_name,
-            bad: Vec::new(),
-            dt_map: Some(HashMap::default()),
-            serverclass_map: HashMap::default(),
-            entities: Some(HashMap::default()),
-            stringtables: Vec::new(),
-            players: Vec::new(),
-            // changing ones
-            wanted_props: wanted_props,
-            game_events: Vec::new(),
-            wanted_players: wanted_players,
-            wanted_ticks: HashSet::from_iter(wanted_ticks),
+        match bytes {
+            Ok(bytes) => {
+                Ok(Self {
+                    bytes: bytes,
+                    fp: 0,
+                    cmd: 0,
+                    tick: 0,
+                    cnt: 0,
+                    round: 0,
+                    event_list: None,
+                    event_map: None,
+                    class_bits: 0,
+                    parse_props: false,
+                    event_name: event_name,
+                    bad: Vec::new(),
+                    dt_map: Some(HashMap::default()),
+                    serverclass_map: HashMap::default(),
+                    entities: Some(HashMap::default()),
+                    stringtables: Vec::new(),
+                    players: Vec::new(),
+                    // changing ones
+                    wanted_props: wanted_props,
+                    game_events: Vec::new(),
+                    wanted_players: wanted_players,
+                    wanted_ticks: HashSet::from_iter(wanted_ticks),
+                })
+            }
+            Err(e) => Err(e),
         }
     }
 }
@@ -138,7 +146,7 @@ impl Demo {
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame();
             self.tick = f.tick;
-
+            println!("{}", self.tick);
             for player in &self.players {
                 if self.wanted_ticks.contains(&self.tick) || self.wanted_ticks.len() == 0 {
                     if self.wanted_players.contains(&player.xuid) || self.wanted_players.len() == 0
@@ -149,7 +157,6 @@ impl Demo {
                             &self.tick,
                             player.entity_id,
                         );
-
                         for (k, v) in props_this_tick {
                             ticks_props.entry(k).or_insert_with(Vec::new).push(v);
                         }

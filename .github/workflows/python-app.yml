@@ -24,26 +24,23 @@ jobs:
 
     steps:
 
-    
-        
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
         toolchain: stable
         override: true
-
-    - name: Build Wheels
-      uses: messense/maturin-action@v1
+    - uses: messense/maturin-action@v1
       with:
+        maturin-version: latest
+        command: build
         target: ${{ matrix.target }}
         manylinux: auto
         args: -i ${{ matrix.python-version }} --release --out dist
+        
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
     
     - name: Install dependencies
       run: |

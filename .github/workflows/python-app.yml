@@ -51,7 +51,7 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.8', '3.9']
-        target: [x86_64]
+        target: [x86_64, i686]
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1

@@ -19,32 +19,31 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        platform: [
-          { python-architecture: "x64", target: "x86_64-pc-windows-msvc" },
-          { python-architecture: "x86", target: "i686-pc-windows-msvc" },
-        ]
+        target: [x64, x86]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
-          python-version: 3.8
-          architecture: ${{ matrix.platform.python-architecture }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: ${{ matrix.target }}
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: ${{ matrix.platform.target }}
           profile: minimal
           default: true
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
-          target: ${{ matrix.platform.target }}
+          target: ${{ matrix.target }}
           args: --release --out dist
+          maturin-version: "v0.13.0"
       - name: Install built wheel
+        shell: bash
         run: |
-          pip install dist/*.whl --force-reinstall
-          auditwheel-symbols --help
+          python -m pip install dist/${{ env.PACKAGE_NAME }}-*.whl --force-reinstall
+          pip install pytest
+          python -m pytest -v
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:

@@ -46,7 +46,7 @@ jobs:
           name: wheels
           path: dist
 
-  windows:
+  ubuntu:
     runs-on: ubuntu-latest
     strategy:
       matrix:

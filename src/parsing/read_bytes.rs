@@ -2,7 +2,7 @@ use crate::Demo;
 
 use super::parser::Frame;
 
-impl Demo {
+impl<'a> Demo<'a> {
     #[inline]
     pub fn read_varint(&mut self) -> u32 {
         let mut result: u32 = 0;

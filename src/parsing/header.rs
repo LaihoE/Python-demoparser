@@ -17,7 +17,7 @@ pub struct Header<'a> {
     pub signon_length: i32,
 }
 
-impl Demo {
+impl<'a> Demo<'a> {
     pub fn parse_header(&mut self) -> Header {
         let h = Header {
             header_magic: str::from_utf8(&self.bytes[..8]).unwrap(),

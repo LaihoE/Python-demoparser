@@ -267,7 +267,7 @@ impl<R: io::Read> BitReader<R> {
 
         for _ in 0..num_elements {
             let pro = Prop {
-                prop: p.clone(),
+                prop: p,
                 arr: None,
                 table: prop.table.clone(),
                 col: 0,

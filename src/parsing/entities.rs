@@ -27,15 +27,15 @@ pub struct Entity {
 }
 
 #[derive(Debug)]
-pub struct Prop {
-    pub prop: Sendprop_t,
+pub struct Prop<'a> {
+    pub prop: &'a Sendprop_t,
     pub arr: Option<Sendprop_t>,
     pub table: CSVCMsg_SendTable,
     pub col: i32,
     pub data: Option<PropData>,
 }
 
-impl Demo {
+impl<'a> Demo<'a> {
     pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities, should_parse: bool) {
         let n_upd_ents = pack_ents.updated_entries();
         let left_over = (pack_ents.entity_data().len() % 4) as i32;
@@ -89,8 +89,6 @@ impl Demo {
                     let mut_ent = mhm.get_mut(&(entity_id as u32));
 
                     let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
-                    self.cnt += ps.len() as i32;
-
                     for pa in data {
                         if self.wanted_props.contains(&pa.prop_name) {
                             ps.insert(pa.prop_name.clone(), pa);
@@ -202,7 +200,7 @@ impl Demo {
         excl
     }
 
-    pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
+    pub fn flatten_dt(&self, table: &'a CSVCMsg_SendTable) -> Vec<Prop> {
         let excl = self.get_excl_props(table);
         let mut newp = self.get_props(table, &excl);
         let mut prios = vec![];
@@ -255,7 +253,7 @@ impl Demo {
         false
     }
 
-    pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
+    pub fn get_props(&self, table: &'a CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
         let mut flat: Vec<Prop> = Vec::new();
         let mut child_props = Vec::new();
         let mut cnt = 0;
@@ -283,7 +281,7 @@ impl Demo {
                 }
             } else if prop.type_() == 5 {
                 let prop_arr = Prop {
-                    prop: prop.clone(),
+                    prop: prop,
                     arr: Some(table.props[cnt].clone()),
                     table: table.clone(),
                     col: 1,
@@ -292,7 +290,7 @@ impl Demo {
                 flat.push(prop_arr);
             } else {
                 let prop = Prop {
-                    prop: prop.clone(),
+                    prop: prop,
                     arr: None,
                     table: table.clone(),
                     col: 1,

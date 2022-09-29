@@ -1,17 +1,17 @@
 use core::num;
-use std::convert::TryInto;
-use std::hash::Hash;
-use pyo3::{Python, Py};
 use csgoproto::cstrike15_gcmessages::score_leaderboard_data::Entry;
 use csgoproto::netmessages::{CSVCMsg_SendTable, CSVCMsg_UpdateStringTable};
+use pyo3::{Py, Python};
+use std::convert::TryInto;
+use std::hash::Hash;
 //use hashbrown::HashMap;
-use std::collections::HashMap;
 use crate::parsing::read_bits::BitReader;
 use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
-use serde::{Serialize, Deserialize};
-use pyo3::ToPyObject;
 use pyo3::PyAny;
+use pyo3::ToPyObject;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct StringTable {
@@ -45,15 +45,15 @@ pub struct UserInfo {
     pub tbd: u32,
 }
 
-impl UserInfo{
-    pub fn to_hashmap(&self) -> HashMap<String, usize>{
-        let hm:HashMap<String, usize> = HashMap::new();
+impl UserInfo {
+    pub fn to_hashmap(&self) -> HashMap<String, usize> {
+        let hm: HashMap<String, usize> = HashMap::new();
         let s = serde_json::to_string(&self).unwrap();
         println!("{}", s);
         let map = serde_json::from_str(&s).unwrap();
         map
     }
-    pub fn to_hashmap_simple(&self) -> HashMap<String, String>{
+    pub fn to_hashmap_simple(&self) -> HashMap<String, String> {
         let mut hm: HashMap<String, String> = HashMap::new();
         //hm.insert("version".to_string(), self.version.to_string());
         hm.insert("steamid".to_string(), self.xuid.to_string());
@@ -69,16 +69,16 @@ impl UserInfo{
         hm.insert("entity_id".to_string(), self.entity_id.to_string());
         //hm.insert("tbd".to_string(), self.tbd.to_string());
         hm
-    } 
+    }
 
-    pub fn to_py_hashmap(&self, py: Python<'_>) -> Py<PyAny>{
+    pub fn to_py_hashmap(&self, py: Python<'_>) -> Py<PyAny> {
         let hm = self.to_hashmap_simple();
         let dict = pyo3::Python::with_gil(|py| hm.to_object(py));
         dict
     }
 }
 
-impl Demo {
+impl<'a> Demo<'a> {
     pub fn parse_string_table(&mut self) {
         let length = self.read_i32();
         let data = self.read_n_bytes(length.try_into().unwrap());
@@ -158,7 +158,7 @@ impl Demo {
                     //println!("USERDATA 1");
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
-                        if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000{
+                        if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                             self.players_connected += 1;
                         }
                         println!("");
@@ -177,13 +177,12 @@ impl Demo {
                         let mut ui = Demo::parse_userinfo(user_data);
                         ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
                         //println!("{} {}", ui.xuid, self.tick);
-                        if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000{
+                        if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                             self.players_connected += 1;
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         self.players.push(ui);
-
                     }
                 }
                 if history.len() == 32 {

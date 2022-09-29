@@ -213,7 +213,7 @@ pub fn is_round_changed(event_name: &str) -> bool {
     }
 }
 
-impl Demo {
+impl<'a> Demo<'a> {
     pub fn parse_game_events(&mut self, game_event: CSVCMsg_GameEvent) -> Vec<GameEvent> {
         let mut game_events: Vec<GameEvent> = Vec::new();
         let event_desc = &self.event_map;

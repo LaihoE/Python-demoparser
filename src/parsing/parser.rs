@@ -21,7 +21,7 @@ pub struct Frame {
     pub playerslot: u8,
 }
 
-pub struct Demo {
+pub struct Demo<'a> {
     pub fp: usize,
     pub tick: i32,
     pub cmd: u8,
@@ -30,7 +30,7 @@ pub struct Demo {
     pub event_list: Option<CSVCMsg_GameEventList>,
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
-    pub serverclass_map: HashMap<u16, ServerClass>,
+    pub serverclass_map: HashMap<u16, ServerClass<'a>>,
     pub entities: Option<HashMap<u32, Option<Entity>>>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
@@ -38,7 +38,7 @@ pub struct Demo {
     pub parse_props: bool,
     pub game_events: Vec<GameEvent>,
     pub event_name: String,
-    pub cnt: i32,
+    pub cnt: &'a i32,
     pub wanted_props: Vec<String>,
     pub wanted_ticks: HashSet<i32>,
     pub wanted_players: Vec<u64>,
@@ -48,7 +48,7 @@ pub struct Demo {
     pub only_header: bool,
 }
 
-impl Demo {
+impl<'a> Demo<'a> {
     pub fn decompress_gz(bytes: Vec<u8>) -> Vec<u8> {
         let mut gz = GzDecoder::new(&bytes[..]);
         let mut out: Vec<u8> = vec![];
@@ -88,7 +88,7 @@ impl Demo {
                     fp: 0,
                     cmd: 0,
                     tick: 0,
-                    cnt: 0,
+                    cnt: &0,
                     round: 0,
                     event_list: None,
                     event_map: None,
@@ -116,7 +116,7 @@ impl Demo {
     }
 }
 
-impl Demo {
+impl<'a> Demo<'a> {
     pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, Vec<f32>> {
         // Main loop
         let mut ticks_props: FxHashMap<String, Vec<f32>> = FxHashMap::default();
@@ -163,7 +163,7 @@ impl Demo {
         ticks_props
     }
 
-    pub fn parse_cmd(&mut self, cmd: u8) {
+    pub fn parse_cmd<'b>(&mut self, cmd: u8) {
         match cmd {
             1 => self.parse_packet(),
             2 => self.parse_packet(),
@@ -234,7 +234,6 @@ impl Demo {
                         }
                     }
                 }
-
                 12 => {
                     let string_table = Message::parse_from_bytes(&data);
                     match string_table {

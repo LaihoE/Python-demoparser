@@ -1,6 +1,5 @@
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::game_events::HurtEvent;
-use crate::parsing::newbitreader::Bitr;
 use crate::parsing::read_bits::BitReader;
 use crate::parsing::read_bits::PropAtom;
 use crate::parsing::read_bits::PropData;

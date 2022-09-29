@@ -21,9 +21,8 @@ fn main() {
     //demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
     //let demo_path = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem".to_string();
 
-    //let demo_path = "/home/laiho/Documents/demos/rclonetest/w.dem";
     let demo_path =
-        "/mnt/d/Downloads/xc.dem";
+        "/home/laiho/Documents/demos/rclonetest/match730_003449965367076585902_0881240613_184.dem";
     let props_names = vec!["m_vecVel".to_string()];
     let x = netmessages::file_descriptor();
     let y = x.messages();
@@ -54,7 +53,7 @@ fn main() {
         wanted_ticks: HashSet::new(),
         players_connected: 0,
         only_header: false,
-        only_players: true,
+        only_players: false,
     };
 
     let h: Header = d.parse_header();

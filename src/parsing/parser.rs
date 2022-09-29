@@ -1,9 +1,10 @@
+use super::game_events::GameEvent;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
-use csgoproto::netmessages::*;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
+use csgoproto::netmessages::*;
 use flate2::read::GzDecoder;
 use fxhash::FxHashMap;
 use hashbrown::HashMap;
@@ -12,8 +13,6 @@ use protobuf;
 use protobuf::Message;
 use std::io::Read;
 use std::path::Path;
-use super::game_events::GameEvent;
-
 
 #[allow(dead_code)]
 pub struct Frame {
@@ -128,21 +127,18 @@ impl Demo {
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame_bytes();
             self.tick = f.tick;
-            println!("{}", self.tick);
+            //println!("{}", self.tick);
             // EARLY EXITS
-            if self.only_players{
-                if Demo::all_players_connected(self.players_connected){
+            if self.only_players {
+                if Demo::all_players_connected(self.players_connected) {
                     break;
                 }
             }
-            if self.only_header{
-                if Demo::all_players_connected(self.players_connected){
+            if self.only_header {
+                if Demo::all_players_connected(self.players_connected) {
                     break;
                 }
             }
-            
-
-
             //println!("{}", self.tick);
             /*
             for player in &self.players {
@@ -178,11 +174,11 @@ impl Demo {
         }
     }
 
-    pub fn all_players_connected(total_connected: i32) -> bool{
-        if total_connected == 10{
-            return true
+    pub fn all_players_connected(total_connected: i32) -> bool {
+        if total_connected == 10 {
+            return true;
         }
-        return false
+        return false;
     }
 
     pub fn parse_packet(&mut self) {
@@ -190,8 +186,7 @@ impl Demo {
         let packet_len = self.read_i32();
         let goal_inx = self.fp + packet_len as usize;
         let parse_props = self.parse_props;
-        while self.fp < goal_inx {          
-
+        while self.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();
             let data = self.read_n_bytes(size);
@@ -239,6 +234,7 @@ impl Demo {
                         }
                     }
                 }
+
                 12 => {
                     let string_table = Message::parse_from_bytes(&data);
                     match string_table {

@@ -48,7 +48,6 @@ impl Demo {
             let dt = self.read_string();
             if self.parse_props {
                 let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt]);
-
                 let server_class = ServerClass {
                     id: my_id,
                     name: name,

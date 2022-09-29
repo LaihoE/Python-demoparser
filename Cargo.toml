@@ -36,4 +36,3 @@ lto = "fat"
 codegen-units = 1
 panic = "abort"
 jemallocator = "0.3.2"
-debug = true

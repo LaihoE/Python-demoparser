@@ -9,14 +9,14 @@ use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use fxhash::FxHashMap;
+use hashbrown::HashMap;
 use protobuf;
 use protobuf::Message;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::io;
+use std::rc::Rc;
 use std::vec;
-
-use hashbrown::HashMap;
 
 #[derive(Debug)]
 pub struct Entity {
@@ -112,7 +112,7 @@ impl Demo {
     ) -> Vec<PropAtom> {
         let mut val = -1;
         let new_way = b.read_bool();
-        let mut indicies = vec![];
+        let mut indicies = Vec::with_capacity(20);
 
         loop {
             val = b.read_inx(val, new_way);
@@ -121,7 +121,7 @@ impl Demo {
             }
             indicies.push(val);
         }
-
+        //println!("{}", indicies.len());
         let mut props: Vec<PropAtom> = Vec::with_capacity(indicies.len());
 
         for inx in indicies {
@@ -135,7 +135,9 @@ impl Demo {
                 continue;
             }
             */
+            /*
             match pdata {
+
                 PropData::VecXY(v) => {
                     let endings = ["_X", "_Y"];
                     for inx in 0..2 {
@@ -164,6 +166,7 @@ impl Demo {
                 }
 
                 PropData::String(_) => {}
+
                 _ => {
                     let atom = PropAtom {
                         prop_name: prop.prop.var_name().to_string(),
@@ -173,16 +176,15 @@ impl Demo {
                     props.push(atom);
                 }
             }
+            */
         }
         props
     }
 
     pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) -> Vec<PropAtom> {
-        let mut data = vec![];
         let sv_cls = &self.serverclass_map[&(ent.class_id.try_into().unwrap())];
         let props = self.handle_entity_upd(sv_cls, b);
-        data.extend(props);
-        data
+        props
     }
 
     pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> Vec<Sendprop_t> {

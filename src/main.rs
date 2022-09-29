@@ -24,7 +24,7 @@ fn main() {
     //let demo_path = "/home/laiho/Documents/demos/rclonetest/w.dem";
     let demo_path =
         "/home/laiho/Documents/demos/rclonetest/match730_003449965367076585902_0881240613_184.dem";
-    let props_names = vec!["m_vecOrigin_X".to_string()];
+    let props_names = vec!["m_vecVel".to_string()];
     let x = netmessages::file_descriptor();
     let y = x.messages();
     let mut v: Vec<MessageDescriptor> = Vec::new();

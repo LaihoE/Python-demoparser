@@ -144,10 +144,10 @@ impl Demo {
         }
 
         while self.fp < self.bytes.len() as usize {
-            let f = self.read_frame();
+            let f = self.read_frame_bytes();
             self.tick = f.tick;
             //println!("{}", self.tick);
-
+            /*
             for player in &self.players {
                 if self.wanted_ticks.contains(&self.tick) || self.wanted_ticks.len() == 0 {
                     if self.wanted_players.contains(&player.xuid) || self.wanted_players.len() == 0
@@ -164,20 +164,10 @@ impl Demo {
                     }
                 }
             }
-
+            */
             self.parse_cmd(f.cmd);
         }
         ticks_props
-    }
-
-    pub fn read_frame(&mut self) -> Frame {
-        let f = Frame {
-            cmd: self.read_byte(),
-            tick: self.read_i32(),
-            playerslot: self.read_byte(),
-        };
-        //println!("{} {}", f.tick, self.round);
-        f
     }
 
     pub fn parse_cmd(&mut self, cmd: u8) {
@@ -231,7 +221,7 @@ impl Demo {
                 }
                 26 => {
                     if parse_props {
-                        let pack_ents = Message::parse_from_bytes(data);
+                        let pack_ents = Message::parse_from_bytes(&data);
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;

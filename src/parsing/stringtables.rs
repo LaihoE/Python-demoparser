@@ -83,7 +83,7 @@ impl Demo {
         let mut last_inx: i32 = -1;
         let mut idx = 0;
         let mut btc = 0;
-        let mut history: Vec<String> = Vec::new();
+        let mut history: Vec<String> = Vec::with_capacity(50000);
         let mut entry = String::new();
         let mut user_data: [u8; 340] = [0; 340];
         buf.read_bool();

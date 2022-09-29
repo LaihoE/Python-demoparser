@@ -238,7 +238,6 @@ impl Demo {
                 }
             }
         }
-
         newp
     }
 

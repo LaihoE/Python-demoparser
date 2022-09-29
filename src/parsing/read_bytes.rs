@@ -1,6 +1,9 @@
 use crate::Demo;
 
+use super::parser::Frame;
+
 impl Demo {
+    #[inline]
     pub fn read_varint(&mut self) -> u32 {
         let mut result: u32 = 0;
         let mut count: u8 = 0;
@@ -20,11 +23,13 @@ impl Demo {
         }
         return result as u32;
     }
+    #[inline]
     pub fn read_short(&mut self) -> u16 {
         let s = u16::from_le_bytes(self.bytes[self.fp..self.fp + 2].try_into().unwrap());
         self.fp += 2;
         s
     }
+    #[inline]
     pub fn read_string(&mut self) -> String {
         let mut v = vec![];
         loop {
@@ -38,6 +43,7 @@ impl Demo {
         let s = String::from_utf8_lossy(&v);
         s.to_string()
     }
+    #[inline]
     pub fn read_i32(&mut self) -> i32 {
         let i = i32::from_le_bytes(self.bytes[self.fp..self.fp + 4].try_into().unwrap());
         self.fp += 4;
@@ -48,22 +54,31 @@ impl Demo {
         let s = String::from_utf8(bytearr.to_vec()).unwrap();
         s
     }
-
+    #[inline]
     pub fn read_u64(&mut self) -> u64 {
         let i = u64::from_le_bytes(self.bytes[self.fp..self.fp + 4].try_into().unwrap());
         self.fp += 8;
         i
     }
-
+    #[inline]
     pub fn read_byte(&mut self) -> u8 {
         let b = self.bytes[self.fp];
         self.fp += 1;
         b
     }
-
+    #[inline]
     pub fn read_n_bytes(&mut self, n: u32) -> &[u8] {
         let s = &self.bytes[self.fp..self.fp + n as usize];
         self.fp += n as usize;
         s
+    }
+
+    #[inline]
+    pub fn read_frame_bytes(&mut self) -> Frame {
+        Frame {
+            cmd: self.read_byte(),
+            tick: self.read_i32(),
+            playerslot: self.read_byte(),
+        }
     }
 }

@@ -23,7 +23,7 @@ fn main() {
 
     //let demo_path = "/home/laiho/Documents/demos/rclonetest/w.dem";
     let demo_path =
-        "/home/laiho/Documents/demos/rclonetest/match730_003449965367076585902_0881240613_184.dem";
+        "/mnt/d/Downloads/xc.dem";
     let props_names = vec!["m_vecVel".to_string()];
     let x = netmessages::file_descriptor();
     let y = x.messages();
@@ -52,6 +52,9 @@ fn main() {
         round: 0,
         wanted_players: Vec::new(),
         wanted_ticks: HashSet::new(),
+        players_connected: 0,
+        only_header: false,
+        only_players: true,
     };
 
     let h: Header = d.parse_header();
@@ -63,7 +66,7 @@ fn main() {
     println!("Elapsed: {:.2?}", elapsed);
     println!("{}", d.cnt);
     for player in &d.players {
-        println!("{} {}", player.entity_id, player.name)
+        println!("{} {} {}", player.entity_id, player.name, player.xuid)
     }
     println!("{:?}", &d.players.len());
 }

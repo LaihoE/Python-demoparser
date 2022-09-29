@@ -1,45 +1,19 @@
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
-use crate::parsing::entities::Prop;
-use crate::parsing::game_events::HurtEvent;
-use crate::parsing::header::Header;
-
-use crate::parsing::extract_props::extract_props;
-use crate::parsing::read_bits::PropAtom;
-use crate::parsing::read_bits::PropData;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
-use csgoproto::netmessages;
+use csgoproto::netmessages::*;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
-use csgoproto::netmessages::CSVCMsg_CreateStringTable;
-use csgoproto::netmessages::CSVCMsg_GameEvent;
-use csgoproto::netmessages::CSVCMsg_GameEventList;
-use csgoproto::netmessages::CSVCMsg_SendTable;
 use flate2::read::GzDecoder;
 use fxhash::FxHashMap;
 use hashbrown::HashMap;
 use hashbrown::HashSet;
-use netmessages::CSVCMsg_PacketEntities;
 use protobuf;
-use protobuf::reflect::MessageDescriptor;
 use protobuf::Message;
-use pyo3::prelude::*;
-use std::any::Any;
-use std::convert::TryInto;
 use std::io::Read;
 use std::path::Path;
-use std::thread;
-use std::time::Instant;
-use std::vec;
-
-use numpy::ndarray::{Array1, ArrayD, ArrayView1, ArrayViewD, ArrayViewMutD, Zip};
-use numpy::{
-    datetime::{units, Timedelta},
-    Complex64, IntoPyArray, PyArray1, PyArrayDyn, PyReadonlyArray1, PyReadonlyArrayDyn,
-    PyReadwriteArray1, PyReadwriteArrayDyn,
-};
-
 use super::game_events::GameEvent;
+
 
 #[allow(dead_code)]
 pub struct Frame {
@@ -70,6 +44,9 @@ pub struct Demo {
     pub wanted_ticks: HashSet<i32>,
     pub wanted_players: Vec<u64>,
     pub round: i32,
+    pub players_connected: i32,
+    pub only_players: bool,
+    pub only_header: bool,
 }
 
 impl Demo {
@@ -101,6 +78,8 @@ impl Demo {
         wanted_players: Vec<u64>,
         wanted_props: Vec<String>,
         event_name: String,
+        only_players: bool,
+        only_header: bool,
     ) -> Result<Self, std::io::Error> {
         let bytes = Demo::read_file(demo_path);
         match bytes {
@@ -128,6 +107,9 @@ impl Demo {
                     game_events: Vec::new(),
                     wanted_players: wanted_players,
                     wanted_ticks: HashSet::from_iter(wanted_ticks),
+                    players_connected: 0,
+                    only_header: only_header,
+                    only_players: only_players,
                 })
             }
             Err(e) => Err(e),
@@ -146,6 +128,21 @@ impl Demo {
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame_bytes();
             self.tick = f.tick;
+            println!("{}", self.tick);
+            // EARLY EXITS
+            if self.only_players{
+                if Demo::all_players_connected(self.players_connected){
+                    break;
+                }
+            }
+            if self.only_header{
+                if Demo::all_players_connected(self.players_connected){
+                    break;
+                }
+            }
+            
+
+
             //println!("{}", self.tick);
             /*
             for player in &self.players {
@@ -181,12 +178,20 @@ impl Demo {
         }
     }
 
+    pub fn all_players_connected(total_connected: i32) -> bool{
+        if total_connected == 10{
+            return true
+        }
+        return false
+    }
+
     pub fn parse_packet(&mut self) {
         self.fp += 160;
         let packet_len = self.read_i32();
         let goal_inx = self.fp + packet_len as usize;
         let parse_props = self.parse_props;
-        while self.fp < goal_inx {
+        while self.fp < goal_inx {          
+
             let msg = self.read_varint();
             let size = self.read_varint();
             let data = self.read_n_bytes(size);

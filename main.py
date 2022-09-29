@@ -1,13 +1,6 @@
-from asyncio import events
-from typing import List
 import demoparser
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-
-
-import pandas as pd
-import numpy as np
+from numpy import zeros
+from pandas import DataFrame
 import demoparser
 
 
@@ -25,7 +18,7 @@ def transform_props(dims, arr, cols):
         else:
             v = dims[i]
             d[k] = v
-    df = pd.DataFrame(arr, columns=cols)
+    df = DataFrame(arr, columns=cols)
     df = df.replace({"entid": d})
     df["entid"].astype("int64")
     df["tick"].astype("int64")
@@ -44,8 +37,8 @@ class PythonDemoParser:
     def __init__(self, file: str) -> None:
         self.path = file
 
-    def parse_props(self, props_names, ticks=[], players=[]) -> pd.DataFrame:
-        out_arr = np.zeros((10000000), order='F')
+    def parse_props(self, props_names, ticks=[], players=[]) -> DataFrame:
+        out_arr = zeros((10000000), order='F')
         dims = demoparser.parse_props(self.path, props_names, out_arr, ticks, players)
         df = transform_props(dims, out_arr, cols=props_names)
         return df
@@ -78,8 +71,12 @@ import time
 
 # BENU 76561198134270402item_found
 # EMIL 76561198194694750
-for file in files:
+x = demoparser.parse_players("/mnt/d/Downloads/xc.dem")
+for player in x:
+    print(player)
+"""for file in files:
     parser = PythonDemoParser(file)
     before = time.time()
     game_events = parser.parse_events("player_hurt")
     print(game_events[0]["round"])
+"""

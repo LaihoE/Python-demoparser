@@ -21,7 +21,8 @@ use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 use std::time::Instant;
-use std::{io, vec};
+use std::{io, vec, result};
+use crate::parsing::stringtables::UserInfo;
 
 #[pyfunction]
 pub fn parse_events(
@@ -31,7 +32,7 @@ pub fn parse_events(
 ) -> PyResult<(Py<PyAny>)> {
     let now = Instant::now();
 
-    let parser = Demo::new(demo_path, Vec::new(), Vec::new(), Vec::new(), event_name);
+    let parser = Demo::new(demo_path, Vec::new(), Vec::new(), Vec::new(), event_name,false,false);
     match parser {
         Err(e) => Err(PyFileNotFoundError::new_err("FILE NOT FOUND")),
         Ok(mut parser) => {
@@ -65,13 +66,14 @@ pub fn parse_props(
     wanted_players: Vec<u64>,
 ) -> PyResult<Vec<u64>> {
     let mut out_arr = out_arr.as_array_mut();
-
     let mut parser = Demo::new(
         demo_path,
         wanted_ticks,
         wanted_players,
         wanted_props.clone(),
         "".to_string(),
+        false,
+        false
     );
     match parser {
         Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
@@ -126,10 +128,48 @@ pub fn parse_props(
     }
 }
 
+
+#[pyfunction]
+pub fn parse_players(
+    py: Python<'_>,
+    demo_path: String,
+
+) -> PyResult<(Py<PyAny>)> {
+
+    let mut parser = Demo::new(
+        demo_path,
+        vec![],
+        vec![],
+        vec![],
+        "".to_string(),
+        true,
+        false
+    );
+    match parser {
+        Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
+        Ok(mut parser) => {
+            let h: Header = parser.parse_header();
+            let data = parser.parse_frame(&vec![]);
+            let players = parser.players; 
+            let mut py_players = vec![];
+            for player in players{
+                if player.xuid > 76500000000000000 && player.xuid < 76600000000000000{
+                    py_players.push(player.to_py_hashmap(py));
+                }
+            }
+            //let py_players = players[0].to_py_hashmap(py)
+            let dict = pyo3::Python::with_gil(|py| py_players.to_object(py));
+            Ok(dict)
+        }
+    }
+}
+
+
 #[pymodule]
 fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_events, m)?)?;
     m.add_function(wrap_pyfunction!(parse_props, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_players, m)?)?;
     //parse(py, demo_name, props_names, out_arr);
     return Ok(());
 }

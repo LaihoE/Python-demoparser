@@ -1,6 +1,5 @@
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::game_events::HurtEvent;
-use crate::parsing::newbitreader::Bitr;
 use crate::parsing::read_bits::BitReader;
 use crate::parsing::read_bits::PropAtom;
 use crate::parsing::read_bits::PropData;
@@ -23,7 +22,6 @@ pub struct Entity {
     pub class_id: u32,
     pub entity_id: u32,
     pub serial: u32,
-    //pub props: HashMap<String, PropAtom>,
     pub props: HashMap<String, PropAtom>,
 }
 
@@ -73,6 +71,7 @@ impl Demo {
                 };
 
                 let data = self.read_new_ent(&e, &mut b);
+
                 for pa in data {
                     if self.wanted_props.contains(&pa.prop_name) {
                         e.props.insert(pa.prop_name.clone(), pa);
@@ -86,10 +85,10 @@ impl Demo {
                     let x = ent.as_ref().unwrap().as_ref().unwrap();
                     let data = self.read_new_ent(&x, &mut b);
 
-                    let mut mhm = self.entities.as_mut().unwrap();
+                    let mhm = self.entities.as_mut().unwrap();
                     let mut_ent = mhm.get_mut(&(entity_id as u32));
 
-                    let mut ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
+                    let ps = &mut mut_ent.unwrap().as_mut().unwrap().props;
                     self.cnt += ps.len() as i32;
 
                     for pa in data {
@@ -121,23 +120,20 @@ impl Demo {
             }
             indicies.push(val);
         }
-        //println!("{}", indicies.len());
         let mut props: Vec<PropAtom> = Vec::with_capacity(indicies.len());
 
         for inx in indicies {
             let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
             let pdata = b.decode(prop);
-            /*
+
             if !self
                 .wanted_props
                 .contains(&prop.prop.var_name().to_string())
             {
                 continue;
             }
-            */
-            /*
-            match pdata {
 
+            match pdata {
                 PropData::VecXY(v) => {
                     let endings = ["_X", "_Y"];
                     for inx in 0..2 {
@@ -176,8 +172,8 @@ impl Demo {
                     props.push(atom);
                 }
             }
-            */
         }
+        //println!("{:?}", props);
         props
     }
 

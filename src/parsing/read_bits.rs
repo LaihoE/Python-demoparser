@@ -100,19 +100,19 @@ impl<R: io::Read> BitReader<R> {
             0 => {}
             1 => {
                 let mut buf = [0; 8 / 8];
-                self.inner.read_exact(&mut buf).unwrap();
+                self.inner.read_exact(&mut buf);
                 self.available = 8;
                 self.bits = u32::from(buf[0]);
             }
             2 => {
                 let mut buf = [0; 16 / 8];
-                self.inner.read_exact(&mut buf).unwrap();
+                self.inner.read_exact(&mut buf);
                 self.available = 16;
                 self.bits = u32::from(buf[0]) + (u32::from(buf[1]) << 8);
             }
             3 => {
                 let mut buf = [0; 24 / 8];
-                self.inner.read_exact(&mut buf).unwrap();
+                self.inner.read_exact(&mut buf);
                 self.available = 24;
                 self.bits =
                     u32::from(buf[0]) + (u32::from(buf[1]) << 8) + (u32::from(buf[2]) << 16);
@@ -124,7 +124,8 @@ impl<R: io::Read> BitReader<R> {
     #[inline]
     pub fn ensure_bits(&mut self) -> io::Result<()> {
         let mut buf = [0; NBITS / 8];
-        self.inner.read_exact(&mut buf);
+        let had_enough = self.inner.read_exact(&mut buf);
+
         self.bits = unsafe { mem::transmute(buf) };
         self.available = NBITS;
 
@@ -159,7 +160,7 @@ impl<R: io::Read> BitReader<R> {
             let in_buf = self.bits;
             let consumed = self.available;
             let remaining = n - consumed;
-            self.ensure_bits().unwrap();
+            self.ensure_bits();
             let ret = in_buf | ((self.bits & MASKS[remaining]) << consumed);
             self.consume(remaining);
             ret.to_le()
@@ -245,7 +246,6 @@ impl<R: io::Read> BitReader<R> {
     }
     #[inline]
     pub fn decode(&mut self, prop: &Prop) -> PropData {
-        //println!("PROP TYPE {}", prop.prop.type_());
         match prop.prop.type_() {
             0 => return PropData::I32(self.decode_int(prop) as i32),
             1 => return PropData::F32(self.decode_float(prop)),
@@ -385,11 +385,11 @@ impl<R: io::Read> BitReader<R> {
                 }
             }
             if low_pres {
-                let lp = 1.0 / (1 << 3) as f64;
+                let lp = (1.0 / (1 << 3) as f64);
                 let frac_val = self.read_nbits(3);
                 let result = int_val as i32 as f64 + frac_val as f64 * lp;
             } else {
-                let cr: f64 = 1.0 / (1 << 5) as f64;
+                let cr: f64 = (1.0 / (1 << 5) as f64);
                 let frac_val = self.read_nbits(5);
                 let result = int_val as i32 as f64 + frac_val as f64 * cr;
             }

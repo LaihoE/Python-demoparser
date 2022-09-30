@@ -21,9 +21,8 @@ fn main() {
     //demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
     //let demo_path = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem".to_string();
 
-    //let demo_path = "/home/laiho/Documents/demos/rclonetest/w.dem";
-    let demo_path =
-        "/mnt/d/Downloads/xc.dem";
+    let demo_path = "/home/laiho/Documents/demos/rclonetest/1.dem";
+
     let props_names = vec!["m_vecVel".to_string()];
     let x = netmessages::file_descriptor();
     let y = x.messages();
@@ -54,10 +53,10 @@ fn main() {
         wanted_ticks: HashSet::new(),
         players_connected: 0,
         only_header: false,
-        only_players: true,
+        only_players: false,
     };
 
-    let h: Header = d.parse_header();
+    let h: Header = d.parse_demo_header();
     let mut event_names: Vec<String> = Vec::new();
     use std::time::Instant;
     let now = Instant::now();

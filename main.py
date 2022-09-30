@@ -1,7 +1,9 @@
+from typing import List
 import demoparser
 from numpy import zeros
 from pandas import DataFrame
 import demoparser
+import glob
 
 
 def transform_props(dims, arr, cols):
@@ -37,46 +39,36 @@ class PythonDemoParser:
     def __init__(self, file: str) -> None:
         self.path = file
 
-    def parse_props(self, props_names, ticks=[], players=[]) -> DataFrame:
-        out_arr = zeros((10000000), order='F')
+    def get_props(self, props_names, ticks=[], players=[]) -> DataFrame:
+        out_arr = zeros((10_000_000), order='F')
         dims = demoparser.parse_props(self.path, props_names, out_arr, ticks, players)
         df = transform_props(dims, out_arr, cols=props_names)
         return df
 
-    def parse_events(self, game_events) -> list:
+    def get_events(self, game_events) -> list[dict]:
         game_events = demoparser.parse_events(self.path, game_events)
         game_events = clean_events(game_events)
-        return game_events
+        return [dict(sorted(game_event.items())) for game_event in game_events]
+    
+    def get_players(self) -> list[dict]:
+        players = demoparser.parse_players(files[0])
+        return [dict(sorted(player.items())) for player in players]
+    
+    def get_header(self) -> list[dict]:
+        demo_header = demoparser.parse_header(files[0])
+        return demo_header
 
 
-
-demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
-# demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem"
-
-import glob
-import time
-
-
-
-event_name = "round_stadftgsrt"
+# players = [76561198194694750]
 files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
-deaths = []
-rounds_ends = []
+parser = PythonDemoParser(files[0])
+df = parser.get_props(["m_hActiveWeapon", "m_iClip1"])
+df = df[df["m_hActiveWeapon"] != -1]
+weapons = set(df["m_hActiveWeapon"].to_list())
+df = df[df["m_iClip1"] != -1]
 
-from collections import Counter
+# print(len(parser.get_events("weapon_fire")))
 
-#file = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem"
-
-import time
-
-# BENU 76561198134270402item_found
-# EMIL 76561198194694750
-x = demoparser.parse_players("/mnt/d/Downloads/xc.dem")
-for player in x:
-    print(player)
-"""for file in files:
-    parser = PythonDemoParser(file)
-    before = time.time()
-    game_events = parser.parse_events("player_hurt")
-    print(game_events[0]["round"])
-"""
+# & 0x7FF& 0x7FF
+# for x in weapons:
+    #print(int(x) & 0x7FF)

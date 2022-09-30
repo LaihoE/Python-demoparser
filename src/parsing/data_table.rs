@@ -3,6 +3,7 @@ use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf::Message;
 
+#[derive(Debug)]
 pub struct ServerClass {
     pub id: u16,
     pub name: String,

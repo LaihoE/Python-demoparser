@@ -1,9 +1,11 @@
+use super::game_events::GameEvent;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
+use crate::parsing::extract_props::extract_props;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
-use csgoproto::netmessages::*;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
+use csgoproto::netmessages::*;
 use flate2::read::GzDecoder;
 use fxhash::FxHashMap;
 use hashbrown::HashMap;
@@ -12,8 +14,6 @@ use protobuf;
 use protobuf::Message;
 use std::io::Read;
 use std::path::Path;
-use super::game_events::GameEvent;
-
 
 #[allow(dead_code)]
 pub struct Frame {
@@ -74,6 +74,7 @@ impl Demo {
 
     pub fn new(
         demo_path: String,
+        parse_props: bool,
         wanted_ticks: Vec<i32>,
         wanted_players: Vec<u64>,
         wanted_props: Vec<String>,
@@ -94,7 +95,7 @@ impl Demo {
                     event_list: None,
                     event_map: None,
                     class_bits: 0,
-                    parse_props: false,
+                    parse_props: parse_props,
                     event_name: event_name,
                     bad: Vec::new(),
                     dt_map: Some(HashMap::default()),
@@ -128,23 +129,18 @@ impl Demo {
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame_bytes();
             self.tick = f.tick;
-            println!("{}", self.tick);
+
             // EARLY EXITS
-            if self.only_players{
-                if Demo::all_players_connected(self.players_connected){
+            if self.only_players {
+                if Demo::all_players_connected(self.players_connected) {
                     break;
                 }
             }
-            if self.only_header{
-                if Demo::all_players_connected(self.players_connected){
+            if self.only_header {
+                if Demo::all_players_connected(self.players_connected) {
                     break;
                 }
             }
-            
-
-
-            //println!("{}", self.tick);
-            /*
             for player in &self.players {
                 if self.wanted_ticks.contains(&self.tick) || self.wanted_ticks.len() == 0 {
                     if self.wanted_players.contains(&player.xuid) || self.wanted_players.len() == 0
@@ -154,14 +150,16 @@ impl Demo {
                             props_names,
                             &self.tick,
                             player.entity_id,
+                            &self.serverclass_map,
                         );
+                        //println!("{:?} {:?}", props_this_tick, props_names);
                         for (k, v) in props_this_tick {
                             ticks_props.entry(k).or_insert_with(Vec::new).push(v);
                         }
                     }
                 }
             }
-            */
+
             self.parse_cmd(f.cmd);
         }
         ticks_props
@@ -178,11 +176,11 @@ impl Demo {
         }
     }
 
-    pub fn all_players_connected(total_connected: i32) -> bool{
-        if total_connected == 10{
-            return true
+    pub fn all_players_connected(total_connected: i32) -> bool {
+        if total_connected == 10 {
+            return true;
         }
-        return false
+        return false;
     }
 
     pub fn parse_packet(&mut self) {
@@ -190,13 +188,13 @@ impl Demo {
         let packet_len = self.read_i32();
         let goal_inx = self.fp + packet_len as usize;
         let parse_props = self.parse_props;
-        while self.fp < goal_inx {          
-
+        while self.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();
             let data = self.read_n_bytes(size);
 
             match msg as i32 {
+                // Game event
                 25 => {
                     let game_event = Message::parse_from_bytes(&data);
                     match game_event {
@@ -211,6 +209,7 @@ impl Demo {
                         ),
                     }
                 }
+                // Game event list
                 30 => {
                     let event_list = Message::parse_from_bytes(&data);
                     match event_list {
@@ -224,6 +223,7 @@ impl Demo {
                         ),
                     }
                 }
+                // Packet entites
                 26 => {
                     if parse_props {
                         let pack_ents = Message::parse_from_bytes(&data);
@@ -239,6 +239,7 @@ impl Demo {
                         }
                     }
                 }
+                // Create string table
                 12 => {
                     let string_table = Message::parse_from_bytes(&data);
                     match string_table {
@@ -252,6 +253,7 @@ impl Demo {
                         ),
                     }
                 }
+                // Update string table
                 13 => {
                     let data = Message::parse_from_bytes(&data);
                     match data {

@@ -23,7 +23,10 @@ fn main() {
 
     let demo_path = "/home/laiho/Documents/demos/rclonetest/1.dem";
 
-    let props_names = vec!["m_vecVel".to_string()];
+    let props_names = vec![
+        "m_angEyeAngles[0]".to_string(),
+        "m_angEyeAngles[1]".to_string(),
+    ];
     let x = netmessages::file_descriptor();
     let y = x.messages();
     let mut v: Vec<MessageDescriptor> = Vec::new();
@@ -46,7 +49,7 @@ fn main() {
         parse_props: true,
         game_events: Vec::new(),
         event_name: "".to_string(),
-        wanted_props: Vec::new(),
+        wanted_props: props_names.clone(),
         cnt: 0,
         round: 0,
         wanted_players: Vec::new(),
@@ -61,6 +64,9 @@ fn main() {
     use std::time::Instant;
     let now = Instant::now();
     let data = d.parse_frame(&props_names);
+
+    println!("{:?}", data);
+
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
     println!("{}", d.cnt);

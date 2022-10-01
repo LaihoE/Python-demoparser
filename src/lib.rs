@@ -12,17 +12,54 @@ use parsing::parser::Demo;
 //use polars::prelude::*;
 //use polars::series::Series;
 use crate::parsing::stringtables::UserInfo;
+use arrow::ffi;
+use polars::prelude::*;
+use polars_arrow::export::arrow;
 use pyo3::exceptions::PyFileNotFoundError;
+use pyo3::exceptions::PyValueError;
+use pyo3::ffi::Py_uintptr_t;
+use pyo3::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
 use pyo3::types::PyList;
+use pyo3::{PyAny, PyObject, PyResult};
 use pyo3::{PyErr, Python};
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 use std::time::Instant;
 use std::{io, result, vec};
+
+/// Arrow array to Python.
+pub(crate) fn to_py_array(py: Python, pyarrow: &PyModule, array: ArrayRef) -> PyResult<PyObject> {
+    let schema = Box::new(ffi::export_field_to_c(&ArrowField::new(
+        "",
+        array.data_type().clone(),
+        true,
+    )));
+    let array = Box::new(ffi::export_array_to_c(array));
+    let schema_ptr: *const ffi::ArrowSchema = &*schema;
+    let array_ptr: *const ffi::ArrowArray = &*array;
+    let array = pyarrow.getattr("Array")?.call_method1(
+        "_import_from_c",
+        (array_ptr as Py_uintptr_t, schema_ptr as Py_uintptr_t),
+    )?;
+
+    Ok(array.to_object(py))
+}
+
+pub fn rust_series_to_py_series(series: &Series) -> PyResult<PyObject> {
+    let series = series.rechunk();
+    let array = series.to_arrow(0);
+    let gil = Python::acquire_gil();
+    let py = gil.python();
+    let pyarrow = py.import("pyarrow")?;
+    let pyarrow_array = to_py_array(py, pyarrow, array)?;
+    let polars = py.import("polars")?;
+    let out = polars.call_method1("from_arrow", (pyarrow_array,))?;
+    Ok(out.to_object(py))
+}
 
 #[pyfunction]
 pub fn parse_events(
@@ -70,11 +107,9 @@ pub fn parse_events(
 pub fn parse_props(
     demo_path: String,
     mut wanted_props: Vec<String>,
-    mut out_arr: PyReadwriteArrayDyn<f64>,
     wanted_ticks: Vec<i32>,
     wanted_players: Vec<u64>,
-) -> PyResult<Vec<u64>> {
-    let mut out_arr = out_arr.as_array_mut();
+) -> PyResult<Vec<PyObject>> {
     let mut parser = Demo::new(
         demo_path,
         true,
@@ -90,50 +125,29 @@ pub fn parse_props(
         Ok(mut parser) => {
             let _: Header = parser.parse_demo_header();
             let data = parser.parse_frame(&wanted_props);
-            let mut cnt = 0;
-            let mut col_len = 1;
 
             wanted_props.push("tick".to_string());
-            wanted_props.push("ent_id".to_string());
+            wanted_props.push("steamid".to_string());
+            wanted_props.push("name".to_string());
+            let mut all_series = vec![];
+            //println!("{:?}", data);
 
-            /*
-            let mut all_series: Vec<Series> = Vec::new();
-
-
-            for prop_name in &props_names {
-                if data.contains_key(prop_name) {
-                    let s = Series::new(prop_name, &data[prop_name]);
-                    all_series.push(s);
-                }
-            }
-
-            let df = DataFrame::new(all_series).unwrap();
-            println!("{:?}", df);
-            */
             for prop_name in &wanted_props {
                 if data.contains_key(prop_name) {
-                    let v = &data[prop_name];
-                    col_len = v.len();
-
-                    for prop in v {
-                        out_arr[cnt] = *prop as f64;
-                        cnt += 1
+                    if let parsing::parser::VarVec::F32(data) = &data[prop_name].data {
+                        let s = Series::new(prop_name, data);
+                        let py_series = rust_series_to_py_series(&s).unwrap();
+                        all_series.push(py_series);
+                    }
+                    if let parsing::parser::VarVec::String(data) = &data[prop_name].data {
+                        let s = Series::new(prop_name, data);
+                        let py_series = rust_series_to_py_series(&s).unwrap();
+                        all_series.push(py_series);
                     }
                 }
             }
 
-            let mut result: Vec<u64> = vec![
-                cnt.try_into().unwrap(),
-                col_len.try_into().unwrap(),
-                wanted_props.len().try_into().unwrap(),
-            ];
-
-            for player in parser.players {
-                result.push(player.xuid);
-                result.push(player.entity_id as u64);
-            }
-
-            Ok(result)
+            Ok(all_series)
         }
     }
 }

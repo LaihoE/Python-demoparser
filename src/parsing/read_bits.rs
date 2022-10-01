@@ -48,7 +48,7 @@ static MASKS: [u32; NBITS + 1] = [
     u32::MAX,
 ];
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PropData {
     I32(i32),
     F32(f32),

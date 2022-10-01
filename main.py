@@ -4,7 +4,7 @@ from numpy import zeros
 from pandas import DataFrame
 import demoparser
 import glob
-
+import polars as pl
 
 def transform_props(dims, arr, cols):
     cols.append("tick")
@@ -40,35 +40,45 @@ class PythonDemoParser:
         self.path = file
 
     def get_props(self, props_names, ticks=[], players=[]) -> DataFrame:
-        out_arr = zeros((10_000_000), order='F')
-        dims = demoparser.parse_props(self.path, props_names, out_arr, ticks, players)
-        df = transform_props(dims, out_arr, cols=props_names)
+        df = demoparser.parse_props(self.path, props_names, ticks, players)
+        df = pl.DataFrame(df).to_pandas()
+        props_names.extend(["tick", "steamid", "name"])
+        df.columns = props_names
         return df
 
     def get_events(self, game_events) -> list[dict]:
         game_events = demoparser.parse_events(self.path, game_events)
         game_events = clean_events(game_events)
         return [dict(sorted(game_event.items())) for game_event in game_events]
-    
+
     def get_players(self) -> list[dict]:
         players = demoparser.parse_players(files[0])
         return [dict(sorted(player.items())) for player in players]
-    
+
     def get_header(self) -> list[dict]:
         demo_header = demoparser.parse_header(files[0])
         return demo_header
 
+import time
 
 # players = [76561198194694750]
-files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
-parser = PythonDemoParser(files[0])
-df = parser.get_props(["m_hActiveWeapon", "m_iClip1"])
-df = df[df["m_hActiveWeapon"] != -1]
-weapons = set(df["m_hActiveWeapon"].to_list())
-df = df[df["m_iClip1"] != -1]
+#files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
+
+files = glob.glob("/home/laiho/Documents/demos/mm/*")
+okfiles = []
+for file in files:
+        if "info" not in file:
+            okfiles.append(file)
+
+
+for file in okfiles:
+    print(file)
+    parser = PythonDemoParser(file)
+    df = parser.get_props(["m_angEyeAngles[0]"])
+    print(df)
+
 
 # print(len(parser.get_events("weapon_fire")))
-
 # & 0x7FF& 0x7FF
 # for x in weapons:
     #print(int(x) & 0x7FF)

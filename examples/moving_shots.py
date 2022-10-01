@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pyparser import PythonDemoParser
-
+import multiprocessing
 
 
 
@@ -28,19 +28,21 @@ for file in files:
 
 def first_bloods(file):
     parser = PythonDemoParser(file)
-    game_events = parser.parse_props(["m_vecOrigin_X", "m_vecOrigin_Y"])
-    df = pd.DataFrame(game_events)
-    plt.scatter(df["m_vecOrigin_X"], df["m_vecOrigin_Y"])
-    plt.show()
-    print(df)
+    df = pd.DataFrame(parser.get_events("hostage_hurt"))
+    return df
 
 
 
 if __name__ == "__main__":
-    import multiprocessing
-    print(len(okfiles))
-    with multiprocessing.Pool(processes=1) as pool:
-        results = pool.map(first_bloods, okfiles)
-    print(results)
-    #df = pd.concat(results)
-    #print(df.groupby("round").size())
+    import tqdm
+    from collections import Counter
+    before = time.time()
+
+    with multiprocessing.Pool(processes=12) as pool:
+        results = list(tqdm.tqdm(pool.imap_unordered(first_bloods, okfiles), total=len(okfiles)))
+    df = pd.concat(results)
+    print(time.time() - before)
+
+    c = Counter(df["player_name"])
+    plt.barh(c.keys(), c.values())
+    plt.show()

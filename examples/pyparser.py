@@ -1,6 +1,10 @@
-import pandas as pd
-import numpy as np
+from typing import List
 import demoparser
+from numpy import zeros
+from pandas import DataFrame
+import demoparser
+import glob
+import polars as pl
 
 def transform_props(dims, arr, cols):
     cols.append("tick")
@@ -16,7 +20,7 @@ def transform_props(dims, arr, cols):
         else:
             v = dims[i]
             d[k] = v
-    df = pd.DataFrame(arr, columns=cols)
+    df = DataFrame(arr, columns=cols)
     df = df.replace({"entid": d})
     df["entid"].astype("int64")
     df["tick"].astype("int64")
@@ -35,13 +39,22 @@ class PythonDemoParser:
     def __init__(self, file: str) -> None:
         self.path = file
 
-    def parse_props(self, props_names, ticks=[], players=[]) -> pd.DataFrame:
-        out_arr = np.zeros((10000000), order='F')
-        dims = demoparser.parse_props(self.path, props_names, out_arr, ticks, players)
-        df = transform_props(dims, out_arr, cols=props_names)
+    def get_props(self, props_names, ticks=[], players=[]) -> DataFrame:
+        df = demoparser.parse_props(self.path, props_names, ticks, players)
+        df = pl.DataFrame(df).to_pandas()
+        props_names.extend(["tick", "steamid", "name"])
+        df.columns = props_names
         return df
 
-    def parse_events(self, game_events) -> list:
+    def get_events(self, game_events) -> list[dict]:
         game_events = demoparser.parse_events(self.path, game_events)
         game_events = clean_events(game_events)
-        return game_events
+        return [dict(sorted(game_event.items())) for game_event in game_events]
+
+    """def get_players(self) -> list[dict]:
+        players = demoparser.parse_players(files[0])
+        return [dict(sorted(player.items())) for player in players]
+
+    def get_header(self) -> list[dict]:
+        demo_header = demoparser.parse_header(files[0])
+        return demo_header"""

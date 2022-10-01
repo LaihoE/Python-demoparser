@@ -1,4 +1,5 @@
 use super::game_events::GameEvent;
+use super::read_bits::PropData;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
 use crate::parsing::extract_props::extract_props;
@@ -20,6 +21,18 @@ pub struct Frame {
     pub cmd: u8,
     pub tick: i32,
     pub playerslot: u8,
+}
+#[derive(Debug, Clone)]
+pub enum VarVec {
+    U64(Vec<u64>),
+    F32(Vec<f32>),
+    I64(Vec<i64>),
+    String(Vec<String>),
+}
+#[derive(Debug, Clone)]
+pub struct PropColumn {
+    pub dtype: String,
+    pub data: VarVec,
 }
 
 pub struct Demo {
@@ -47,6 +60,32 @@ pub struct Demo {
     pub players_connected: i32,
     pub only_players: bool,
     pub only_header: bool,
+}
+
+impl VarVec {
+    pub fn push_propdata(&mut self, item: PropData) {
+        match item {
+            PropData::F32(p) => match self {
+                VarVec::F32(f) => f.push(p),
+                _ => {}
+            },
+            PropData::I64(p) => match self {
+                VarVec::I64(f) => f.push(p),
+                _ => {}
+            },
+            PropData::String(p) => match self {
+                VarVec::String(f) => f.push(p),
+                _ => {}
+            },
+            _ => panic!("bad type for prop"),
+        }
+    }
+    pub fn push_string(&mut self, data: String) {
+        match self {
+            VarVec::String(f) => f.push(data),
+            _ => {}
+        }
+    }
 }
 
 impl Demo {
@@ -119,12 +158,9 @@ impl Demo {
 }
 
 impl Demo {
-    pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, Vec<f32>> {
+    pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, PropColumn> {
         // Main loop
-        let mut ticks_props: FxHashMap<String, Vec<f32>> = FxHashMap::default();
-        for name in props_names {
-            ticks_props.insert(name.to_string(), Vec::new());
-        }
+        let mut ticks_props: FxHashMap<String, PropColumn> = FxHashMap::default();
 
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame_bytes();
@@ -145,16 +181,66 @@ impl Demo {
                 if self.wanted_ticks.contains(&self.tick) || self.wanted_ticks.len() == 0 {
                     if self.wanted_players.contains(&player.xuid) || self.wanted_players.len() == 0
                     {
-                        let props_this_tick: Vec<(String, f32)> = extract_props(
-                            &self.entities,
-                            props_names,
-                            &self.tick,
-                            player.entity_id,
-                            &self.serverclass_map,
-                        );
-                        //println!("{:?} {:?}", props_this_tick, props_names);
-                        for (k, v) in props_this_tick {
-                            ticks_props.entry(k).or_insert_with(Vec::new).push(v);
+                        if self
+                            .entities
+                            .as_ref()
+                            .unwrap()
+                            .contains_key(&player.entity_id)
+                        {
+                            if self.entities.as_ref().unwrap()[&player.entity_id].is_some() {
+                                let ent = self.entities.as_ref().unwrap()[&player.entity_id]
+                                    .as_ref()
+                                    .unwrap();
+
+                                for prop_name in props_names {
+                                    // println!("{:?}", ent.props);
+                                    match ent.props.get(prop_name) {
+                                        None => {}
+                                        Some(e) => {
+                                            //println!("{} {:?}", prop_name, e.data);
+                                            ticks_props
+                                                .entry(e.prop_name.to_string())
+                                                .or_insert_with(|| PropColumn {
+                                                    dtype: "f32".to_string(),
+                                                    data: VarVec::F32(Vec::new()),
+                                                })
+                                                .data
+                                                .push_propdata(e.data.clone());
+                                            // EXTRA
+                                            ticks_props
+                                                .entry("tick".to_string())
+                                                .or_insert_with(|| PropColumn {
+                                                    dtype: "i32".to_string(),
+                                                    data: VarVec::String(vec![]),
+                                                })
+                                                .data
+                                                .push_string(self.tick.to_string());
+
+                                            ticks_props
+                                                .entry("steamid".to_string())
+                                                .or_insert_with(|| PropColumn {
+                                                    dtype: "u64".to_string(),
+                                                    data: VarVec::String(vec![]),
+                                                })
+                                                .data
+                                                .push_string(player.xuid.to_string());
+                                            ticks_props
+                                                .entry("name".to_string())
+                                                .or_insert_with(|| PropColumn {
+                                                    dtype: "u64".to_string(),
+                                                    data: VarVec::String(vec![]),
+                                                })
+                                                .data
+                                                .push_string(player.name.to_string());
+                                        }
+                                    }
+                                }
+                                /*
+
+
+                                */
+                                //tick_props.push(("name".to_string(), wanted_name));
+                            }
                         }
                     }
                 }

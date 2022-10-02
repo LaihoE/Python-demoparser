@@ -74,8 +74,8 @@ for file in files:
 for file in okfiles:
     print(file)
     parser = PythonDemoParser(file)
-    df = parser.get_props(["m_angEyeAngles[0]"])
-    print(df)
+    df = parser.get_events("player_death")
+    break
 
 
 # print(len(parser.get_events("weapon_fire")))

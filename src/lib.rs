@@ -167,8 +167,8 @@ pub fn parse_players(py: Python<'_>, demo_path: String) -> PyResult<(Py<PyAny>)>
     match parser {
         Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
         Ok(mut parser) => {
-            let h: Header = parser.parse_demo_header();
-            let data = parser.parse_frame(&vec![]);
+            let _: Header = parser.parse_demo_header();
+            let _ = parser.parse_frame(&vec![]);
             let players = parser.players;
             let mut py_players = vec![];
             for player in players {

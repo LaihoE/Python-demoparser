@@ -19,30 +19,42 @@ import time
 
 
 
-files = glob.glob("/home/laiho/Documents/demos/mm/*")
+# files = glob.glob("/home/laiho/Documents/demos/mm/*")
+# files = glob.glob("/media/laiho/New Volume1/demos/testc/*")
+files = glob.glob("/home/laiho/Documents/demos/faceits/clean_unzompr/*")
+
+
 okfiles = []
-for file in files:
-        if "info" not in file:
-            okfiles.append(file)
+for x in files:
+        if "info" not in x:
+            okfiles.append(x)
+
 
 
 def first_bloods(file):
+    print("*******")
     parser = PythonDemoParser(file)
-    df = pd.DataFrame(parser.get_events("hostage_hurt"))
+    df = pd.DataFrame(parser.get_events("player_hurt"))
+    #df = df.groupby(["attacker_id"])["round"].max()
+    #print(df)
     return df
 
 
-
 if __name__ == "__main__":
+    import sqlite3
     import tqdm
     from collections import Counter
     before = time.time()
 
-    with multiprocessing.Pool(processes=12) as pool:
+    with multiprocessing.Pool(processes=1) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(first_bloods, okfiles), total=len(okfiles)))
-    df = pd.concat(results)
-    print(time.time() - before)
 
-    c = Counter(df["player_name"])
-    plt.barh(c.keys(), c.values())
-    plt.show()
+    df = pd.concat(results)
+    
+    conn = sqlite3.connect('test_database')
+    
+    df.to_sql('player_hurt', conn)
+    print(time.time() - before)
+    print(df)
+    #df.to_csv("test.csv")
+    # print(Counter(df["weapon"]))

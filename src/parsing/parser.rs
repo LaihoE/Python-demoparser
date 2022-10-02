@@ -27,6 +27,7 @@ pub enum VarVec {
     U64(Vec<u64>),
     F32(Vec<f32>),
     I64(Vec<i64>),
+    I32(Vec<i32>),
     String(Vec<String>),
 }
 #[derive(Debug, Clone)]
@@ -67,6 +68,10 @@ impl VarVec {
         match item {
             PropData::F32(p) => match self {
                 VarVec::F32(f) => f.push(p),
+                _ => {}
+            },
+            PropData::I32(p) => match self {
+                VarVec::I32(f) => f.push(p),
                 _ => {}
             },
             PropData::I64(p) => match self {
@@ -193,11 +198,9 @@ impl Demo {
                                     .unwrap();
 
                                 for prop_name in props_names {
-                                    // println!("{:?}", ent.props);
                                     match ent.props.get(prop_name) {
                                         None => {}
                                         Some(e) => {
-                                            //println!("{} {:?}", prop_name, e.data);
                                             ticks_props
                                                 .entry(e.prop_name.to_string())
                                                 .or_insert_with(|| PropColumn {
@@ -206,6 +209,7 @@ impl Demo {
                                                 })
                                                 .data
                                                 .push_propdata(e.data.clone());
+
                                             // EXTRA
                                             ticks_props
                                                 .entry("tick".to_string())

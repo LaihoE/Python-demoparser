@@ -73,7 +73,6 @@ impl Demo {
                 let data = self.read_new_ent(&e, &mut b);
 
                 for pa in data {
-                    //println!("a{:?}", pa);
                     if self.wanted_props.contains(&pa.prop_name) {
                         e.props.insert(pa.prop_name.clone(), pa);
                     }
@@ -93,8 +92,6 @@ impl Demo {
                     self.cnt += ps.len() as i32;
 
                     for pa in data {
-                        //println!("a{:?}", pa);
-
                         if self.wanted_props.contains(&pa.prop_name) {
                             ps.insert(pa.prop_name.clone(), pa);
                         }

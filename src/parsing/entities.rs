@@ -125,14 +125,15 @@ impl Demo {
         for inx in indicies {
             let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
             let pdata = b.decode(prop);
-
+            //println!("{:?}", prop.prop.);
+            /*
             if !self
                 .wanted_props
                 .contains(&prop.prop.var_name().to_string())
             {
                 continue;
             }
-
+            */
             match pdata {
                 PropData::VecXY(v) => {
                     let endings = ["_X", "_Y"];
@@ -160,8 +161,6 @@ impl Demo {
                         props.push(atom);
                     }
                 }
-
-                PropData::String(_) => {}
 
                 _ => {
                     let atom = PropAtom {

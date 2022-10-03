@@ -46,7 +46,6 @@ df = parser.parse_events("weapon_fire", format="df")
 
 
 ## Performance
-**Performance is likely going to improve (especially props speed)**
 
 Performance can be split in two parts. Reading the demo and parsing the demo. 
 Performance will vary mostly based on reading speed.
@@ -69,4 +68,4 @@ So this is how fast reading the raw data takes, then for parsing:
 
 As you can see there is a huge difference between time taken for events and props. This is not a surprise since most of data is inside props. The parser only parses the part you are interested in.
 
-Assuming you are only parsing game events and you have a fast NVME drive you can parse over **24 demos per second** single core and with paralell parsing over **80 demos per second**.
+Performance still has lots of room for improvement

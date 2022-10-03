@@ -31,7 +31,7 @@ use std::io::prelude::*;
 use std::time::Instant;
 use std::{io, result, vec};
 
-/// Arrow array to Python.
+/// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
 pub(crate) fn to_py_array(py: Python, pyarrow: &PyModule, array: ArrayRef) -> PyResult<PyObject> {
     let schema = Box::new(ffi::export_field_to_c(&ArrowField::new(
         "",
@@ -130,7 +130,6 @@ pub fn parse_props(
             wanted_props.push("steamid".to_string());
             wanted_props.push("name".to_string());
             let mut all_series = vec![];
-            //println!("{:?}", data);
 
             for prop_name in &wanted_props {
                 if data.contains_key(prop_name) {
@@ -144,6 +143,13 @@ pub fn parse_props(
                         let py_series = rust_series_to_py_series(&s).unwrap();
                         all_series.push(py_series);
                     }
+                    if let parsing::parser::VarVec::I32(data) = &data[prop_name].data {
+                        let s = Series::new(prop_name, data);
+                        let py_series = rust_series_to_py_series(&s).unwrap();
+                        all_series.push(py_series);
+                    }
+                } else {
+                    println!("{:?} NOT FOUND !!!", prop_name);
                 }
             }
 
@@ -211,6 +217,6 @@ fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_props, m)?)?;
     m.add_function(wrap_pyfunction!(parse_players, m)?)?;
     m.add_function(wrap_pyfunction!(parse_header, m)?)?;
-    //parse(py, demo_name, props_names, out_arr);
+    // parse(py, demo_name, props_names, out_arr);
     return Ok(());
 }

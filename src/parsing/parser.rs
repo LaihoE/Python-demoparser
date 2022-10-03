@@ -68,19 +68,27 @@ impl VarVec {
         match item {
             PropData::F32(p) => match self {
                 VarVec::F32(f) => f.push(p),
-                _ => {}
+                _ => {
+                    println!("1WHAT")
+                }
             },
             PropData::I32(p) => match self {
                 VarVec::I32(f) => f.push(p),
-                _ => {}
+                _ => {
+                    println!("2WHAT")
+                }
             },
             PropData::I64(p) => match self {
                 VarVec::I64(f) => f.push(p),
-                _ => {}
+                _ => {
+                    println!("3WHAT")
+                }
             },
             PropData::String(p) => match self {
                 VarVec::String(f) => f.push(p),
-                _ => {}
+                _ => {
+                    println!("4WHAT")
+                }
             },
             _ => panic!("bad type for prop"),
         }
@@ -88,6 +96,18 @@ impl VarVec {
     pub fn push_string(&mut self, data: String) {
         match self {
             VarVec::String(f) => f.push(data),
+            _ => {}
+        }
+    }
+    pub fn push_float(&mut self, data: f32) {
+        match self {
+            VarVec::F32(f) => f.push(data),
+            _ => {}
+        }
+    }
+    pub fn push_i32(&mut self, data: i32) {
+        match self {
+            VarVec::I32(f) => f.push(data),
             _ => {}
         }
     }
@@ -164,7 +184,6 @@ impl Demo {
 
 impl Demo {
     pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, PropColumn> {
-        // Main loop
         let mut ticks_props: FxHashMap<String, PropColumn> = FxHashMap::default();
 
         while self.fp < self.bytes.len() as usize {
@@ -178,9 +197,7 @@ impl Demo {
                 }
             }
             if self.only_header {
-                if Demo::all_players_connected(self.players_connected) {
-                    break;
-                }
+                break;
             }
             for player in &self.players {
                 if self.wanted_ticks.contains(&self.tick) || self.wanted_ticks.len() == 0 {
@@ -199,51 +216,67 @@ impl Demo {
 
                                 for prop_name in props_names {
                                     match ent.props.get(prop_name) {
-                                        None => {}
+                                        None => {
+                                            //println!("{:?}", &prop_name[..3]);
+                                            if &prop_name[..3] == "m_b" {
+                                                ticks_props
+                                                    .entry(prop_name.to_string())
+                                                    .or_insert_with(|| PropColumn {
+                                                        dtype: "f32".to_string(),
+                                                        data: VarVec::I32(Vec::new()),
+                                                    })
+                                                    .data
+                                                    .push_i32(1);
+                                            } else {
+                                                ticks_props
+                                                    .entry(prop_name.to_string())
+                                                    .or_insert_with(|| PropColumn {
+                                                        dtype: "f32".to_string(),
+                                                        data: VarVec::F32(Vec::new()),
+                                                    })
+                                                    .data
+                                                    .push_i32(1);
+                                            }
+                                        }
                                         Some(e) => {
+                                            //println!("{:?}", e.data);
                                             ticks_props
-                                                .entry(e.prop_name.to_string())
+                                                .entry(prop_name.to_string())
                                                 .or_insert_with(|| PropColumn {
                                                     dtype: "f32".to_string(),
                                                     data: VarVec::F32(Vec::new()),
                                                 })
                                                 .data
                                                 .push_propdata(e.data.clone());
-
-                                            // EXTRA
-                                            ticks_props
-                                                .entry("tick".to_string())
-                                                .or_insert_with(|| PropColumn {
-                                                    dtype: "i32".to_string(),
-                                                    data: VarVec::String(vec![]),
-                                                })
-                                                .data
-                                                .push_string(self.tick.to_string());
-
-                                            ticks_props
-                                                .entry("steamid".to_string())
-                                                .or_insert_with(|| PropColumn {
-                                                    dtype: "u64".to_string(),
-                                                    data: VarVec::String(vec![]),
-                                                })
-                                                .data
-                                                .push_string(player.xuid.to_string());
-                                            ticks_props
-                                                .entry("name".to_string())
-                                                .or_insert_with(|| PropColumn {
-                                                    dtype: "u64".to_string(),
-                                                    data: VarVec::String(vec![]),
-                                                })
-                                                .data
-                                                .push_string(player.name.to_string());
                                         }
                                     }
                                 }
-                                /*
+                                // EXTRA
+                                ticks_props
+                                    .entry("tick".to_string())
+                                    .or_insert_with(|| PropColumn {
+                                        dtype: "i32".to_string(),
+                                        data: VarVec::String(vec![]),
+                                    })
+                                    .data
+                                    .push_string(self.tick.to_string());
 
-
-                                */
-                                //tick_props.push(("name".to_string(), wanted_name));
+                                ticks_props
+                                    .entry("steamid".to_string())
+                                    .or_insert_with(|| PropColumn {
+                                        dtype: "u64".to_string(),
+                                        data: VarVec::String(vec![]),
+                                    })
+                                    .data
+                                    .push_string(player.xuid.to_string());
+                                ticks_props
+                                    .entry("name".to_string())
+                                    .or_insert_with(|| PropColumn {
+                                        dtype: "u64".to_string(),
+                                        data: VarVec::String(vec![]),
+                                    })
+                                    .data
+                                    .push_string(player.name.to_string());
                             }
                         }
                     }

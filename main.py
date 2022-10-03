@@ -39,10 +39,14 @@ class PythonDemoParser:
     def __init__(self, file: str) -> None:
         self.path = file
 
-    def get_props(self, props_names, ticks=[], players=[]) -> DataFrame:
+    def get_props(self, props_names: list[str], ticks=[], players=[]) -> DataFrame:
+        print(type(props_names))
+        if type(props_names) != list:
+            raise TypeError("Wanted values should be a list not a string!")
         df = demoparser.parse_props(self.path, props_names, ticks, players)
         df = pl.DataFrame(df).to_pandas()
         props_names.extend(["tick", "steamid", "name"])
+        print(df)
         df.columns = props_names
         return df
 
@@ -74,11 +78,23 @@ for file in files:
 for file in okfiles:
     print(file)
     parser = PythonDemoParser(file)
-    df = parser.get_events("player_death")
+    df = parser.get_props(
+        ["m_angEyeAngles[0]",
+        "m_angEyeAngles[1]",
+        ])
+    df.to_csv("CAPU.csv")
+    print(df)
     break
 
 
-# print(len(parser.get_events("weapon_fire")))
-# & 0x7FF& 0x7FF
-# for x in weapons:
-    #print(int(x) & 0x7FF)
+"""
+m_vecOrigin
+m_vecOrigin[2]
+m_Local.m_aimPunchAngle
+m_Local.m_aimPunchAngleVel
+m_Local.m_flFOVRate
+m_Local.m_flFallVelocity
+m_Local.m_flLastDuckTime
+m_Local.m_viewPunchAngle
+m_vecVelocity[0]
+"""

@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from pyparser import PythonDemoParser
 import multiprocessing
+from sqlalchemy import create_engine
+
 
 
 
@@ -30,14 +32,14 @@ for x in files:
             okfiles.append(x)
 
 
+okfiles = okfiles[:400]
 
 def first_bloods(file):
-    print("*******")
+    
     parser = PythonDemoParser(file)
-    df = pd.DataFrame(parser.get_events("player_hurt"))
-    #df = df.groupby(["attacker_id"])["round"].max()
-    #print(df)
-    return df
+    game_events = parser.get_events("")
+    return game_events
+    
 
 
 if __name__ == "__main__":
@@ -45,16 +47,23 @@ if __name__ == "__main__":
     import tqdm
     from collections import Counter
     before = time.time()
-
-    with multiprocessing.Pool(processes=1) as pool:
+    conn = sqlite3.connect('all_events3')
+    c = conn.cursor()
+    with multiprocessing.Pool(processes=12) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(first_bloods, okfiles), total=len(okfiles)))
+    #df = pd.concat(results)
+    engine = create_engine('sqlite:///all_events3', echo=False)
 
-    df = pd.concat(results)
-    
-    conn = sqlite3.connect('test_database')
-    
-    df.to_sql('player_hurt', conn)
-    print(time.time() - before)
-    print(df)
-    #df.to_csv("test.csv")
-    # print(Counter(df["weapon"]))
+    sorted_game_events = {}
+
+    for result in results:
+
+        for event in result:
+            if event["event_name"] in sorted_game_events:
+                sorted_game_events[event["event_name"]].append(event)
+            else:
+                sorted_game_events[event["event_name"]] = [event]
+
+    for event_name, event_list in sorted_game_events.items():
+        df = pd.DataFrame(event_list) 
+        df.to_sql(event_name, engine, if_exists='append')

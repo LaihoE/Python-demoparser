@@ -235,7 +235,7 @@ impl Demo {
                                                         data: VarVec::F32(Vec::new()),
                                                     })
                                                     .data
-                                                    .push_i32(1);
+                                                    .push_float(-1.0);
                                             }
                                         }
                                         Some(e) => {

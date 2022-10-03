@@ -81,6 +81,8 @@ for file in okfiles:
     df = parser.get_props(
         ["m_angEyeAngles[0]",
         "m_angEyeAngles[1]",
+        "m_vecOrigin_X",
+        "m_vecOrigin_Y"
         ])
     df.to_csv("CAPU.csv")
     print(df)

@@ -125,7 +125,9 @@ impl Demo {
         let result = std::fs::read(&demo_path);
         match result {
             // FILE COULD NOT BE READ
-            Err(e) => Err(e), //panic!("The demo could not be found. Error: {}", e),
+            Err(e) => {
+                println!("{}", e);
+                Err(e)}, //panic!("The demo could not be found. Error: {}", e),
             Ok(bytes) => {
                 let extension = Path::new(&demo_path).extension().unwrap();
                 match extension.to_str().unwrap() {
@@ -167,7 +169,6 @@ impl Demo {
                     entities: Some(HashMap::default()),
                     stringtables: Vec::new(),
                     players: Vec::new(),
-                    // changing ones
                     wanted_props: wanted_props,
                     game_events: Vec::new(),
                     wanted_players: wanted_players,
@@ -239,7 +240,7 @@ impl Demo {
                                             }
                                         }
                                         Some(e) => {
-                                            //println!("{:?}", e.data);
+                                            println!("{:?}", e.data);
                                             ticks_props
                                                 .entry(prop_name.to_string())
                                                 .or_insert_with(|| PropColumn {

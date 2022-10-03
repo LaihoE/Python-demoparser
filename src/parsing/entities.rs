@@ -134,6 +134,10 @@ impl Demo {
                 continue;
             }
             */
+            //println!("{:?}", prop.prop.var_name().to_string());
+            if prop.prop.var_name().to_string().contains("Stats"){
+                println!("{:?}", prop.prop.var_name().to_string());
+            }
             match pdata {
                 PropData::VecXY(v) => {
                     let endings = ["_X", "_Y"];

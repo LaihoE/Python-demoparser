@@ -46,7 +46,6 @@ class PythonDemoParser:
         df = demoparser.parse_props(self.path, props_names, ticks, players)
         df = pl.DataFrame(df).to_pandas()
         props_names.extend(["tick", "steamid", "name"])
-        print(df)
         df.columns = props_names
         return df
 
@@ -56,11 +55,11 @@ class PythonDemoParser:
         return [dict(sorted(game_event.items())) for game_event in game_events]
 
     def get_players(self) -> list[dict]:
-        players = demoparser.parse_players(files[0])
+        players = demoparser.parse_players(self.path)
         return [dict(sorted(player.items())) for player in players]
 
     def get_header(self) -> list[dict]:
-        demo_header = demoparser.parse_header(files[0])
+        demo_header = demoparser.parse_header(self.path)
         return demo_header
 
 import time
@@ -68,25 +67,18 @@ import time
 # players = [76561198194694750]
 #files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
 
-files = glob.glob("/home/laiho/Documents/demos/mm/*")
+files = glob.glob("/mnt/c/Users/emill/got/x/*")
 okfiles = []
 for file in files:
         if "info" not in file:
             okfiles.append(file)
+print(okfiles)
 
-
-for file in okfiles:
-    print(file)
-    parser = PythonDemoParser(file)
-    df = parser.get_props(
-        ["m_angEyeAngles[0]",
-        "m_angEyeAngles[1]",
-        "m_vecOrigin_X",
-        "m_vecOrigin_Y"
-        ])
-    df.to_csv("CAPU.csv")
-    print(df)
-    break
+for x in okfiles:
+    print(x)
+    parser = PythonDemoParser(x)
+    players = parser.get_players()
+    print([player["name"] for player in players])
 
 
 """

@@ -183,10 +183,22 @@ impl Demo {
     }
 }
 
+fn create_type_hm() -> HashMap<String, i32> {
+    let mut hm = HashMap::new();
+    let mut rdr = csv::Reader::from_path("types.csv".to_string()).unwrap();
+    for result in rdr.records() {
+        let varname = result.as_ref().unwrap()[0].to_string();
+        let t = result.as_ref().unwrap()[1].to_string();
+        hm.insert(varname, t.parse::<i32>().unwrap());
+    }
+    hm
+}
+
+
 impl Demo {
     pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, PropColumn> {
         let mut ticks_props: FxHashMap<String, PropColumn> = FxHashMap::default();
-
+        let typehm = create_type_hm();
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame_bytes();
             self.tick = f.tick;
@@ -218,7 +230,8 @@ impl Demo {
                                 for prop_name in props_names {
                                     match ent.props.get(prop_name) {
                                         None => {
-                                            //println!("{:?}", &prop_name[..3]);
+                                            let prop_type = typehm[prop_name];
+                                            println!("{} {}", prop_name, prop_type);
                                             if &prop_name[..3] == "m_b" {
                                                 ticks_props
                                                     .entry(prop_name.to_string())
@@ -240,7 +253,7 @@ impl Demo {
                                             }
                                         }
                                         Some(e) => {
-                                            println!("{:?}", e.data);
+                                            //println!("{:?}", e.data);
                                             ticks_props
                                                 .entry(prop_name.to_string())
                                                 .or_insert_with(|| PropColumn {

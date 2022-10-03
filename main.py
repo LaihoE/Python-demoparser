@@ -65,7 +65,7 @@ class PythonDemoParser:
 import time
 
 # players = [76561198194694750]
-#files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
+# files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
 
 files = glob.glob("/mnt/c/Users/emill/got/x/*")
 okfiles = []
@@ -77,8 +77,8 @@ print(okfiles)
 for x in okfiles:
     print(x)
     parser = PythonDemoParser(x)
-    players = parser.get_players()
-    print([player["name"] for player in players])
+    df = parser.get_events(["m_vecOrigin_X"])
+    print(df)
 
 
 """

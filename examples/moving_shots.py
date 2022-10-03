@@ -23,8 +23,8 @@ import time
 
 # files = glob.glob("/home/laiho/Documents/demos/mm/*")
 # files = glob.glob("/media/laiho/New Volume1/demos/testc/*")
-files = glob.glob("/home/laiho/Documents/demos/faceits/clean_unzompr/*")
-
+# files = glob.glob("/mnt/c/Users/emill/got/x/*")
+files = glob.glob("/mnt/d/b/b/*")
 
 okfiles = []
 for x in files:
@@ -37,22 +37,23 @@ okfiles = okfiles[:400]
 def first_bloods(file):
     
     parser = PythonDemoParser(file)
-    game_events = parser.get_events("")
+    game_events = parser.get_events("player_hurt")
     return game_events
     
 
 
 if __name__ == "__main__":
-    import sqlite3
+    import tqdm
+    """import sqlite3
     import tqdm
     from collections import Counter
     before = time.time()
     conn = sqlite3.connect('all_events3')
-    c = conn.cursor()
+    c = conn.cursor()"""
     with multiprocessing.Pool(processes=12) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(first_bloods, okfiles), total=len(okfiles)))
     #df = pd.concat(results)
-    engine = create_engine('sqlite:///all_events3', echo=False)
+    """engine = create_engine('sqlite:///all_events3', echo=False)
 
     sorted_game_events = {}
 
@@ -66,4 +67,4 @@ if __name__ == "__main__":
 
     for event_name, event_list in sorted_game_events.items():
         df = pd.DataFrame(event_list) 
-        df.to_sql(event_name, engine, if_exists='append')
+        df.to_sql(event_name, engine, if_exists='append')"""

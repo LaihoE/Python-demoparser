@@ -2,19 +2,17 @@ use super::game_events::GameEvent;
 use super::read_bits::PropData;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
-use crate::parsing::extract_props::extract_props;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::*;
-use flate2::read::GzDecoder;
+
 use fxhash::FxHashMap;
 use hashbrown::HashMap;
 use hashbrown::HashSet;
 use protobuf;
 use protobuf::Message;
 use std::io::Read;
-use std::path::Path;
 
 #[allow(dead_code)]
 pub struct Frame {
@@ -69,25 +67,25 @@ impl VarVec {
             PropData::F32(p) => match self {
                 VarVec::F32(f) => f.push(p),
                 _ => {
-                    println!("1WHAT")
+                    panic!("Tried to push a {:?} into a float column", item);
                 }
             },
             PropData::I32(p) => match self {
                 VarVec::I32(f) => f.push(p),
                 _ => {
-                    println!("2WHAT")
+                    panic!("Tried to push a {:?} into a i32 column", item);
                 }
             },
             PropData::I64(p) => match self {
                 VarVec::I64(f) => f.push(p),
                 _ => {
-                    println!("3WHAT")
+                    panic!("Tried to push a {:?} into a i64 column", item);
                 }
             },
             PropData::String(p) => match self {
                 VarVec::String(f) => f.push(p),
                 _ => {
-                    println!("4WHAT")
+                    panic!("Tried to push a {:?} into a string column", p);
                 }
             },
             _ => panic!("bad type for prop"),
@@ -114,33 +112,8 @@ impl VarVec {
 }
 
 impl Demo {
-    pub fn decompress_gz(bytes: Vec<u8>) -> Vec<u8> {
-        let mut gz = GzDecoder::new(&bytes[..]);
-        let mut out: Vec<u8> = vec![];
-        gz.read_to_end(&mut out).unwrap();
-        out
-    }
-
-    pub fn read_file(demo_path: String) -> Result<Vec<u8>, std::io::Error> {
-        let result = std::fs::read(&demo_path);
-        match result {
-            // FILE COULD NOT BE READ
-            Err(e) => {
-                println!("{}", e);
-                Err(e)
-            } //panic!("The demo could not be found. Error: {}", e),
-            Ok(bytes) => {
-                let extension = Path::new(&demo_path).extension().unwrap();
-                match extension.to_str().unwrap() {
-                    "gz" => Ok(Demo::decompress_gz(bytes)),
-                    _ => Ok(bytes),
-                }
-            }
-        }
-    }
-
     pub fn new(
-        demo_path: String,
+        bytes: Vec<u8>,
         parse_props: bool,
         wanted_ticks: Vec<i32>,
         wanted_players: Vec<u64>,
@@ -149,42 +122,42 @@ impl Demo {
         only_players: bool,
         only_header: bool,
     ) -> Result<Self, std::io::Error> {
-        let bytes = Demo::read_file(demo_path);
-        match bytes {
-            Ok(bytes) => Ok(Self {
-                bytes: bytes,
-                fp: 0,
-                cmd: 0,
-                tick: 0,
-                cnt: 0,
-                round: 0,
-                event_list: None,
-                event_map: None,
-                class_bits: 0,
-                parse_props: parse_props,
-                event_name: event_name,
-                bad: Vec::new(),
-                dt_map: Some(HashMap::default()),
-                serverclass_map: HashMap::default(),
-                entities: Some(HashMap::default()),
-                stringtables: Vec::new(),
-                players: Vec::new(),
-                wanted_props: wanted_props,
-                game_events: Vec::new(),
-                wanted_players: wanted_players,
-                wanted_ticks: HashSet::from_iter(wanted_ticks),
-                players_connected: 0,
-                only_header: only_header,
-                only_players: only_players,
-            }),
-            Err(e) => Err(e),
-        }
+        //let bytes = Demo::read_file(demo_path);
+        Ok(Self {
+            bytes: bytes,
+            fp: 0,
+            cmd: 0,
+            tick: 0,
+            cnt: 0,
+            round: 0,
+            event_list: None,
+            event_map: None,
+            class_bits: 0,
+            parse_props: parse_props,
+            event_name: event_name,
+            bad: Vec::new(),
+            dt_map: Some(HashMap::default()),
+            serverclass_map: HashMap::default(),
+            entities: Some(HashMap::default()),
+            stringtables: Vec::new(),
+            players: Vec::new(),
+            wanted_props: wanted_props,
+            game_events: Vec::new(),
+            wanted_players: wanted_players,
+            wanted_ticks: HashSet::from_iter(wanted_ticks),
+            players_connected: 0,
+            only_header: only_header,
+            only_players: only_players,
+        })
     }
 }
 
 fn create_type_hm() -> HashMap<String, i32> {
     let mut hm = HashMap::new();
-    let mut rdr = csv::Reader::from_path("types.csv".to_string()).unwrap();
+    let mut rdr = csv::Reader::from_path(
+        "/home/laihox/pyparser2/Python-demoparser/src/parsing/types.csv".to_string(),
+    )
+    .unwrap();
     for result in rdr.records() {
         let varname = result.as_ref().unwrap()[0].to_string();
         let t = result.as_ref().unwrap()[1].to_string();
@@ -229,29 +202,57 @@ impl Demo {
                                     match ent.props.get(prop_name) {
                                         None => {
                                             let prop_type = typehm[prop_name];
-                                            println!("{} {}", prop_name, prop_type);
-                                            if &prop_name[..3] == "m_b" {
-                                                ticks_props
-                                                    .entry(prop_name.to_string())
-                                                    .or_insert_with(|| PropColumn {
-                                                        dtype: "f32".to_string(),
-                                                        data: VarVec::I32(Vec::new()),
-                                                    })
-                                                    .data
-                                                    .push_i32(69);
-                                            } else {
-                                                ticks_props
-                                                    .entry(prop_name.to_string())
-                                                    .or_insert_with(|| PropColumn {
-                                                        dtype: "f32".to_string(),
-                                                        data: VarVec::F32(Vec::new()),
-                                                    })
-                                                    .data
-                                                    .push_float(-1.0);
+                                            match prop_type {
+                                                // INT
+                                                0 => {
+                                                    ticks_props
+                                                        .entry(prop_name.to_string())
+                                                        .or_insert_with(|| PropColumn {
+                                                            dtype: "f32".to_string(),
+                                                            data: VarVec::I32(Vec::new()),
+                                                        })
+                                                        .data
+                                                        .push_i32(1);
+                                                }
+                                                // FLOAT
+                                                1 => {
+                                                    ticks_props
+                                                        .entry(prop_name.to_string())
+                                                        .or_insert_with(|| PropColumn {
+                                                            dtype: "f32".to_string(),
+                                                            data: VarVec::F32(Vec::new()),
+                                                        })
+                                                        .data
+                                                        .push_float(-1.0);
+                                                }
+                                                // Vec
+                                                2 => {
+                                                    ticks_props
+                                                        .entry(prop_name.to_string())
+                                                        .or_insert_with(|| PropColumn {
+                                                            dtype: "f32".to_string(),
+                                                            data: VarVec::F32(Vec::new()),
+                                                        })
+                                                        .data
+                                                        .push_float(-1.0);
+                                                }
+                                                // STRING
+                                                4 => {
+                                                    ticks_props
+                                                        .entry(prop_name.to_string())
+                                                        .or_insert_with(|| PropColumn {
+                                                            dtype: "f32".to_string(),
+                                                            data: VarVec::String(Vec::new()),
+                                                        })
+                                                        .data
+                                                        .push_string("".to_string());
+                                                }
+                                                _ => {
+                                                    println!("UNK TYPE");
+                                                }
                                             }
                                         }
                                         Some(e) => {
-                                            //println!("{:?}", e.data);
                                             ticks_props
                                                 .entry(prop_name.to_string())
                                                 .or_insert_with(|| PropColumn {
@@ -294,7 +295,6 @@ impl Demo {
                     }
                 }
             }
-
             self.parse_cmd(f.cmd);
         }
         ticks_props

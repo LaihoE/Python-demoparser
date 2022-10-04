@@ -125,14 +125,23 @@ impl Demo {
         for inx in indicies {
             let prop = &sv_cls.fprops.as_ref().unwrap()[inx as usize];
             let pdata = b.decode(prop);
-            //println!("{:?}", prop.prop.);
-            /* 
-            if !self.wanted_props
-                .contains(prop.prop.var_name())
+
+
+            let prop_name = &prop.prop.var_name().to_string();
+            let prop_name_X = &(prop.prop.var_name().to_string() + &"_X".to_string());
+            let prop_name_Y = &(prop.prop.var_name().to_string() +  &"_Y".to_string());
+            //println!("{} {} {}", prop_name, prop_name_X, prop_name_Y);
+            if !self.wanted_props.contains(prop_name)
             {
-                continue;
+                if !self.wanted_props.contains(prop_name_X)
+                {
+                    if !self.wanted_props.contains(prop_name_Y)
+                {
+                    continue;
+                }
+                }
             }
-            */
+            
 
             match pdata {
                 PropData::VecXY(v) => {

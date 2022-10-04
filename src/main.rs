@@ -18,11 +18,7 @@ use std::time::Instant;
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 fn main() {
-    //demo_name = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571866312135147584_0815469279_189.dem"
-    //let demo_path = "/home/laiho/.steam/steam/steamapps/common/Counter-Strike Global Offensive/csgo/replays/match730_003571109800890597417_2128991285_181.dem".to_string();
-
     let demo_path = "/home/laiho/Documents/demos/rclonetest/1.dem";
-
     let props_names = vec![
         "m_angEyeAngles[0]".to_string(),
         "m_angEyeAngles[1]".to_string(),

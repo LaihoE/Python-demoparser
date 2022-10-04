@@ -33,7 +33,7 @@ fn parse_key(key: &Key_t) -> KeyData {
         5 => return KeyData::ByteData(key.val_byte().try_into().unwrap()),
         6 => return KeyData::BoolData(key.val_bool()),
         7 => return KeyData::Uint64Data(key.val_uint64()),
-        _ => panic!("KEYDATA FAILED"),
+        _ => panic!("Unkown key type for game event key"),
     }
 }
 
@@ -227,7 +227,6 @@ impl Demo {
                     &self.players,
                     self.round,
                 );
-
                 if self.event_name.len() > 0 {
                     if match_data_to_game_event(
                         &name_data_pairs,
@@ -251,7 +250,6 @@ impl Demo {
                         })
                     }
                 }
-
                 if is_round_changed(event_desc.name()) {
                     self.round += 1;
                 }

@@ -127,7 +127,8 @@ impl Demo {
             // FILE COULD NOT BE READ
             Err(e) => {
                 println!("{}", e);
-                Err(e)}, //panic!("The demo could not be found. Error: {}", e),
+                Err(e)
+            } //panic!("The demo could not be found. Error: {}", e),
             Ok(bytes) => {
                 let extension = Path::new(&demo_path).extension().unwrap();
                 match extension.to_str().unwrap() {
@@ -150,34 +151,32 @@ impl Demo {
     ) -> Result<Self, std::io::Error> {
         let bytes = Demo::read_file(demo_path);
         match bytes {
-            Ok(bytes) => {
-                Ok(Self {
-                    bytes: bytes,
-                    fp: 0,
-                    cmd: 0,
-                    tick: 0,
-                    cnt: 0,
-                    round: 0,
-                    event_list: None,
-                    event_map: None,
-                    class_bits: 0,
-                    parse_props: parse_props,
-                    event_name: event_name,
-                    bad: Vec::new(),
-                    dt_map: Some(HashMap::default()),
-                    serverclass_map: HashMap::default(),
-                    entities: Some(HashMap::default()),
-                    stringtables: Vec::new(),
-                    players: Vec::new(),
-                    wanted_props: wanted_props,
-                    game_events: Vec::new(),
-                    wanted_players: wanted_players,
-                    wanted_ticks: HashSet::from_iter(wanted_ticks),
-                    players_connected: 0,
-                    only_header: only_header,
-                    only_players: only_players,
-                })
-            }
+            Ok(bytes) => Ok(Self {
+                bytes: bytes,
+                fp: 0,
+                cmd: 0,
+                tick: 0,
+                cnt: 0,
+                round: 0,
+                event_list: None,
+                event_map: None,
+                class_bits: 0,
+                parse_props: parse_props,
+                event_name: event_name,
+                bad: Vec::new(),
+                dt_map: Some(HashMap::default()),
+                serverclass_map: HashMap::default(),
+                entities: Some(HashMap::default()),
+                stringtables: Vec::new(),
+                players: Vec::new(),
+                wanted_props: wanted_props,
+                game_events: Vec::new(),
+                wanted_players: wanted_players,
+                wanted_ticks: HashSet::from_iter(wanted_ticks),
+                players_connected: 0,
+                only_header: only_header,
+                only_players: only_players,
+            }),
             Err(e) => Err(e),
         }
     }
@@ -193,7 +192,6 @@ fn create_type_hm() -> HashMap<String, i32> {
     }
     hm
 }
-
 
 impl Demo {
     pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, PropColumn> {
@@ -240,7 +238,7 @@ impl Demo {
                                                         data: VarVec::I32(Vec::new()),
                                                     })
                                                     .data
-                                                    .push_i32(1);
+                                                    .push_i32(69);
                                             } else {
                                                 ticks_props
                                                     .entry(prop_name.to_string())

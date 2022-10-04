@@ -22,6 +22,7 @@ ndarray = "0.15.6"
 polars = "0.24.3"
 polars-arrow = "0.24.3"
 csv = "1.1"
+phf = { version = "0.11", features = ["macros"] }
 
 
 [dependencies.csgoproto]

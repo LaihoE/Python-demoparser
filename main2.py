@@ -1,5 +1,8 @@
-import demoparser
+from demoparser import DemoParser
 import glob
+import time
+from collections import Counter
+
 
 files = glob.glob("/mnt/c/Users/emill/got/x/*")
 okfiles = []
@@ -8,5 +11,10 @@ for file in files:
             okfiles.append(file)
 
 path = okfiles[0]
-parser = demoparser.DemoParser(path)
-print(parser.parse_events("player_hurt"))
+
+
+parser = DemoParser(path)
+
+
+df = parser.parse_props(["m_iHealth"], [], [])
+print(df)

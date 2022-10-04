@@ -18,7 +18,7 @@ use std::time::Instant;
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 fn main() {
-    let demo_path = "/home/laiho/Documents/demos/rclonetest/1.dem";
+    let demo_path = "/mnt/c/Users/emill/got/x/q.dem";
     let props_names = vec![
         "m_angEyeAngles[0]".to_string(),
         "m_angEyeAngles[1]".to_string(),
@@ -61,13 +61,7 @@ fn main() {
     let now = Instant::now();
     let data = d.parse_frame(&props_names);
 
-    println!("{:?}", data);
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
-    println!("{}", d.cnt);
-    for player in &d.players {
-        println!("{} {} {}", player.entity_id, player.name, player.xuid)
-    }
-    println!("{:?}", &d.players.len());
 }

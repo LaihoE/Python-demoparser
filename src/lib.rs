@@ -48,7 +48,7 @@ pub(crate) fn to_py_array(py: Python, pyarrow: &PyModule, array: ArrayRef) -> Py
 
     Ok(array.to_object(py))
 }
-
+/// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
 pub fn rust_series_to_py_series(series: &Series) -> PyResult<PyObject> {
     let series = series.rechunk();
     let array = series.to_arrow(0);
@@ -67,7 +67,6 @@ pub fn parse_events(
     demo_path: String,
     event_name: String,
 ) -> PyResult<(Py<PyAny>)> {
-    let now = Instant::now();
 
     let parser = Demo::new(
         demo_path,
@@ -80,7 +79,7 @@ pub fn parse_events(
         false,
     );
     match parser {
-        Err(e) => Err(PyFileNotFoundError::new_err("FILE NOT FOUND")),
+        Err(e) => Err(PyFileNotFoundError::new_err("ERROR READING FILE")),
         Ok(mut parser) => {
             let h: Header = parser.parse_demo_header();
             let data = parser.parse_frame(&vec!["".to_owned()]);
@@ -105,11 +104,12 @@ pub fn parse_events(
 
 #[pyfunction]
 pub fn parse_props(
+    py: Python,
     demo_path: String,
     mut wanted_props: Vec<String>,
     wanted_ticks: Vec<i32>,
     wanted_players: Vec<u64>,
-) -> PyResult<Vec<PyObject>> {
+) -> PyResult<PyObject> {
     let mut parser = Demo::new(
         demo_path,
         true,
@@ -152,15 +152,19 @@ pub fn parse_props(
                     println!("{:?} NOT FOUND !!!", prop_name);
                 }
             }
-
-            Ok(all_series)
+            let polars = py.import("polars")?;
+            let all_series_py = all_series.to_object(py);
+            let df = polars.call_method1("DataFrame", (all_series_py,))?;
+            df.setattr("columns", wanted_props.to_object(py)).unwrap();
+            let pandas_df = df.call_method0("to_pandas").unwrap();
+            Ok(pandas_df.to_object(py))
         }
     }
 }
 
 #[pyfunction]
 pub fn parse_players(py: Python<'_>, demo_path: String) -> PyResult<(Py<PyAny>)> {
-    let mut parser = Demo::new(
+    let parser = Demo::new(
         demo_path,
         false,
         vec![],

@@ -33,7 +33,7 @@ fn parse_key(key: &Key_t) -> KeyData {
         5 => return KeyData::ByteData(key.val_byte().try_into().unwrap()),
         6 => return KeyData::BoolData(key.val_bool()),
         7 => return KeyData::Uint64Data(key.val_uint64()),
-        _ => panic!("KEYDATA FAILED"),
+        _ => panic!("Unkown key type for game event key"),
     }
 }
 

@@ -40,7 +40,6 @@ class PythonDemoParser:
         self.path = file
 
     def get_props(self, props_names: list[str], ticks=[], players=[]) -> DataFrame:
-        print(type(props_names))
         if type(props_names) != list:
             raise TypeError("Wanted values should be a list not a string!")
         df = demoparser.parse_props(self.path, props_names, ticks, players)
@@ -72,12 +71,33 @@ okfiles = []
 for file in files:
         if "info" not in file:
             okfiles.append(file)
-print(okfiles)
+
+
+import struct
+
+class Bytebuffer:
+    def __init__(self, data):
+        self.data = data
+        self.index = 0
+
+    def read(self, num_bytes):
+        data = self.data[self.index:self.index + num_bytes]
+        self.index += num_bytes
+        return data
+
+    def read_int(self):
+        data = self.read(4)
+        data = struct.unpack("<I", data)[0]
+        return data
+
+    def read_short(self):
+        return struct.unpack("<H", self.read(2))[0]
+
 
 for x in okfiles:
     print(x)
     parser = PythonDemoParser(x)
-    df = parser.get_events(["m_vecOrigin_X"])
+    df = parser.get_props(["m_vecVelocity[0]", "m_szLastPlaceName", "m_vecOrigin_X"], ticks=[x for x in range(10000)])
     print(df)
 
 

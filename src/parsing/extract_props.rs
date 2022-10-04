@@ -35,7 +35,6 @@ pub fn extract_props(
                     }
                 }
             }
-
             tick_props.push(("tick".to_string(), *tick as f32));
             tick_props.push(("steamid".to_string(), wanted_steamid as f32));
             //tick_props.push(("name".to_string(), wanted_name));

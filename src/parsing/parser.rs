@@ -69,25 +69,25 @@ impl VarVec {
             PropData::F32(p) => match self {
                 VarVec::F32(f) => f.push(p),
                 _ => {
-                    println!("1WHAT")
+                    panic!("Tried to push a {:?} into a float column", item);
                 }
             },
             PropData::I32(p) => match self {
                 VarVec::I32(f) => f.push(p),
                 _ => {
-                    println!("2WHAT")
+                    panic!("Tried to push a {:?} into a i32 column", item);
                 }
             },
             PropData::I64(p) => match self {
                 VarVec::I64(f) => f.push(p),
                 _ => {
-                    println!("3WHAT")
+                    panic!("Tried to push a {:?} into a i64 column", item);
                 }
             },
             PropData::String(p) => match self {
                 VarVec::String(f) => f.push(p),
                 _ => {
-                    println!("4WHAT")
+                    panic!("Tried to push a {:?} into a string column", p);
                 }
             },
             _ => panic!("bad type for prop"),
@@ -185,7 +185,7 @@ impl Demo {
 
 fn create_type_hm() -> HashMap<String, i32> {
     let mut hm = HashMap::new();
-    let mut rdr = csv::Reader::from_path("types.csv".to_string()).unwrap();
+    let mut rdr = csv::Reader::from_path("/home/laihox/pyparser2/Python-demoparser/src/parsing/types.csv".to_string()).unwrap();
     for result in rdr.records() {
         let varname = result.as_ref().unwrap()[0].to_string();
         let t = result.as_ref().unwrap()[1].to_string();
@@ -231,9 +231,9 @@ impl Demo {
                                     match ent.props.get(prop_name) {
                                         None => {
                                             let prop_type = typehm[prop_name];
-                                            println!("{} {}", prop_name, prop_type);
-                                            if &prop_name[..3] == "m_b" {
-                                                ticks_props
+                                            match prop_type {
+                                                0 => {
+                                                    ticks_props
                                                     .entry(prop_name.to_string())
                                                     .or_insert_with(|| PropColumn {
                                                         dtype: "f32".to_string(),
@@ -241,8 +241,9 @@ impl Demo {
                                                     })
                                                     .data
                                                     .push_i32(1);
-                                            } else {
-                                                ticks_props
+                                                }
+                                                1 => {
+                                                    ticks_props
                                                     .entry(prop_name.to_string())
                                                     .or_insert_with(|| PropColumn {
                                                         dtype: "f32".to_string(),
@@ -250,10 +251,33 @@ impl Demo {
                                                     })
                                                     .data
                                                     .push_float(-1.0);
+                                                }
+                                                2 =>  {
+                                                    ticks_props
+                                                    .entry(prop_name.to_string())
+                                                    .or_insert_with(|| PropColumn {
+                                                        dtype: "f32".to_string(),
+                                                        data: VarVec::F32(Vec::new()),
+                                                    })
+                                                    .data
+                                                    .push_float(-1.0);
+                                                }
+                                                4 =>  {
+                                                    ticks_props
+                                                    .entry(prop_name.to_string())
+                                                    .or_insert_with(|| PropColumn {
+                                                        dtype: "f32".to_string(),
+                                                        data: VarVec::String(Vec::new()),
+                                                    })
+                                                    .data
+                                                    .push_string("".to_string());
+                                                }
+                                                _ => {
+                                                    println!("UNK TYPE");
+                                                }
                                             }
                                         }
                                         Some(e) => {
-                                            //println!("{:?}", e.data);
                                             ticks_props
                                                 .entry(prop_name.to_string())
                                                 .or_insert_with(|| PropColumn {
@@ -296,7 +320,6 @@ impl Demo {
                     }
                 }
             }
-
             self.parse_cmd(f.cmd);
         }
         ticks_props

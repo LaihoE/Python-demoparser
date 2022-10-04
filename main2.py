@@ -8,8 +8,5 @@ for file in files:
             okfiles.append(file)
 
 path = okfiles[0]
-props_names = ["m_vecVelocity[0]"]
-
-
-df = demoparser.parse_props(path, props_names, [], [])
-print(df)
+parser = demoparser.DemoParser(path)
+print(parser.parse_events("player_hurt"))

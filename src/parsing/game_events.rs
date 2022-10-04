@@ -227,7 +227,6 @@ impl Demo {
                     &self.players,
                     self.round,
                 );
-
                 if self.event_name.len() > 0 {
                     if match_data_to_game_event(
                         &name_data_pairs,
@@ -251,7 +250,6 @@ impl Demo {
                         })
                     }
                 }
-
                 if is_round_changed(event_desc.name()) {
                     self.round += 1;
                 }

@@ -2,12 +2,9 @@ from asyncio import events
 from typing import List
 from unicodedata import name
 import demoparser
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pyparser import PythonDemoParser
 import multiprocessing
-from sqlalchemy import create_engine
 
 
 
@@ -35,9 +32,7 @@ for x in files:
 okfiles = okfiles[:400]
 
 def first_bloods(file):
-    
-    parser = PythonDemoParser(file)
-    game_events = parser.get_events("player_hurt")
+    game_events = demoparser.parse_events(file, "player_hurt")
     return game_events
     
 

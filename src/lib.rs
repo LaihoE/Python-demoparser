@@ -30,6 +30,9 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::time::Instant;
 use std::{io, result, vec};
+use flate2::read::GzDecoder;
+use std::path::Path;
+
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
 pub(crate) fn to_py_array(py: Python, pyarrow: &PyModule, array: ArrayRef) -> PyResult<PyObject> {
@@ -61,166 +64,208 @@ pub fn rust_series_to_py_series(series: &Series) -> PyResult<PyObject> {
     Ok(out.to_object(py))
 }
 
-#[pyfunction]
-pub fn parse_events(
-    py: Python<'_>,
-    demo_path: String,
-    event_name: String,
-) -> PyResult<(Py<PyAny>)> {
+pub fn decompress_gz(bytes: Vec<u8>) -> Vec<u8> {
+    let mut gz = GzDecoder::new(&bytes[..]);
+    let mut out: Vec<u8> = vec![];
+    gz.read_to_end(&mut out).unwrap();
+    out
+}
 
-    let parser = Demo::new(
-        demo_path,
-        false,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        event_name,
-        false,
-        false,
-    );
-    match parser {
-        Err(e) => Err(PyFileNotFoundError::new_err("ERROR READING FILE")),
-        Ok(mut parser) => {
-            let h: Header = parser.parse_demo_header();
-            let data = parser.parse_frame(&vec!["".to_owned()]);
-            let mut cnt = 0;
-            let mut game_evs: Vec<FxHashMap<String, Vec<PyObject>>> = Vec::new();
-
-            // Create Hashmap with <string, pyobject> to be able to convert to python dict
-            for ge in parser.game_events {
-                let mut hm: FxHashMap<String, Vec<PyObject>> = FxHashMap::default();
-                let tuples = ge.to_py_tuples(py);
-                for (k, v) in tuples {
-                    hm.entry(k).or_insert_with(Vec::new).push(v);
-                }
-                game_evs.push(hm);
+pub fn read_file(demo_path: String) -> Result<Vec<u8>, std::io::Error> {
+    let result = std::fs::read(&demo_path);
+    match result {
+        // FILE COULD NOT BE READ
+        Err(e) => {
+            println!("{}", e);
+            Err(e)}, //panic!("The demo could not be found. Error: {}", e),
+        Ok(bytes) => {
+            let extension = Path::new(&demo_path).extension().unwrap();
+            match extension.to_str().unwrap() {
+                "gz" => Ok(decompress_gz(bytes)),
+                _ => Ok(bytes),
             }
-
-            let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
-            Ok(dict)
         }
     }
 }
 
-#[pyfunction]
-pub fn parse_props(
-    py: Python,
-    demo_path: String,
-    mut wanted_props: Vec<String>,
-    wanted_ticks: Vec<i32>,
-    wanted_players: Vec<u64>,
-) -> PyResult<PyObject> {
-    let mut parser = Demo::new(
-        demo_path,
-        true,
-        wanted_ticks,
-        wanted_players,
-        wanted_props.clone(),
-        "".to_string(),
-        false,
-        false,
-    );
-    match parser {
-        Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
-        Ok(mut parser) => {
-            let _: Header = parser.parse_demo_header();
-            let data = parser.parse_frame(&wanted_props);
+#[pyclass]
+struct DemoParser{
+    path: String,
+    bytes: Option<Vec<u8>>,
+}
 
-            wanted_props.push("tick".to_string());
-            wanted_props.push("steamid".to_string());
-            wanted_props.push("name".to_string());
-            let mut all_series = vec![];
+#[pymethods]
+impl DemoParser{
 
-            for prop_name in &wanted_props {
-                if data.contains_key(prop_name) {
-                    if let parsing::parser::VarVec::F32(data) = &data[prop_name].data {
-                        let s = Series::new(prop_name, data);
-                        let py_series = rust_series_to_py_series(&s).unwrap();
-                        all_series.push(py_series);
+    #[new]
+    pub fn py_new(demo_path: String) -> PyResult<Self>{
+        let bytes = read_file(demo_path.clone()).unwrap();
+        Ok(DemoParser{
+            path: demo_path,
+            bytes: Some(bytes)
+        })
+    }
+
+    pub fn parse_events(
+        &self,
+        py: Python<'_>,
+        event_name: String,
+    ) -> PyResult<Py<PyAny>> {
+
+        let parser = Demo::new(
+            self.bytes.as_ref().unwrap().to_vec(),
+            false,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            event_name,
+            false,
+            false,
+        );
+        match parser {
+            Err(e) => Err(PyFileNotFoundError::new_err("ERROR READING FILE")),
+            Ok(mut parser) => {
+                let _: Header = parser.parse_demo_header();
+                let _ = parser.parse_frame(&vec!["".to_owned()]);
+                let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
+
+                
+                // Create Hashmap with <string, pyobject> to be able to convert to python dict
+                for ge in parser.game_events {
+                    let mut hm: FxHashMap<String, PyObject> = FxHashMap::default();
+                    let tuples = ge.to_py_tuples(py);
+                    for (k, v) in tuples {
+                        hm.insert(k, v);
                     }
-                    if let parsing::parser::VarVec::String(data) = &data[prop_name].data {
-                        let s = Series::new(prop_name, data);
-                        let py_series = rust_series_to_py_series(&s).unwrap();
-                        all_series.push(py_series);
-                    }
-                    if let parsing::parser::VarVec::I32(data) = &data[prop_name].data {
-                        let s = Series::new(prop_name, data);
-                        let py_series = rust_series_to_py_series(&s).unwrap();
-                        all_series.push(py_series);
-                    }
-                } else {
-                    println!("{:?} NOT FOUND !!!", prop_name);
+                    game_evs.push(hm);
                 }
+                
+
+                let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
+
+                Ok(dict)
             }
-            let polars = py.import("polars")?;
-            let all_series_py = all_series.to_object(py);
-            let df = polars.call_method1("DataFrame", (all_series_py,))?;
-            df.setattr("columns", wanted_props.to_object(py)).unwrap();
-            let pandas_df = df.call_method0("to_pandas").unwrap();
-            Ok(pandas_df.to_object(py))
         }
     }
-}
 
-#[pyfunction]
-pub fn parse_players(py: Python<'_>, demo_path: String) -> PyResult<(Py<PyAny>)> {
-    let parser = Demo::new(
-        demo_path,
-        false,
-        vec![],
-        vec![],
-        vec![],
-        "".to_string(),
-        true,
-        false,
-    );
-    match parser {
-        Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
-        Ok(mut parser) => {
-            let _: Header = parser.parse_demo_header();
-            let _ = parser.parse_frame(&vec![]);
-            let players = parser.players;
-            let mut py_players = vec![];
-            for player in players {
-                if player.xuid > 76500000000000000 && player.xuid < 76600000000000000 {
-                    py_players.push(player.to_py_hashmap(py));
+    pub fn parse_props(
+        &self,
+        py: Python,
+        mut wanted_props: Vec<String>,
+        wanted_ticks: Vec<i32>,
+        wanted_players: Vec<u64>,
+    ) -> PyResult<PyObject> {
+        let mut parser = Demo::new(
+            self.bytes.as_ref().unwrap().to_vec(),
+            true,
+            wanted_ticks,
+            wanted_players,
+            wanted_props.clone(),
+            "".to_string(),
+            false,
+            false,
+        );
+        match parser {
+            Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
+            Ok(mut parser) => {
+                let _: Header = parser.parse_demo_header();
+                let data = parser.parse_frame(&wanted_props);
+
+                wanted_props.push("tick".to_string());
+                wanted_props.push("steamid".to_string());
+                wanted_props.push("name".to_string());
+                let mut all_series = vec![];
+
+                for prop_name in &wanted_props {
+                    if data.contains_key(prop_name) {
+                        if let parsing::parser::VarVec::F32(data) = &data[prop_name].data {
+                            let s = Series::new(prop_name, data);
+                            let py_series = rust_series_to_py_series(&s).unwrap();
+                            all_series.push(py_series);
+                        }
+                        if let parsing::parser::VarVec::String(data) = &data[prop_name].data {
+                            let s = Series::new(prop_name, data);
+                            let py_series = rust_series_to_py_series(&s).unwrap();
+                            all_series.push(py_series);
+                        }
+                        if let parsing::parser::VarVec::I32(data) = &data[prop_name].data {
+                            let s = Series::new(prop_name, data);
+                            let py_series = rust_series_to_py_series(&s).unwrap();
+                            all_series.push(py_series);
+                        }
+                    } else {
+                        println!("{:?} NOT FOUND !!!", prop_name);
+                    }
                 }
+                let polars = py.import("polars")?;
+                let all_series_py = all_series.to_object(py);
+                let df = polars.call_method1("DataFrame", (all_series_py,))?;
+                df.setattr("columns", wanted_props.to_object(py)).unwrap();
+                let pandas_df = df.call_method0("to_pandas").unwrap();
+                Ok(pandas_df.to_object(py))
             }
-            //let py_players = players[0].to_py_hashmap(py)
-            let dict = pyo3::Python::with_gil(|py| py_players.to_object(py));
-            Ok(dict)
+        }
+    }
+
+    pub fn parse_players(&self, py: Python<'_>) -> PyResult<(Py<PyAny>)> {
+        let parser = Demo::new(
+            self.bytes.as_ref().unwrap().to_vec(),
+            false,
+            vec![],
+            vec![],
+            vec![],
+            "".to_string(),
+            true,
+            false,
+        );
+        match parser {
+            Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
+            Ok(mut parser) => {
+                let _: Header = parser.parse_demo_header();
+                let _ = parser.parse_frame(&vec![]);
+                let players = parser.players;
+                let mut py_players = vec![];
+                for player in players {
+                    if player.xuid > 76500000000000000 && player.xuid < 76600000000000000 {
+                        py_players.push(player.to_py_hashmap(py));
+                    }
+                }
+                let dict = pyo3::Python::with_gil(|py| py_players.to_object(py));
+                Ok(dict)
+            }
+        }
+    }
+
+    pub fn parse_header(&self, py: Python<'_>) -> PyResult<(Py<PyAny>)> {
+        let mut parser = Demo::new(
+            self.bytes.as_ref().unwrap().to_vec(),
+            false,
+            vec![],
+            vec![],
+            vec![],
+            "".to_string(),
+            true,
+            false,
+        );
+        match parser {
+            Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
+            Ok(mut parser) => {
+                let h: Header = parser.parse_demo_header();
+                let dict = h.to_py_hashmap(py);
+                Ok(dict)
+            }
         }
     }
 }
 
-#[pyfunction]
-pub fn parse_header(py: Python<'_>, demo_path: String) -> PyResult<(Py<PyAny>)> {
-    let mut parser = Demo::new(
-        demo_path,
-        false,
-        vec![],
-        vec![],
-        vec![],
-        "".to_string(),
-        true,
-        false,
-    );
-    match parser {
-        Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
-        Ok(mut parser) => {
-            let h: Header = parser.parse_demo_header();
-            let dict = h.to_py_hashmap(py);
-            Ok(dict)
-        }
-    }
-}
 
 #[pymodule]
 fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(parse_events, m)?)?;
-    m.add_function(wrap_pyfunction!(parse_props, m)?)?;
-    m.add_function(wrap_pyfunction!(parse_players, m)?)?;
-    m.add_function(wrap_pyfunction!(parse_header, m)?)?;
+    m.add_class::<DemoParser>()?;
+    //m.add_function(wrap_pyfunction!(parse_events, m)?)?;
+    //m.add_function(wrap_pyfunction!(parse_props, m)?)?;
+    //m.add_function(wrap_pyfunction!(parse_players, m)?)?;
+    //m.add_function(wrap_pyfunction!(parse_header, m)?)?;
     // parse(py, demo_name, props_names, out_arr);
     return Ok(());
 }

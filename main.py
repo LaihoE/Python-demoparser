@@ -33,7 +33,7 @@ def clean_events(events):
         for k,v in events[i].items():
             subd[k] = v[0]
         cleaned_events.append(subd)
-    return cleaned_events
+    return [dict(sorted(game_event.items())) for game_event in cleaned_events]
 
 class PythonDemoParser:
     def __init__(self, file: str) -> None:

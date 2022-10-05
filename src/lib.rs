@@ -13,6 +13,7 @@ use parsing::parser::Demo;
 //use polars::series::Series;
 use crate::parsing::stringtables::UserInfo;
 use arrow::ffi;
+use flate2::read::GzDecoder;
 use polars::prelude::*;
 use polars_arrow::export::arrow;
 use pyo3::exceptions::PyFileNotFoundError;
@@ -28,11 +29,9 @@ use pyo3::{PyErr, Python};
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::Path;
 use std::time::Instant;
 use std::{io, result, vec};
-use flate2::read::GzDecoder;
-use std::path::Path;
-
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
 pub(crate) fn to_py_array(py: Python, pyarrow: &PyModule, array: ArrayRef) -> PyResult<PyObject> {
@@ -77,7 +76,8 @@ pub fn read_file(demo_path: String) -> Result<Vec<u8>, std::io::Error> {
         // FILE COULD NOT BE READ
         Err(e) => {
             println!("{}", e);
-            Err(e)}, //panic!("The demo could not be found. Error: {}", e),
+            Err(e)
+        } //panic!("The demo could not be found. Error: {}", e),
         Ok(bytes) => {
             let extension = Path::new(&demo_path).extension().unwrap();
             match extension.to_str().unwrap() {
@@ -89,29 +89,23 @@ pub fn read_file(demo_path: String) -> Result<Vec<u8>, std::io::Error> {
 }
 
 #[pyclass]
-struct DemoParser{
+struct DemoParser {
     path: String,
     bytes: Option<Vec<u8>>,
 }
 
 #[pymethods]
-impl DemoParser{
-
+impl DemoParser {
     #[new]
-    pub fn py_new(demo_path: String) -> PyResult<Self>{
+    pub fn py_new(demo_path: String) -> PyResult<Self> {
         let bytes = read_file(demo_path.clone()).unwrap();
-        Ok(DemoParser{
+        Ok(DemoParser {
             path: demo_path,
-            bytes: Some(bytes)
+            bytes: Some(bytes),
         })
     }
 
-    pub fn parse_events(
-        &self,
-        py: Python<'_>,
-        event_name: String,
-    ) -> PyResult<Py<PyAny>> {
-
+    pub fn parse_events(&self, py: Python<'_>, event_name: String) -> PyResult<Py<PyAny>> {
         let parser = Demo::new(
             self.bytes.as_ref().unwrap().to_vec(),
             false,
@@ -129,7 +123,6 @@ impl DemoParser{
                 let _ = parser.parse_frame(&vec!["".to_owned()]);
                 let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
 
-                
                 // Create Hashmap with <string, pyobject> to be able to convert to python dict
                 for ge in parser.game_events {
                     let mut hm: FxHashMap<String, PyObject> = FxHashMap::default();
@@ -139,7 +132,6 @@ impl DemoParser{
                     }
                     game_evs.push(hm);
                 }
-                
 
                 let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
 
@@ -147,7 +139,10 @@ impl DemoParser{
             }
         }
     }
-
+    #[args(
+        wanted_ticks = Vec::new(),
+        wanted_players = Vec::new(),
+    )]
     pub fn parse_props(
         &self,
         py: Python,
@@ -257,7 +252,6 @@ impl DemoParser{
         }
     }
 }
-
 
 #[pymodule]
 fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {

@@ -156,6 +156,7 @@ impl Demo {
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
+                        self.wanted_ent_ids.push(ui.entity_id.clone());
                         self.players.push(ui);
                     }
                 } else {
@@ -170,6 +171,7 @@ impl Demo {
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
+                        self.wanted_ent_ids.push(ui.entity_id.clone());
                         self.players.push(ui);
                     }
                 }
@@ -267,13 +269,14 @@ impl Demo {
                     user_data = buf.read_bits_st(st.uds);
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
-                            ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
-                            if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
-                                self.players_connected += 1;
-                            }
-                            ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
-                            ui.name = ui.name.trim_end_matches("\x00").to_string();
-                            self.players.push(ui);
+                        ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
+                        if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
+                            self.players_connected += 1;
+                        }
+                        ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
+                        ui.name = ui.name.trim_end_matches("\x00").to_string();
+                        self.wanted_ent_ids.push(ui.entity_id.clone());
+                        self.players.push(ui);
                     }
                 } else {
                     let size = buf.read_nbits(14);
@@ -286,18 +289,19 @@ impl Demo {
                             match temp_id {
                                 Err(e) => ui.entity_id = 99999,
                                 Ok(ok) => {
-                                    ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
+                                    ui.entity_id =
+                                        (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
                                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                                         self.players_connected += 1;
                                     }
-                                    ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
+                                    ui.friends_name =
+                                        ui.friends_name.trim_end_matches("\x00").to_string();
                                     ui.name = ui.name.trim_end_matches("\x00").to_string();
+                                    self.wanted_ent_ids.push(ui.entity_id.clone());
                                     self.players.push(ui);
                                 }
                             }
                         }
-
-                        
                     }
                 }
                 if history.len() == 32 {

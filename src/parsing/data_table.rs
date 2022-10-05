@@ -1,14 +1,31 @@
 use crate::parsing::entities::Prop;
+use crate::parsing::game_events::HurtEvent;
+use crate::parsing::read_bits::BitReader;
+use crate::parsing::read_bits::PropAtom;
+use crate::parsing::read_bits::PropData;
 use crate::Demo;
+
+use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
+use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
+
+use fxhash::FxHashMap;
+use hashbrown::HashMap;
+use protobuf;
 use protobuf::Message;
+
+use std::collections::HashSet;
+use std::convert::TryInto;
+use std::io;
+use std::rc::Rc;
+use std::vec;
 
 #[derive(Debug)]
 pub struct ServerClass {
     pub id: u16,
     pub name: String,
     pub dt: String,
-    pub fprops: Option<Vec<Prop>>,
+    pub fprops: Vec<Prop>,
 }
 
 impl Demo {
@@ -50,14 +67,135 @@ impl Demo {
             if self.parse_props {
                 let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt]);
 
-                let server_class = ServerClass {
-                    id: my_id,
-                    name: name,
-                    dt: dt,
-                    fprops: Some(props),
-                };
-                self.serverclass_map.insert(my_id, server_class);
+                self.serverclass_map.insert(
+                    my_id,
+                    ServerClass {
+                        id: my_id,
+                        name: name,
+                        dt: dt,
+                        fprops: props,
+                    },
+                );
             }
         }
+    }
+    pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> Vec<Sendprop_t> {
+        let mut excl = vec![];
+
+        for prop in &table.props {
+            if prop.flags() & (1 << 6) != 0 {
+                excl.push(prop.clone());
+            }
+
+            if prop.type_() == 6 {
+                let sub_table = &self.dt_map.as_ref().unwrap()[prop.dt_name()];
+                excl.extend(self.get_excl_props(&sub_table.clone()));
+            }
+        }
+        excl
+    }
+
+    pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
+        let excl = self.get_excl_props(table);
+        let mut newp = self.get_props(table, &excl);
+        let mut prios = vec![];
+        for p in &newp {
+            prios.push(p.prop.priority());
+        }
+
+        let set: HashSet<_> = prios.drain(..).collect();
+        prios.extend(set.into_iter());
+        prios.push(64);
+        prios.sort();
+        let mut start = 0;
+
+        for prio_inx in 0..prios.len() {
+            let priority = prios[prio_inx];
+            loop {
+                let mut currentprop = start;
+                while currentprop < newp.len() {
+                    let prop = newp[currentprop].prop.clone();
+                    if prop.priority() == priority
+                        || priority == 64 && ((prop.flags() & (1 << 18)) != 0)
+                    {
+                        if start != currentprop {
+                            newp.swap(start, currentprop);
+                        }
+                        start += 1;
+                    }
+                    currentprop += 1;
+                }
+                if currentprop == newp.len() {
+                    break;
+                }
+            }
+        }
+        newp
+    }
+
+    #[inline]
+    pub fn is_prop_excl(
+        &self,
+        excl: &Vec<Sendprop_t>,
+        table: &CSVCMsg_SendTable,
+        prop: &Sendprop_t,
+    ) -> bool {
+        for item in excl {
+            if table.net_table_name() == item.dt_name() && prop.var_name() == item.var_name() {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
+        let mut flat: Vec<Prop> = Vec::new();
+        let mut child_props = Vec::new();
+        let mut cnt = 0;
+        for prop in &table.props {
+            if (prop.flags() & (1 << 8) != 0)
+                || (prop.flags() & (1 << 6) != 0)
+                || self.is_prop_excl(excl, &table, prop)
+            {
+                continue;
+            }
+
+            if prop.type_() == 6 {
+                let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
+                child_props = self.get_props(sub_table, excl);
+
+                if (prop.flags() & (1 << 11)) == 0 {
+                    for mut p in child_props {
+                        p.col = 0;
+                        flat.push(p);
+                    }
+                } else {
+                    for p in child_props {
+                        flat.push(p);
+                    }
+                }
+            } else if prop.type_() == 5 {
+                let prop_arr = Prop {
+                    prop: prop.clone(),
+                    arr: Some(table.props[cnt].clone()),
+                    table: table.clone(),
+                    col: 1,
+                    data: None,
+                };
+                flat.push(prop_arr);
+            } else {
+                let prop = Prop {
+                    prop: prop.clone(),
+                    arr: None,
+                    table: table.clone(),
+                    col: 1,
+                    data: None,
+                };
+                flat.push(prop);
+            }
+            cnt += 1;
+        }
+        flat.sort_by_key(|x| x.col);
+        return flat;
     }
 }

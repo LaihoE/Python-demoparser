@@ -10,6 +10,7 @@ use csgoproto::netmessages::*;
 use fxhash::FxHashMap;
 use hashbrown::HashMap;
 use hashbrown::HashSet;
+use phf::phf_map;
 use protobuf;
 use protobuf::Message;
 use std::io::Read;
@@ -59,6 +60,7 @@ pub struct Demo {
     pub players_connected: i32,
     pub only_players: bool,
     pub only_header: bool,
+    pub wanted_ent_ids: Vec<u32>,
 }
 
 impl VarVec {
@@ -67,19 +69,19 @@ impl VarVec {
             PropData::F32(p) => match self {
                 VarVec::F32(f) => f.push(p),
                 _ => {
-                    panic!("Tried to push a {:?} into a float column", item);
+                    panic!("Tried to push a {:?} into a {:?} column", item, self);
                 }
             },
             PropData::I32(p) => match self {
                 VarVec::I32(f) => f.push(p),
                 _ => {
-                    panic!("Tried to push a {:?} into a i32 column", item);
+                    panic!("Tried to push a {:?} into a {:?} column", item, self);
                 }
             },
             PropData::I64(p) => match self {
                 VarVec::I64(f) => f.push(p),
                 _ => {
-                    panic!("Tried to push a {:?} into a i64 column", item);
+                    panic!("Tried to push a {:?} into a {:?} column", item, self);
                 }
             },
             PropData::String(p) => match self {
@@ -117,13 +119,31 @@ impl Demo {
         parse_props: bool,
         wanted_ticks: Vec<i32>,
         wanted_players: Vec<u64>,
-        wanted_props: Vec<String>,
+        mut wanted_props: Vec<String>,
         event_name: String,
         only_players: bool,
         only_header: bool,
     ) -> Result<Self, std::io::Error> {
-        //let bytes = Demo::read_file(demo_path);
+        let mut extra_wanted_props = vec![];
+        for p in &wanted_props {
+            match TYPEHM.get(&p) {
+                Some(n) => {
+                    if &p[(p.len() - 1)..] == "X" {
+                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
+                    } else if &p[(p.len() - 1)..] == "Y" {
+                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
+                    } else if &p[(p.len() - 1)..] == "Z" {
+                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
+                    }
+                }
+                None => {
+                    panic!("Prop: {} not found", p);
+                }
+            }
+        }
+        wanted_props.extend(extra_wanted_props);
         Ok(Self {
+            wanted_ent_ids: Vec::new(),
             bytes: bytes,
             fp: 0,
             cmd: 0,
@@ -152,28 +172,12 @@ impl Demo {
     }
 }
 
-fn create_type_hm() -> HashMap<String, i32> {
-    let mut hm = HashMap::new();
-    let mut rdr = csv::Reader::from_path(
-        "/home/laihox/pyparser2/Python-demoparser/src/parsing/types.csv".to_string(),
-    )
-    .unwrap();
-    for result in rdr.records() {
-        let varname = result.as_ref().unwrap()[0].to_string();
-        let t = result.as_ref().unwrap()[1].to_string();
-        hm.insert(varname, t.parse::<i32>().unwrap());
-    }
-    hm
-}
-
 impl Demo {
     pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, PropColumn> {
         let mut ticks_props: FxHashMap<String, PropColumn> = FxHashMap::default();
-        let typehm = create_type_hm();
         while self.fp < self.bytes.len() as usize {
             let f = self.read_frame_bytes();
             self.tick = f.tick;
-
             // EARLY EXITS
             if self.only_players {
                 if Demo::all_players_connected(self.players_connected) {
@@ -184,6 +188,10 @@ impl Demo {
                 break;
             }
             for player in &self.players {
+                if player.xuid == 0 {
+                    continue;
+                };
+
                 if self.wanted_ticks.contains(&self.tick) || self.wanted_ticks.len() == 0 {
                     if self.wanted_players.contains(&player.xuid) || self.wanted_players.len() == 0
                     {
@@ -199,9 +207,9 @@ impl Demo {
                                     .unwrap();
 
                                 for prop_name in props_names {
+                                    let prop_type = TYPEHM[prop_name];
                                     match ent.props.get(prop_name) {
                                         None => {
-                                            let prop_type = typehm[prop_name];
                                             match prop_type {
                                                 // INT
                                                 0 => {
@@ -209,10 +217,12 @@ impl Demo {
                                                         .entry(prop_name.to_string())
                                                         .or_insert_with(|| PropColumn {
                                                             dtype: "f32".to_string(),
-                                                            data: VarVec::I32(Vec::new()),
+                                                            data: VarVec::I32(Vec::with_capacity(
+                                                                100000,
+                                                            )),
                                                         })
                                                         .data
-                                                        .push_i32(1);
+                                                        .push_i32(-1);
                                                 }
                                                 // FLOAT
                                                 1 => {
@@ -220,7 +230,9 @@ impl Demo {
                                                         .entry(prop_name.to_string())
                                                         .or_insert_with(|| PropColumn {
                                                             dtype: "f32".to_string(),
-                                                            data: VarVec::F32(Vec::new()),
+                                                            data: VarVec::F32(Vec::with_capacity(
+                                                                100000,
+                                                            )),
                                                         })
                                                         .data
                                                         .push_float(-1.0);
@@ -231,7 +243,9 @@ impl Demo {
                                                         .entry(prop_name.to_string())
                                                         .or_insert_with(|| PropColumn {
                                                             dtype: "f32".to_string(),
-                                                            data: VarVec::F32(Vec::new()),
+                                                            data: VarVec::F32(Vec::with_capacity(
+                                                                100000,
+                                                            )),
                                                         })
                                                         .data
                                                         .push_float(-1.0);
@@ -242,7 +256,9 @@ impl Demo {
                                                         .entry(prop_name.to_string())
                                                         .or_insert_with(|| PropColumn {
                                                             dtype: "f32".to_string(),
-                                                            data: VarVec::String(Vec::new()),
+                                                            data: VarVec::String(
+                                                                Vec::with_capacity(100000),
+                                                            ),
                                                         })
                                                         .data
                                                         .push_string("".to_string());
@@ -252,16 +268,45 @@ impl Demo {
                                                 }
                                             }
                                         }
-                                        Some(e) => {
-                                            ticks_props
-                                                .entry(prop_name.to_string())
-                                                .or_insert_with(|| PropColumn {
-                                                    dtype: "f32".to_string(),
-                                                    data: VarVec::F32(Vec::new()),
-                                                })
-                                                .data
-                                                .push_propdata(e.data.clone());
-                                        }
+                                        Some(e) => match prop_type {
+                                            0 => {
+                                                ticks_props
+                                                    .entry(prop_name.to_string())
+                                                    .or_insert_with(|| PropColumn {
+                                                        dtype: "f32".to_string(),
+                                                        data: VarVec::I32(Vec::with_capacity(
+                                                            100000,
+                                                        )),
+                                                    })
+                                                    .data
+                                                    .push_propdata(e.data.clone());
+                                            }
+                                            1 => {
+                                                ticks_props
+                                                    .entry(prop_name.to_string())
+                                                    .or_insert_with(|| PropColumn {
+                                                        dtype: "f32".to_string(),
+                                                        data: VarVec::F32(Vec::with_capacity(
+                                                            100000,
+                                                        )),
+                                                    })
+                                                    .data
+                                                    .push_propdata(e.data.clone());
+                                            }
+                                            4 => {
+                                                ticks_props
+                                                    .entry(prop_name.to_string())
+                                                    .or_insert_with(|| PropColumn {
+                                                        dtype: "f32".to_string(),
+                                                        data: VarVec::String(Vec::with_capacity(
+                                                            100000,
+                                                        )),
+                                                    })
+                                                    .data
+                                                    .push_propdata(e.data.clone());
+                                            }
+                                            _ => panic!("UNKOWN PROP TYPE"),
+                                        },
                                     }
                                 }
                                 // EXTRA
@@ -269,7 +314,7 @@ impl Demo {
                                     .entry("tick".to_string())
                                     .or_insert_with(|| PropColumn {
                                         dtype: "i32".to_string(),
-                                        data: VarVec::String(vec![]),
+                                        data: VarVec::String(Vec::with_capacity(100000)),
                                     })
                                     .data
                                     .push_string(self.tick.to_string());
@@ -278,7 +323,7 @@ impl Demo {
                                     .entry("steamid".to_string())
                                     .or_insert_with(|| PropColumn {
                                         dtype: "u64".to_string(),
-                                        data: VarVec::String(vec![]),
+                                        data: VarVec::String(Vec::with_capacity(100000)),
                                     })
                                     .data
                                     .push_string(player.xuid.to_string());
@@ -286,7 +331,7 @@ impl Demo {
                                     .entry("name".to_string())
                                     .or_insert_with(|| PropColumn {
                                         dtype: "u64".to_string(),
-                                        data: VarVec::String(vec![]),
+                                        data: VarVec::String(Vec::with_capacity(100000)),
                                     })
                                     .data
                                     .push_string(player.name.to_string());
@@ -407,3 +452,162 @@ impl Demo {
         }
     }
 }
+
+pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
+    "m_flNextAttack" => 1,
+    "m_bDuckOverride" => 0,
+    "m_flStamina" => 1,
+    "m_flVelocityModifier" => 1,
+    "m_iShotsFired" => 0,
+    "m_nQuestProgressReason" => 0,
+    "m_vecOrigin" => 2,
+    "m_vecOrigin_X" => 1,
+    "m_vecOrigin_Y" => 1,
+    "m_vecOrigin[2]" => 1,
+    "m_aimPunchAngle" => 2,
+    "m_aimPunchAngle_X" => 1,
+    "m_aimPunchAngle_Y" => 1,
+    "m_aimPunchAngleVel" => 2,
+    "m_aimPunchAngleVel_X" => 1,
+    "m_aimPunchAngleVel_Y" => 1,
+    "m_audio.soundscapeIndex" => 0,
+    "m_bDucked" => 0,
+    "m_bDucking" => 0,
+    "m_bWearingSuit" => 0,
+    "m_chAreaBits.000" => 0,
+    "m_chAreaBits.001" => 0,
+    "m_chAreaPortalBits.002" => 0,
+    "m_flFOVRate" => 1,
+    "m_flFallVelocity" => 1,
+    "m_flLastDuckTime" => 1,
+    "m_viewPunchAngle" => 2,
+    "m_viewPunchAngle_X" => 1,
+    "m_viewPunchAngle_Y" => 1,
+    "m_flDeathTime" => 1,
+    "m_flNextDecalTime" => 1,
+    "m_hLastWeapon" => 0,
+    "m_hTonemapController" => 0,
+    "m_nNextThinkTick" => 0,
+    "m_nTickBase" => 0,
+    "m_vecBaseVelocity" => 2,
+    "m_vecBaseVelocity_X" => 1,
+    "m_vecBaseVelocity_Y" => 1,
+    "m_vecVelocity[0]" => 1,
+    "m_vecVelocity[1]" => 1,
+    "m_vecVelocity[2]" => 1,
+    "m_vecViewOffset[2]" => 1,
+    "m_ArmorValue" => 0,
+    "m_usSolidFlags" => 0,
+    "m_vecMaxs" => 2,
+    "m_vecMaxs_X" => 1,
+    "m_vecMaxs_Y" => 1,
+    "m_vecMins" => 2,
+    "m_vecMins_X" => 1,
+    "m_vecMins_Y" => 1,
+    "m_LastHitGroup" => 0,
+    "m_afPhysicsFlags" => 0,
+    "m_angEyeAngles[0]" => 1,
+    "m_angEyeAngles[1]" => 1,
+    "m_bAnimatedEveryTick" => 0,
+    "m_bClientSideRagdoll" => 0,
+    "m_bHasDefuser" => 0,
+    "m_bHasHelmet" => 0,
+    "m_bHasMovedSinceSpawn" => 0,
+    "m_bInBombZone" => 0,
+    "m_bInBuyZone" => 0,
+    "m_bIsDefusing" => 0,
+    "m_bIsHoldingLookAtWeapon" => 0,
+    "m_bIsLookingAtWeapon" => 0,
+    "m_bIsScoped" => 0,
+    "m_bIsWalking" => 0,
+    "m_bResumeZoom" => 0,
+    "m_bSpotted" => 0,
+    "m_bSpottedByMask.000" => 0,
+    "m_bStrafing" => 0,
+    "m_bWaitForNoAttack" => 0,
+    "m_fEffects" => 0,
+    "m_fFlags" => 0,
+    "m_fMolotovDamageTime" => 1,
+    "m_fMolotovUseTime" => 1,
+    "m_flDuckAmount" => 1,
+    "m_flDuckSpeed" => 1,
+    "m_flFOVTime" => 1,
+    "m_flFlashDuration" => 1,
+    "m_flFlashMaxAlpha" => 1,
+    "m_flGroundAccelLinearFracLastTime" => 1,
+    "m_flLastMadeNoiseTime" => 1,
+    "m_flLowerBodyYawTarget" => 1,
+    "m_flProgressBarStartTime" => 1,
+    "m_flSimulationTime" => 0,
+    "m_flThirdpersonRecoil" => 1,
+    "m_flTimeOfLastInjury" => 1,
+    "m_hActiveWeapon" => -1,
+    "m_hColorCorrectionCtrl" => 0,
+    "m_hGroundEntity" => 0,
+    "m_hMyWeapons.000" => 0,
+    "m_hMyWeapons.001" => 0,
+    "m_hMyWeapons.002" => 0,
+    "m_hMyWeapons.003" => 0,
+    "m_hMyWeapons.004" => 0,
+    "m_hMyWeapons.005" => 0,
+    "m_hMyWeapons.006" => 0,
+    "m_hMyWeapons.007" => 0,
+    "m_hMyWeapons.008" => 0,
+    "m_hObserverTarget" => 0,
+    "m_hPlayerPing" => 0,
+    "m_hPostProcessCtrl" => 0,
+    "m_hRagdoll" => 0,
+    "m_hViewModel" => 5,
+    "m_hZoomOwner" => 0,
+    "m_iAccount" => 0,
+    "m_iAddonBits" => 0,
+    "m_iAmmo.014" => 0,
+    "m_iAmmo.015" => 0,
+    "m_iAmmo.016" => 0,
+    "m_iAmmo.017" => 0,
+    "m_iAmmo.018" => 0,
+    "m_iClass" => 0,
+    "m_iDeathPostEffect" => 0,
+    "m_iFOV" => 0,
+    "m_iFOVStart" => 0,
+    "m_iHealth" => 0,
+    "m_iMoveState" => 0,
+    "m_iNumRoundKills" => 0,
+    "m_iNumRoundKillsHeadshots" => 0,
+    "m_iObserverMode" => 0,
+    "m_iPendingTeamNum" => 0,
+    "m_iPlayerState" => 0,
+    "m_iPrimaryAddon" => 0,
+    "m_iProgressBarDuration" => 0,
+    "m_iSecondaryAddon" => 0,
+    "m_iStartAccount" => 0,
+    "m_iTeamNum" => 0,
+    "m_lifeState" => 0,
+    "m_nForceBone" => 0,
+    "m_nHeavyAssaultSuitCooldownRemaining" => 0,
+    "m_nLastConcurrentKilled" => 0,
+    "m_nLastKillerIndex" => 0,
+    "m_nModelIndex" => 0,
+    "m_nRelativeDirectionOfLastInjury" => 0,
+    "m_nWaterLevel" => 0,
+    "m_rank.005" => 0,
+    "m_szLastPlaceName" => 4,
+    "m_totalHitsOnServer" => 0,
+    "m_ubEFNoInterpParity" => 0,
+    "m_unCurrentEquipmentValue" => 0,
+    "m_unFreezetimeEndEquipmentValue" => 0,
+    "m_unMusicID" => 0,
+    "m_unRoundStartEquipmentValue" => 0,
+    "m_unTotalRoundDamageDealt" => 0,
+    "m_vecForce" => 2,
+    "m_vecForce_X" => 1,
+    "m_vecForce_Y" => 1,
+    "m_vecLadderNormal" => 2,
+    "m_vecLadderNormal_X" => 1,
+    "m_vecLadderNormal_Y" => 1,
+    "m_vecPlayerPatchEconIndices.002" => 0,
+    "movetype" => 0,
+    "pl.deadflag" => 0,
+    "m_bSilencerOn" => 0,
+    "m_bReloadVisuallyComplete" => 1,
+};

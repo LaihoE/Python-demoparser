@@ -35,9 +35,9 @@ jemallocator = "0.3.2"
 overflow-checks = false
 
 [profile.release]
-opt-level = 3
+opt-level = 1
 #lto = "fat"
 #codegen-units = 1
-panic = "abort"
-jemallocator = "0.3.2"
-debug = true
+#panic = "abort"
+#jemallocator = "0.3.2"
+#debug = true

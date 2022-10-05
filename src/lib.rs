@@ -139,10 +139,7 @@ impl DemoParser {
             }
         }
     }
-    #[args(
-        wanted_ticks = Vec::new(),
-        wanted_players = Vec::new(),
-    )]
+
     pub fn parse_props(
         &self,
         py: Python,

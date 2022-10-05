@@ -30,7 +30,7 @@ jobs:
       with:
         command: publish
         target: ${{ matrix.target }}
-        args: -i ${{ matrix.python-version }} --username ${{ secrets.PYPI_USERNAME }} --password ${{ secrets.PYPI_USERNAME }}
+        args: -i ${{ matrix.python-version }} --username ${{ secrets.PYPI_USERNAME }} --password ${{ secrets.PYPI_PASSWORD }}
 
     - name: Set up Python
       uses: actions/setup-python@v3

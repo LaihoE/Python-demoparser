@@ -1,16 +1,11 @@
-use std::any::Any;
-
+use super::stringtables::UserInfo;
 use crate::Demo;
 use csgoproto::netmessages::csvcmsg_game_event::Key_t;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
-use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
 use hashbrown::HashMap;
-use protobuf::Message;
 use pyo3::prelude::*;
-
-use super::stringtables::UserInfo;
 
 #[derive(Debug, Default)]
 pub struct HurtEvent {
@@ -38,7 +33,7 @@ fn parse_key(key: &Key_t) -> KeyData {
 }
 
 fn parse_key_steamid(key: &Key_t, players: &Vec<UserInfo>) -> KeyData {
-    let mut ent_id = key.val_short();
+    let ent_id = key.val_short();
     for player in players {
         if player.entity_id as i32 == ent_id {
             match key.type_() {
@@ -54,7 +49,7 @@ fn parse_key_steamid(key: &Key_t, players: &Vec<UserInfo>) -> KeyData {
 }
 
 fn parse_key_steam_name(key: &Key_t, players: &Vec<UserInfo>) -> KeyData {
-    let mut ent_id = key.val_short();
+    let ent_id = key.val_short();
     for player in players {
         if player.entity_id as i32 == ent_id {
             match key.type_() {
@@ -169,7 +164,7 @@ pub fn gen_name_val_pairs(
                 });
             }
             _ => {
-                let mut val = parse_key(ge);
+                let val = parse_key(ge);
                 kv_pairs.push(NameDataPair {
                     name: desc.name().to_owned(),
                     data: val,
@@ -193,11 +188,7 @@ pub fn gen_name_val_pairs(
     kv_pairs
 }
 
-pub fn match_data_to_game_event(
-    namedatavec: &Vec<NameDataPair>,
-    event_name: &str,
-    wanted: &String,
-) -> bool {
+pub fn match_data_to_game_event(event_name: &str, wanted: &String) -> bool {
     if event_name.contains(wanted) {
         return true;
     } else {
@@ -228,11 +219,7 @@ impl Demo {
                     self.round,
                 );
                 if self.event_name.len() > 0 {
-                    if match_data_to_game_event(
-                        &name_data_pairs,
-                        event_desc.name(),
-                        &self.event_name,
-                    ) {
+                    if match_data_to_game_event(event_desc.name(), &self.event_name) {
                         game_events.push({
                             GameEvent {
                                 name: event_desc.name().to_owned(),

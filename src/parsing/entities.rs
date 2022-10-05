@@ -1,5 +1,4 @@
 use crate::parsing::data_table::ServerClass;
-use crate::parsing::game_events::HurtEvent;
 use crate::parsing::read_bits::BitReader;
 use crate::parsing::read_bits::PropAtom;
 use crate::parsing::read_bits::PropData;
@@ -7,15 +6,8 @@ use crate::Demo;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
-use fxhash::FxHashMap;
 use hashbrown::HashMap;
-use protobuf;
-use protobuf::Message;
-use std::collections::HashSet;
 use std::convert::TryInto;
-use std::io;
-use std::rc::Rc;
-use std::vec;
 
 #[derive(Debug)]
 pub struct Entity {

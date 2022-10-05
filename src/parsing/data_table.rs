@@ -1,23 +1,10 @@
 use crate::parsing::entities::Prop;
-use crate::parsing::game_events::HurtEvent;
-use crate::parsing::read_bits::BitReader;
-use crate::parsing::read_bits::PropAtom;
-use crate::parsing::read_bits::PropData;
 use crate::Demo;
-
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
-use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
-
-use fxhash::FxHashMap;
-use hashbrown::HashMap;
 use protobuf;
 use protobuf::Message;
-
 use std::collections::HashSet;
-use std::convert::TryInto;
-use std::io;
-use std::rc::Rc;
 use std::vec;
 
 #[derive(Debug)]
@@ -150,7 +137,6 @@ impl Demo {
 
     pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
         let mut flat: Vec<Prop> = Vec::new();
-        let mut child_props = Vec::new();
         let mut cnt = 0;
         for prop in &table.props {
             if (prop.flags() & (1 << 8) != 0)
@@ -162,7 +148,7 @@ impl Demo {
 
             if prop.type_() == 6 {
                 let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
-                child_props = self.get_props(sub_table, excl);
+                let child_props = self.get_props(sub_table, excl);
 
                 if (prop.flags() & (1 << 11)) == 0 {
                     for mut p in child_props {

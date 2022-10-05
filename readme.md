@@ -86,3 +86,10 @@ Numbers are with a ryzen 5900x
 As you can see there is a huge difference between time taken for events and props. This is not a surprise since most of data is inside props. The parser only parses the part you are interested in.
 
 Performance still has lots of room for improvement.
+
+
+## Other notes
+- The full demo is read into memory in when creating Demoparser class
+    - Allows multiple parses without having to read the file multiple times
+- Supports .gz files (faceit demos directly)
+

@@ -1,26 +1,30 @@
 # CSGO demo parser for Python
-Work in progress !
+Work in progress! expect some bugs here and there
 
 
 ## Game events
 
 ```python
-parser = PythonDemoParser("demo.dem")
+from demoparser import DemoParser
+
+parser = DemoParser("path_to_demo.dem")
 events = parser.parse_events("weapon_fire")
 ```
 ## Player data
 ```python
+from demoparser import DemoParser
+
 wanted_props = ["m_vecOrigin", "m_iHealth"]
 wanted_players = [76561197991348083]
-wanted_ticks = [x for x in range(10000, 11000)]
+wanted_ticks = [x for x in range(10000, 11000)] # =10000..11000
 
-parser = PythonDemoParser("demo.dem")
+parser = DemoParser("path_to_demo.dem")
 df = parser.parse_props(props_wanted,
                         players=wanted_players,
                         ticks=wanted_ticks)
 ```
 
-Example game event
+#### Example game event
 ```python
 {
 'player_name': 'flusha',
@@ -32,25 +36,29 @@ Example game event
 'player_id': '76561197991348083'
 }
 ```
-Example player data (output is a df)
+List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike:_Global_Offensive_Events)
+#### Example player data (output is a df)
 
 
 ```python
-    m_iHealth  m_vecOrigin_X  m_vecOrigin_Y  tick            steamid    name
-0            1     393.780060       4.702123  1000  76561197991348083  flusha
-1            1     394.615204       6.274790  1001  76561197991348083  flusha
-2            1     395.472229       7.841670  1002  76561197991348083  flusha
-3            1     396.350128       9.403141  1003  76561197991348083  flusha
-4            1     397.192352      10.901176  1004  76561197991348083  flusha
-..         ...            ...            ...   ...                ...     ...
-995          0     918.243347    1071.038330  1995  76561197991348083  flusha
-996          0     919.217529    1071.078613  1996  76561197991348083  flusha
-997          0     920.191101    1071.131104  1997  76561197991348083  flusha
-998          0     920.191101    1071.131104  1998  76561197991348083  flusha
-999          0     922.136047    1071.270996  1999  76561197991348083  flusha
+       m_iHealth  m_vecOrigin_X  m_vecOrigin_Y    tick            steamid    name
+0            100     148.867508    -413.923218   10000  76561197991348083  flusha
+1            100     149.625168    -412.063995   10001  76561197991348083  flusha
+2            100     150.342468    -410.183685   10002  76561197991348083  flusha
+3            100     151.025726    -408.286407   10003  76561197991348083  flusha
+4            100     151.677643    -406.374207   10004  76561197991348083  flusha
+...          ...            ...            ...     ...                ...     ...
+90911         86   -1684.031250    2547.948975  100995  76561197991348083  flusha
+90912         86   -1684.031250    2547.948975  100996  76561197991348083  flusha
+90913         86   -1684.031250    2547.948975  100997  76561197991348083  flusha
+90914         86   -1684.031250    2547.948975  100998  76561197991348083  flusha
+90915         86   -1684.031250    2547.948975  100999  76561197991348083  flusha
 
-[1000 rows x 6 columns]
+[90916 rows x 6 columns]
 ```
+Player data uses the real names for the props with one exception. All "vector" props are rolled out into their own columns. For example:
+m_vecOrigin --> (m_vecOrigin_X, m_vecOrigin_Y).   
+List of possible values comming soon.
 ## Performance
 
 Performance can be split in two parts. Reading the demo and parsing the demo. 
@@ -66,7 +74,7 @@ For reference here are some very rough numbers for reading speeds assuming an av
 | Fast nvme SSD    | 7000 MB/s  | 0.0114s       | 87.5         |
 
 ### Parsing
-Time taken for the actual parsing:
+Time taken for the parsing (VERY roughly):
 | Action      | Time |
 | ----------- | ---- |
 | Game events | 30ms |

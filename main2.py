@@ -21,6 +21,6 @@ parser = DemoParser(path)
 
 wanted_players = [76561197991348083]
 wanted_ticks = [x for x in range(10000, 101000)]
-df = parser.parse_props(["m_vecOrigin_X","m_iHealth" ,"m_vecOrigin_Y"], wanted_ticks, wanted_players)
+df = parser.parse_props(["m_iHealth", "m_vecOrigin_X", "m_vecOrigin_Y"], wanted_ticks, wanted_players)
 
 print(df)

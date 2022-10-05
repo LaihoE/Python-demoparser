@@ -7,7 +7,7 @@ Work in progress! expect some bugs here and there
 from demoparser import DemoParser
 
 parser = DemoParser("path_to_demo.dem")
-events = parser.parse_events("weapon_fire")
+events = parser.parse_events("player_death")
 ```
 ## Player data
 ```python

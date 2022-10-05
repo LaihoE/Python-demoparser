@@ -1,7 +1,6 @@
 # CSGO demo parser for Python
 Work in progress! expect some bugs here and there
 
-
 ## Game events
 
 ```python
@@ -14,14 +13,14 @@ events = parser.parse_events("weapon_fire")
 ```python
 from demoparser import DemoParser
 
-wanted_props = ["m_vecOrigin", "m_iHealth"]
-wanted_players = [76561197991348083]
+wanted_props = ["m_vecOrigin_X", "m_iHealth"]
+wanted_players = [76561197991348083] # Empty for all players
 wanted_ticks = [x for x in range(10000, 11000)] # =10000..11000
 
 parser = DemoParser("path_to_demo.dem")
-df = parser.parse_props(props_wanted,
-                        players=wanted_players,
-                        ticks=wanted_ticks)
+df = parser.parse_props(wanted_props,
+                        wanted_ticks,
+                        wanted_players)
 ```
 
 #### Example game event
@@ -56,6 +55,13 @@ List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike
 
 [90916 rows x 6 columns]
 ```
+## Install
+Requires rust for now: [Download Rust](https://www.rust-lang.org/tools/install)
+```python
+pip install demoparser
+```
+
+
 Player data uses the real names for the props with one exception. All "vector" props are rolled out into their own columns. For example:
 m_vecOrigin --> (m_vecOrigin_X, m_vecOrigin_Y).   
 List of possible values comming soon.

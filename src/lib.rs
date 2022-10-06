@@ -14,6 +14,7 @@ use parsing::parser::Demo;
 use crate::parsing::stringtables::UserInfo;
 use arrow::ffi;
 use flate2::read::GzDecoder;
+use memmap::{Mmap, MmapOptions};
 use polars::prelude::*;
 use polars_arrow::export::arrow;
 use pyo3::exceptions::PyFileNotFoundError;
@@ -69,45 +70,48 @@ pub fn decompress_gz(bytes: Vec<u8>) -> Vec<u8> {
     gz.read_to_end(&mut out).unwrap();
     out
 }
+/*
+pub fn read_file(demo_path: String) -> Result<&'static [u8], std::io::Error> {
+    //let result = std::fs::read(&demo_path);
+    let file = File::open(demo_path);
 
-pub fn read_file(demo_path: String) -> Result<Vec<u8>, std::io::Error> {
-    let result = std::fs::read(&demo_path);
-    match result {
+    match file {
         // FILE COULD NOT BE READ
         Err(e) => {
             println!("{}", e);
             Err(e)
         } //panic!("The demo could not be found. Error: {}", e),
-        Ok(bytes) => {
+        Ok(file) => {
+            /*
             let extension = Path::new(&demo_path).extension().unwrap();
             match extension.to_str().unwrap() {
                 "gz" => Ok(decompress_gz(bytes)),
                 _ => Ok(bytes),
             }
+            */
+            let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+            Ok(mmap)
         }
     }
 }
-
+*/
 #[pyclass]
 struct DemoParser {
     path: String,
-    bytes: Option<Vec<u8>>,
 }
 
 #[pymethods]
 impl DemoParser {
     #[new]
     pub fn py_new(demo_path: String) -> PyResult<Self> {
-        let bytes = read_file(demo_path.clone()).unwrap();
-        Ok(DemoParser {
-            path: demo_path,
-            bytes: Some(bytes),
-        })
+        Ok(DemoParser { path: demo_path })
     }
 
     pub fn parse_events(&self, py: Python<'_>, event_name: String) -> PyResult<Py<PyAny>> {
+        let file = File::open(self.path.clone()).unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         let parser = Demo::new(
-            self.bytes.as_ref().unwrap().to_vec(),
+            mmap,
             false,
             Vec::new(),
             Vec::new(),
@@ -147,8 +151,10 @@ impl DemoParser {
         wanted_ticks: Vec<i32>,
         wanted_players: Vec<u64>,
     ) -> PyResult<PyObject> {
-        let mut parser = Demo::new(
-            self.bytes.as_ref().unwrap().to_vec(),
+        let file = File::open(self.path.clone()).unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+        let parser = Demo::new(
+            mmap,
             true,
             wanted_ticks,
             wanted_players,
@@ -200,8 +206,10 @@ impl DemoParser {
     }
 
     pub fn parse_players(&self, py: Python<'_>) -> PyResult<(Py<PyAny>)> {
+        let file = File::open(self.path.clone()).unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         let parser = Demo::new(
-            self.bytes.as_ref().unwrap().to_vec(),
+            mmap,
             false,
             vec![],
             vec![],
@@ -229,8 +237,10 @@ impl DemoParser {
     }
 
     pub fn parse_header(&self, py: Python<'_>) -> PyResult<(Py<PyAny>)> {
-        let mut parser = Demo::new(
-            self.bytes.as_ref().unwrap().to_vec(),
+        let file = File::open(self.path.clone()).unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+        let parser = Demo::new(
+            mmap,
             false,
             vec![],
             vec![],

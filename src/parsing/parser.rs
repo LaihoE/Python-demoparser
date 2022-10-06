@@ -10,6 +10,7 @@ use csgoproto::netmessages::*;
 use fxhash::FxHashMap;
 use hashbrown::HashMap;
 use hashbrown::HashSet;
+use memmap::Mmap;
 use phf::phf_map;
 use protobuf;
 use protobuf::Message;
@@ -39,7 +40,7 @@ pub struct Demo {
     pub fp: usize,
     pub tick: i32,
     pub cmd: u8,
-    pub bytes: Vec<u8>,
+    pub bytes: Mmap,
     pub class_bits: u32,
     pub event_list: Option<CSVCMsg_GameEventList>,
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
@@ -115,7 +116,7 @@ impl VarVec {
 
 impl Demo {
     pub fn new(
-        bytes: Vec<u8>,
+        bytes: Mmap,
         parse_props: bool,
         wanted_ticks: Vec<i32>,
         wanted_players: Vec<u64>,

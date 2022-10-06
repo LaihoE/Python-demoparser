@@ -16,8 +16,8 @@ Ryzen 9 5900x
 Samsung 980 pro nvme SSD
 
 
-1000 Faceit demos in parallel (12 processes):
+952 Faceit demos in parallel (12 processes):
 ```Python
-1000/1000 [01:02<00:00, 16.11it/s]
+952/952 [00:27<00:00, 35.16it/s]
 ```
-1 minute 2 seconds with an average of 16.11 demos per second. The SSD im using is very fast so your numbers might vary greatly.
+took: 27s average 35 demos / second. The SSD im using is very fast so your numbers might vary greatly.

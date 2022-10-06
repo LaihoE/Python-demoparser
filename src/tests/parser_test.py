@@ -4,13 +4,13 @@ import unittest
 import numpy as np
 import os
 import glob
-from demo_parser import PythonDemoParser
+from demoparser import DemoParser
 
 
 class TestFullDemo(unittest.TestCase):
     def setUp(self) -> None:
         self.files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
-        self.parser = PythonDemoParser(self.files[0])
+        self.parser = DemoParser(self.files[0])
     
     def test_events(self):
         events = self.parser.parse_events("player_hurt")

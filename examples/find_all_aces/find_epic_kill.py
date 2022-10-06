@@ -38,9 +38,9 @@ def parse(file):
 if __name__ == "__main__":
     import tqdm
 
-    files = glob.glob("path/to/files/*")
+    files = glob.glob("/home/laiho/Documents/demos/faceits/clean_unzompr/*")
 
-    with mp.Pool(processes=12) as pool:
+    with mp.Pool(processes=16) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(parse, files), total=len(files)))
 
     df = pd.concat(results)

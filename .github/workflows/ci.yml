@@ -29,20 +29,13 @@ jobs:
           toolchain: nightly
           profile: minimal
           default: true
-      - name: Build wheels
-        uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: --release --out dist
-      - name: Install built wheel
-        run: |
-          pip install demoparser --no-index --find-links dist --force-reinstall
-      - name: Upload wheels
-        uses: actions/upload-artifact@v2
-        with:
-          name: wheels
-          path: dist
-
+    - name: Build Wheels
+      uses: messense/maturin-action@v1
+      with:
+        command: publish
+        target: ${{ matrix.target }}
+        args: -i ${{ matrix.python-version }} --username ${{ secrets.PYPI_USERNAME }} --password ${{ secrets.PYPI_PASSWORD }}
+  
   linux:
     runs-on: ubuntu-latest
     strategy:

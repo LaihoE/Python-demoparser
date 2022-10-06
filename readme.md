@@ -1,5 +1,9 @@
 # CSGO demo parser for Python
 Work in progress! expect some bugs here and there
+## Installing
+```python
+pip install demoparser
+```
 
 ## Game events
 
@@ -55,13 +59,6 @@ List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike
 
 [90916 rows x 6 columns]
 ```
-## Install
-Requires rust for now: [Download Rust](https://www.rust-lang.org/tools/install)
-```python
-pip install demoparser
-```
-
-
 Player data uses the real names for the props with one exception. All "vector" props are rolled out into their own columns. For example:
 m_vecOrigin --> (m_vecOrigin_X, m_vecOrigin_Y).   
 List of possible values comming soon.

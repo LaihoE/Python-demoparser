@@ -25,11 +25,11 @@ pub struct Frame {
 }
 #[derive(Debug, Clone)]
 pub enum VarVec {
-    U64(Vec<u64>),
-    F32(Vec<f32>),
-    I64(Vec<i64>),
-    I32(Vec<i32>),
-    String(Vec<String>),
+    U64(Vec<Option<u64>>),
+    F32(Vec<Option<f32>>),
+    I64(Vec<Option<i64>>),
+    I32(Vec<Option<i32>>),
+    String(Vec<Option<String>>),
 }
 #[derive(Debug, Clone)]
 pub struct PropColumn {
@@ -70,25 +70,25 @@ impl VarVec {
     pub fn push_propdata(&mut self, item: PropData) {
         match item {
             PropData::F32(p) => match self {
-                VarVec::F32(f) => f.push(p),
+                VarVec::F32(f) => f.push(Some(p)),
                 _ => {
                     panic!("Tried to push a {:?} into a {:?} column", item, self);
                 }
             },
             PropData::I32(p) => match self {
-                VarVec::I32(f) => f.push(p),
+                VarVec::I32(f) => f.push(Some(p)),
                 _ => {
                     panic!("Tried to push a {:?} into a {:?} column", item, self);
                 }
             },
             PropData::I64(p) => match self {
-                VarVec::I64(f) => f.push(p),
+                VarVec::I64(f) => f.push(Some(p)),
                 _ => {
                     panic!("Tried to push a {:?} into a {:?} column", item, self);
                 }
             },
             PropData::String(p) => match self {
-                VarVec::String(f) => f.push(p),
+                VarVec::String(f) => f.push(Some(p)),
                 _ => {
                     panic!("Tried to push a {:?} into a string column", p);
                 }
@@ -98,19 +98,25 @@ impl VarVec {
     }
     pub fn push_string(&mut self, data: String) {
         match self {
-            VarVec::String(f) => f.push(data),
+            VarVec::String(f) => f.push(Some(data)),
             _ => {}
         }
     }
-    pub fn push_float(&mut self, data: f32) {
+    pub fn push_string_none(&mut self) {
         match self {
-            VarVec::F32(f) => f.push(data),
+            VarVec::String(f) => f.push(None),
             _ => {}
         }
     }
-    pub fn push_i32(&mut self, data: i32) {
+    pub fn push_float_none(&mut self) {
         match self {
-            VarVec::I32(f) => f.push(data),
+            VarVec::F32(f) => f.push(None),
+            _ => {}
+        }
+    }
+    pub fn push_i32_none(&mut self) {
+        match self {
+            VarVec::I32(f) => f.push(None),
             _ => {}
         }
     }
@@ -315,7 +321,7 @@ impl Demo {
                                                             )),
                                                         })
                                                         .data
-                                                        .push_i32(-1);
+                                                        .push_i32_none();
                                                 }
                                                 // FLOAT
                                                 1 => {
@@ -328,7 +334,7 @@ impl Demo {
                                                             )),
                                                         })
                                                         .data
-                                                        .push_float(-1.0);
+                                                        .push_float_none();
                                                 }
                                                 // Vec
                                                 2 => {
@@ -341,7 +347,7 @@ impl Demo {
                                                             )),
                                                         })
                                                         .data
-                                                        .push_float(-1.0);
+                                                        .push_float_none();
                                                 }
                                                 // STRING
                                                 4 => {
@@ -356,7 +362,7 @@ impl Demo {
                                                             ),
                                                         })
                                                         .data
-                                                        .push_string("".to_string());
+                                                        .push_string_none();
                                                 }
                                                 _ => {
                                                     println!("UNK TYPE");

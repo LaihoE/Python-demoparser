@@ -198,6 +198,7 @@ impl DemoParser {
                 let df = polars.call_method1("DataFrame", (all_series_py,))?;
                 df.setattr("columns", wanted_props.to_object(py)).unwrap();
                 let pandas_df = df.call_method0("to_pandas").unwrap();
+                pandas_df.call_method1("replace", (-1, polars)).unwrap();
                 Ok(pandas_df.to_object(py))
             }
         }

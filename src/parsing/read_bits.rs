@@ -59,17 +59,6 @@ pub enum PropData {
     Vec(Vec<i32>),
 }
 
-impl PropData {
-    pub fn to_float(&self) -> f32 {
-        match self {
-            PropData::F32(f) => *f,
-            PropData::I32(i) => *i as f32,
-            PropData::I64(ii) => *ii as f32,
-            _ => panic!("DONT SUP F32"),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct PropAtom {
     pub prop_name: String,
@@ -86,7 +75,7 @@ pub struct BitReader<R: io::Read> {
 
 impl<R: io::Read> BitReader<R> {
     pub fn new(reader: R, left_over: i32) -> BitReader<R> {
-        let mut b = BitReader {
+        let b = BitReader {
             inner: reader,
             bits: 0,
             available: 0,
@@ -100,19 +89,19 @@ impl<R: io::Read> BitReader<R> {
             0 => {}
             1 => {
                 let mut buf = [0; 8 / 8];
-                self.inner.read_exact(&mut buf);
+                self.inner.read_exact(&mut buf).unwrap();
                 self.available = 8;
                 self.bits = u32::from(buf[0]);
             }
             2 => {
                 let mut buf = [0; 16 / 8];
-                self.inner.read_exact(&mut buf);
+                self.inner.read_exact(&mut buf).unwrap();
                 self.available = 16;
                 self.bits = u32::from(buf[0]) + (u32::from(buf[1]) << 8);
             }
             3 => {
                 let mut buf = [0; 24 / 8];
-                self.inner.read_exact(&mut buf);
+                self.inner.read_exact(&mut buf).unwrap();
                 self.available = 24;
                 self.bits =
                     u32::from(buf[0]) + (u32::from(buf[1]) << 8) + (u32::from(buf[2]) << 16);
@@ -125,7 +114,6 @@ impl<R: io::Read> BitReader<R> {
     pub fn ensure_bits(&mut self) -> io::Result<()> {
         let mut buf = [0; NBITS / 8];
         let had_enough = self.inner.read_exact(&mut buf);
-
         self.bits = unsafe { mem::transmute(buf) };
         self.available = NBITS;
 

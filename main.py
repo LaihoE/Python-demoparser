@@ -45,13 +45,14 @@ def parse(file):
     parser = DemoParser(file)
     wanted_props = ["m_vecOrigin_X", "m_iHealth", "m_angEyeAngles[0]"]
     wanted_players = [] # Empty for all players
-    wanted_ticks = [x for x in range(10000, 15000)] # =10000..11000
+    wanted_ticks = [x for x in range(10000, 20000)] # =10000..11000
 
     parser = DemoParser(file)
     df = parser.parse_props(wanted_props,
                             wanted_ticks,
                             wanted_players)
     #print(df[df["steamid"] == "76561198977304502"])
+    print(df.isna().sum())
     print(df)
     #print(parser.parse_header())
 

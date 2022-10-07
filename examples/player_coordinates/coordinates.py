@@ -15,13 +15,11 @@ def util_dmg(file):
     df = parser.parse_props(wanted_props,
                             wanted_ticks,
                             wanted_players)
-    #print(df)
-    #return df
+    return df
 
 
 if __name__ == "__main__":
     files = glob.glob("/home/laiho/Documents/demos/mygames/*")
-    #files = files[-10:]
     with mp.Pool(processes=8) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(util_dmg, files), total=len(files)))
     df = pd.concat(results)

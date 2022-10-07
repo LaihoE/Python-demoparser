@@ -33,15 +33,21 @@ fn parse_key(key: &Key_t) -> KeyData {
 }
 
 fn parse_key_steamid(key: &Key_t, players: &HashMap<u64, UserInfo>) -> KeyData {
-    let ent_id = key.val_short();
+    let user_id = key.val_short();
     for (_, player) in players {
-        if player.entity_id as i32 == ent_id {
+        if player.user_id as i32 == user_id {
             match key.type_() {
                 4 => return KeyData::StrData(player.xuid.to_string()),
                 _ => panic!("KEYDATA FAILED"),
             }
         }
     }
+    /*
+    println!("Coulnt find:{}", user_id);
+    for (_, player) in players {
+        print!(" ({}, {}) ", player.name, player.user_id)
+    }
+    */
     match key.type_() {
         4 => return KeyData::StrData(key.val_short().to_string()),
         _ => panic!("KEYDATA FAILED"),

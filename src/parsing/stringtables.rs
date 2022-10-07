@@ -51,7 +51,7 @@ impl UserInfo {
         //hm.insert("version".to_string(), self.version.to_string());
         hm.insert("steamid".to_string(), self.xuid.to_string());
         //hm.insert("name".to_string(), self.name.to_string());
-        //hm.insert("user_id".to_string(), self.user_id.to_string());
+        hm.insert("user_id".to_string(), self.user_id.to_string());
         //hm.insert("guid".to_string(), self.guid.to_string());
         //hm.insert("friends_id".to_string(), self.friends_id.to_string());
         hm.insert("name".to_string(), self.name.to_string());
@@ -165,7 +165,7 @@ impl Demo {
 
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
-                        ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
+                        ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
                         if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                             self.players_connected += 1;
                         }
@@ -269,7 +269,7 @@ impl Demo {
                     user_data = buf.read_bits_st(st.uds);
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
-                        ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
+                        ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
                         if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                             self.players_connected += 1;
                         }
@@ -289,10 +289,13 @@ impl Demo {
                         if st.data[index as usize].entry != "" {
                             let temp_id = (st.data[index as usize].entry).parse::<u32>();
                             match temp_id {
-                                Err(e) => ui.entity_id = 99999,
+                                Err(e) => {
+                                    println!("{} {}", ui.name, st.data[index as usize].entry);
+                                    ui.entity_id = 99999
+                                }
                                 Ok(ok) => {
                                     ui.entity_id =
-                                        (st.data[index as usize].entry).parse::<u32>().unwrap() + 2;
+                                        (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
                                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                                         self.players_connected += 1;
                                     }

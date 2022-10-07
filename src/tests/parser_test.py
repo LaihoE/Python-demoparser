@@ -18,3 +18,7 @@ class TestFullDemo(unittest.TestCase):
         with open(correct_path) as f:
             correct = json.load(f)
         self.assertEqual(events, correct)
+    
+    def test_no_duplicate_players(self):
+        players = self.parser.parse_players()
+        

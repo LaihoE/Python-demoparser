@@ -70,31 +70,25 @@ pub fn decompress_gz(bytes: Vec<u8>) -> Vec<u8> {
     gz.read_to_end(&mut out).unwrap();
     out
 }
-/*
-pub fn read_file(demo_path: String) -> Result<&'static [u8], std::io::Error> {
-    //let result = std::fs::read(&demo_path);
-    let file = File::open(demo_path);
 
-    match file {
+pub fn read_file(demo_path: String) -> Result<Vec<u8>, std::io::Error> {
+    let result = std::fs::read(&demo_path);
+    match result {
         // FILE COULD NOT BE READ
         Err(e) => {
             println!("{}", e);
             Err(e)
         } //panic!("The demo could not be found. Error: {}", e),
-        Ok(file) => {
-            /*
+        Ok(bytes) => {
             let extension = Path::new(&demo_path).extension().unwrap();
             match extension.to_str().unwrap() {
                 "gz" => Ok(decompress_gz(bytes)),
                 _ => Ok(bytes),
             }
-            */
-            let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
-            Ok(mmap)
         }
     }
 }
-*/
+
 #[pyclass]
 struct DemoParser {
     path: String,
@@ -110,7 +104,7 @@ impl DemoParser {
     pub fn parse_events(&self, py: Python<'_>, event_name: String) -> PyResult<Py<PyAny>> {
         let file = File::open(self.path.clone()).unwrap();
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
-        let parser = Demo::new(
+        let parser = Demo::new_mmap(
             mmap,
             false,
             Vec::new(),
@@ -138,7 +132,6 @@ impl DemoParser {
                 }
 
                 let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
-
                 Ok(dict)
             }
         }
@@ -151,10 +144,9 @@ impl DemoParser {
         wanted_ticks: Vec<i32>,
         wanted_players: Vec<u64>,
     ) -> PyResult<PyObject> {
-        let file = File::open(self.path.clone()).unwrap();
-        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+        let bytes = read_file(self.path.clone()).unwrap();
         let parser = Demo::new(
-            mmap,
+            bytes,
             true,
             wanted_ticks,
             wanted_players,
@@ -163,17 +155,20 @@ impl DemoParser {
             false,
             false,
         );
+
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
             Ok(mut parser) => {
-                let _: Header = parser.parse_demo_header();
-                let data = parser.parse_frame(&wanted_props);
+                let h: Header = parser.parse_demo_header();
+                parser.playback_frames = h.playback_frames as usize;
 
+                let data = parser.parse_frame(&wanted_props);
                 wanted_props.push("tick".to_string());
                 wanted_props.push("steamid".to_string());
                 wanted_props.push("name".to_string());
                 let mut all_series = vec![];
-
+                // println!("{:?}", wanted_props);
+                // println!("{:?}", data.keys());
                 for prop_name in &wanted_props {
                     if data.contains_key(prop_name) {
                         if let parsing::parser::VarVec::F32(data) = &data[prop_name].data {
@@ -192,7 +187,10 @@ impl DemoParser {
                             all_series.push(py_series);
                         }
                     } else {
-                        println!("{:?} NOT FOUND !!!", prop_name);
+                        println!(
+                            "{:?} Column not found. Maybe your prop is incorrect?",
+                            prop_name
+                        );
                     }
                 }
                 let polars = py.import("polars")?;
@@ -200,6 +198,7 @@ impl DemoParser {
                 let df = polars.call_method1("DataFrame", (all_series_py,))?;
                 df.setattr("columns", wanted_props.to_object(py)).unwrap();
                 let pandas_df = df.call_method0("to_pandas").unwrap();
+                pandas_df.call_method1("replace", (-1, polars)).unwrap();
                 Ok(pandas_df.to_object(py))
             }
         }
@@ -208,7 +207,7 @@ impl DemoParser {
     pub fn parse_players(&self, py: Python<'_>) -> PyResult<(Py<PyAny>)> {
         let file = File::open(self.path.clone()).unwrap();
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
-        let parser = Demo::new(
+        let parser = Demo::new_mmap(
             mmap,
             false,
             vec![],
@@ -225,7 +224,7 @@ impl DemoParser {
                 let _ = parser.parse_frame(&vec![]);
                 let players = parser.players;
                 let mut py_players = vec![];
-                for player in players {
+                for (_, player) in players {
                     if player.xuid > 76500000000000000 && player.xuid < 76600000000000000 {
                         py_players.push(player.to_py_hashmap(py));
                     }
@@ -239,7 +238,7 @@ impl DemoParser {
     pub fn parse_header(&self, py: Python<'_>) -> PyResult<(Py<PyAny>)> {
         let file = File::open(self.path.clone()).unwrap();
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
-        let parser = Demo::new(
+        let parser = Demo::new_mmap(
             mmap,
             false,
             vec![],
@@ -263,10 +262,5 @@ impl DemoParser {
 #[pymodule]
 fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<DemoParser>()?;
-    //m.add_function(wrap_pyfunction!(parse_events, m)?)?;
-    //m.add_function(wrap_pyfunction!(parse_props, m)?)?;
-    //m.add_function(wrap_pyfunction!(parse_players, m)?)?;
-    //m.add_function(wrap_pyfunction!(parse_header, m)?)?;
-    // parse(py, demo_name, props_names, out_arr);
     return Ok(());
 }

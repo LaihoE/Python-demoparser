@@ -157,7 +157,7 @@ impl Demo {
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         self.wanted_ent_ids.push(ui.entity_id.clone());
-                        self.players.push(ui);
+                        self.players.insert(ui.entity_id.clone(), ui);
                     }
                 } else {
                     let size = buf.read_nbits(14);
@@ -172,7 +172,7 @@ impl Demo {
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         self.wanted_ent_ids.push(ui.entity_id.clone());
-                        self.players.push(ui);
+                        self.players.insert(ui.entity_id.clone(), ui);
                     }
                 }
                 if history.len() == 32 {
@@ -199,7 +199,7 @@ impl Demo {
             udsb: data.user_data_size_bits(),
             data: Vec::new(),
         };
-        for i in 1..50000 {
+        for _ in 1..50000 {
             st.data.push(StField {
                 entry: "".to_string(),
                 udata: "".to_string(),
@@ -273,10 +273,12 @@ impl Demo {
                         if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                             self.players_connected += 1;
                         }
+
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
+                        //println!("Created player: {} {}", ui.name, ui.entity_id);
                         self.wanted_ent_ids.push(ui.entity_id.clone());
-                        self.players.push(ui);
+                        self.players.insert(ui.entity_id.clone(), ui);
                     }
                 } else {
                     let size = buf.read_nbits(14);
@@ -297,8 +299,9 @@ impl Demo {
                                     ui.friends_name =
                                         ui.friends_name.trim_end_matches("\x00").to_string();
                                     ui.name = ui.name.trim_end_matches("\x00").to_string();
+                                    //println!("Created player: {} {}", ui.name, ui.entity_id);
                                     self.wanted_ent_ids.push(ui.entity_id.clone());
-                                    self.players.push(ui);
+                                    self.players.insert(ui.entity_id.clone(), ui);
                                 }
                             }
                         }

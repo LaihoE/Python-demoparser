@@ -32,9 +32,9 @@ fn parse_key(key: &Key_t) -> KeyData {
     }
 }
 
-fn parse_key_steamid(key: &Key_t, players: &Vec<UserInfo>) -> KeyData {
+fn parse_key_steamid(key: &Key_t, players: &HashMap<u32, UserInfo>) -> KeyData {
     let ent_id = key.val_short();
-    for player in players {
+    for (_, player) in players {
         if player.entity_id as i32 == ent_id {
             match key.type_() {
                 4 => return KeyData::StrData(player.xuid.to_string()),
@@ -48,9 +48,9 @@ fn parse_key_steamid(key: &Key_t, players: &Vec<UserInfo>) -> KeyData {
     }
 }
 
-fn parse_key_steam_name(key: &Key_t, players: &Vec<UserInfo>) -> KeyData {
+fn parse_key_steam_name(key: &Key_t, players: &HashMap<u32, UserInfo>) -> KeyData {
     let ent_id = key.val_short();
-    for player in players {
+    for (_, player) in players {
         if player.entity_id as i32 == ent_id {
             match key.type_() {
                 4 => {
@@ -128,7 +128,7 @@ pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
     tick: &i32,
-    players: &Vec<UserInfo>,
+    players: &HashMap<u32, UserInfo>,
     round: i32,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
@@ -140,24 +140,24 @@ pub fn gen_name_val_pairs(
 
         match desc.name() {
             "userid" => {
-                let steamid = parse_key_steamid(ge, players);
+                let steamid = parse_key_steamid(ge, &players);
                 kv_pairs.push(NameDataPair {
                     name: "player_id".to_string(),
                     data: steamid,
                 });
-                let steam_name = parse_key_steam_name(ge, players);
+                let steam_name = parse_key_steam_name(ge, &players);
                 kv_pairs.push(NameDataPair {
                     name: "player_name".to_string(),
                     data: steam_name,
                 });
             }
             "attacker" => {
-                let steamid = parse_key_steamid(ge, players);
+                let steamid = parse_key_steamid(ge, &players);
                 kv_pairs.push(NameDataPair {
                     name: "attacker_id".to_string(),
                     data: steamid,
                 });
-                let steam_name = parse_key_steam_name(ge, players);
+                let steam_name = parse_key_steam_name(ge, &players);
                 kv_pairs.push(NameDataPair {
                     name: "attacker_name".to_string(),
                     data: steam_name,

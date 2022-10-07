@@ -6,7 +6,6 @@ use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::*;
-
 use fxhash::FxHashMap;
 use hashbrown::HashMap;
 use hashbrown::HashSet;
@@ -15,6 +14,8 @@ use phf::phf_map;
 use protobuf;
 use protobuf::Message;
 use std::io::Read;
+use std::ops::Index;
+use std::u8;
 
 #[allow(dead_code)]
 pub struct Frame {
@@ -40,7 +41,7 @@ pub struct Demo {
     pub fp: usize,
     pub tick: i32,
     pub cmd: u8,
-    pub bytes: Mmap,
+    pub bytes: BytesVariant,
     pub class_bits: u32,
     pub event_list: Option<CSVCMsg_GameEventList>,
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
@@ -49,7 +50,7 @@ pub struct Demo {
     pub entities: Option<HashMap<u32, Option<Entity>>>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
-    pub players: Vec<UserInfo>,
+    pub players: HashMap<u32, UserInfo>,
     pub parse_props: bool,
     pub game_events: Vec<GameEvent>,
     pub event_name: String,
@@ -62,6 +63,7 @@ pub struct Demo {
     pub only_players: bool,
     pub only_header: bool,
     pub wanted_ent_ids: Vec<u32>,
+    pub playback_frames: usize,
 }
 
 impl VarVec {
@@ -114,8 +116,39 @@ impl VarVec {
     }
 }
 
+pub enum BytesVariant {
+    Mmap(Mmap),
+    Vec(Vec<u8>),
+}
+
+impl<Idx> std::ops::Index<Idx> for BytesVariant
+where
+    Idx: std::slice::SliceIndex<[u8]>,
+{
+    type Output = Idx::Output;
+    #[inline(always)]
+    fn index(&self, i: Idx) -> &Self::Output {
+        match self {
+            Self::Mmap(m) => {
+                return &m[i];
+            }
+            Self::Vec(v) => {
+                return &v[i];
+            }
+        }
+    }
+}
+impl BytesVariant {
+    pub fn get_len(&self) -> usize {
+        match self {
+            Self::Mmap(m) => m.len(),
+            Self::Vec(v) => v.len(),
+        }
+    }
+}
+
 impl Demo {
-    pub fn new(
+    pub fn new_mmap(
         bytes: Mmap,
         parse_props: bool,
         wanted_ticks: Vec<i32>,
@@ -145,7 +178,7 @@ impl Demo {
         wanted_props.extend(extra_wanted_props);
         Ok(Self {
             wanted_ent_ids: Vec::new(),
-            bytes: bytes,
+            bytes: BytesVariant::Mmap(bytes),
             fp: 0,
             cmd: 0,
             tick: 0,
@@ -161,7 +194,7 @@ impl Demo {
             serverclass_map: HashMap::default(),
             entities: Some(HashMap::default()),
             stringtables: Vec::new(),
-            players: Vec::new(),
+            players: HashMap::new(),
             wanted_props: wanted_props,
             game_events: Vec::new(),
             wanted_players: wanted_players,
@@ -169,6 +202,64 @@ impl Demo {
             players_connected: 0,
             only_header: only_header,
             only_players: only_players,
+            playback_frames: 0,
+        })
+    }
+    pub fn new(
+        bytes: Vec<u8>,
+        parse_props: bool,
+        wanted_ticks: Vec<i32>,
+        wanted_players: Vec<u64>,
+        mut wanted_props: Vec<String>,
+        event_name: String,
+        only_players: bool,
+        only_header: bool,
+    ) -> Result<Self, std::io::Error> {
+        let mut extra_wanted_props = vec![];
+        for p in &wanted_props {
+            match TYPEHM.get(&p) {
+                Some(n) => {
+                    if &p[(p.len() - 1)..] == "X" {
+                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
+                    } else if &p[(p.len() - 1)..] == "Y" {
+                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
+                    } else if &p[(p.len() - 1)..] == "Z" {
+                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
+                    }
+                }
+                None => {
+                    panic!("Prop: {} not found", p);
+                }
+            }
+        }
+        wanted_props.extend(extra_wanted_props);
+        Ok(Self {
+            wanted_ent_ids: Vec::new(),
+            bytes: BytesVariant::Vec(bytes),
+            fp: 0,
+            cmd: 0,
+            tick: 0,
+            cnt: 0,
+            round: 0,
+            event_list: None,
+            event_map: None,
+            class_bits: 0,
+            parse_props: parse_props,
+            event_name: event_name,
+            bad: Vec::new(),
+            dt_map: Some(HashMap::default()),
+            serverclass_map: HashMap::default(),
+            entities: Some(HashMap::default()),
+            stringtables: Vec::new(),
+            players: HashMap::new(),
+            wanted_props: wanted_props,
+            game_events: Vec::new(),
+            wanted_players: wanted_players,
+            wanted_ticks: HashSet::from_iter(wanted_ticks),
+            players_connected: 0,
+            only_header: only_header,
+            only_players: only_players,
+            playback_frames: 0,
         })
     }
 }
@@ -176,23 +267,23 @@ impl Demo {
 impl Demo {
     pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, PropColumn> {
         let mut ticks_props: FxHashMap<String, PropColumn> = FxHashMap::default();
-        while self.fp < self.bytes.len() as usize {
+        while self.fp < self.bytes.get_len() as usize {
             let f = self.read_frame_bytes();
             self.tick = f.tick;
-            // EARLY EXITS
+            // EARLY EXIT
             if self.only_players {
                 if Demo::all_players_connected(self.players_connected) {
                     break;
                 }
             }
+            // EARLY EXIT
             if self.only_header {
                 break;
             }
-            for player in &self.players {
-                if player.xuid == 0 {
+            for (_, player) in &self.players {
+                if player.xuid == 0 || player.name == "GOTV" {
                     continue;
                 };
-
                 if self.wanted_ticks.contains(&self.tick) || self.wanted_ticks.len() == 0 {
                     if self.wanted_players.contains(&player.xuid) || self.wanted_players.len() == 0
                     {
@@ -219,7 +310,7 @@ impl Demo {
                                                         .or_insert_with(|| PropColumn {
                                                             dtype: "f32".to_string(),
                                                             data: VarVec::I32(Vec::with_capacity(
-                                                                100000,
+                                                                self.playback_frames,
                                                             )),
                                                         })
                                                         .data
@@ -232,7 +323,7 @@ impl Demo {
                                                         .or_insert_with(|| PropColumn {
                                                             dtype: "f32".to_string(),
                                                             data: VarVec::F32(Vec::with_capacity(
-                                                                100000,
+                                                                self.playback_frames,
                                                             )),
                                                         })
                                                         .data
@@ -245,7 +336,7 @@ impl Demo {
                                                         .or_insert_with(|| PropColumn {
                                                             dtype: "f32".to_string(),
                                                             data: VarVec::F32(Vec::with_capacity(
-                                                                100000,
+                                                                self.playback_frames,
                                                             )),
                                                         })
                                                         .data
@@ -258,7 +349,9 @@ impl Demo {
                                                         .or_insert_with(|| PropColumn {
                                                             dtype: "f32".to_string(),
                                                             data: VarVec::String(
-                                                                Vec::with_capacity(100000),
+                                                                Vec::with_capacity(
+                                                                    self.playback_frames,
+                                                                ),
                                                             ),
                                                         })
                                                         .data
@@ -276,7 +369,7 @@ impl Demo {
                                                     .or_insert_with(|| PropColumn {
                                                         dtype: "f32".to_string(),
                                                         data: VarVec::I32(Vec::with_capacity(
-                                                            100000,
+                                                            self.playback_frames,
                                                         )),
                                                     })
                                                     .data
@@ -288,7 +381,7 @@ impl Demo {
                                                     .or_insert_with(|| PropColumn {
                                                         dtype: "f32".to_string(),
                                                         data: VarVec::F32(Vec::with_capacity(
-                                                            100000,
+                                                            self.playback_frames,
                                                         )),
                                                     })
                                                     .data
@@ -300,7 +393,7 @@ impl Demo {
                                                     .or_insert_with(|| PropColumn {
                                                         dtype: "f32".to_string(),
                                                         data: VarVec::String(Vec::with_capacity(
-                                                            100000,
+                                                            self.playback_frames,
                                                         )),
                                                     })
                                                     .data
@@ -315,7 +408,9 @@ impl Demo {
                                     .entry("tick".to_string())
                                     .or_insert_with(|| PropColumn {
                                         dtype: "i32".to_string(),
-                                        data: VarVec::String(Vec::with_capacity(100000)),
+                                        data: VarVec::String(Vec::with_capacity(
+                                            self.playback_frames,
+                                        )),
                                     })
                                     .data
                                     .push_string(self.tick.to_string());
@@ -324,7 +419,9 @@ impl Demo {
                                     .entry("steamid".to_string())
                                     .or_insert_with(|| PropColumn {
                                         dtype: "u64".to_string(),
-                                        data: VarVec::String(Vec::with_capacity(100000)),
+                                        data: VarVec::String(Vec::with_capacity(
+                                            self.playback_frames,
+                                        )),
                                     })
                                     .data
                                     .push_string(player.xuid.to_string());
@@ -332,7 +429,9 @@ impl Demo {
                                     .entry("name".to_string())
                                     .or_insert_with(|| PropColumn {
                                         dtype: "u64".to_string(),
-                                        data: VarVec::String(Vec::with_capacity(100000)),
+                                        data: VarVec::String(Vec::with_capacity(
+                                            self.playback_frames,
+                                        )),
                                     })
                                     .data
                                     .push_string(player.name.to_string());

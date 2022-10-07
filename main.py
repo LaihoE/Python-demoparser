@@ -33,15 +33,36 @@ def parse(file):
         # Put all of those rounds in an output list
         all_rounds.append(kills_per_round)
     return pd.concat(all_rounds)
+from demoparser import DemoParser
+import glob
+import multiprocessing as mp
+import pandas as pd
+
+
+def parse(file):
+    number_of_kills = 5
+
+    parser = DemoParser(file)
+    wanted_props = ["m_vecOrigin_X", "m_iHealth"]
+    wanted_players = [76561198977304502] # Empty for all players
+    wanted_ticks = [x for x in range(10000, 15000)] # =10000..11000
+
+    parser = DemoParser(file)
+    df = parser.parse_props(wanted_props,
+                            wanted_ticks,
+                            wanted_players)
+    #print(df[df["steamid"] == "76561198977304502"])
+    print(df)
+    #print(parser.parse_header())
+
+
 
 
 if __name__ == "__main__":
     import tqdm
 
-    files = glob.glob("/home/laiho/Documents/demos/mygames/*")
+    files = glob.glob("/home/laiho/Documents/demos/faceits/clean_unzompr/*")
+    files = files[:1]
 
-    with mp.Pool(processes=2) as pool:
+    with mp.Pool(processes=1) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(parse, files), total=len(files)))
-
-    df = pd.concat(results)
-    print(df)

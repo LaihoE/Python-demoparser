@@ -50,7 +50,7 @@ pub struct Demo {
     pub entities: Option<HashMap<u32, Option<Entity>>>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
-    pub players: HashMap<u32, UserInfo>,
+    pub players: HashMap<u64, UserInfo>,
     pub parse_props: bool,
     pub game_events: Vec<GameEvent>,
     pub event_name: String,
@@ -293,6 +293,7 @@ impl Demo {
                             .unwrap()
                             .contains_key(&player.entity_id)
                         {
+                            //println!("X");
                             if self.entities.as_ref().unwrap()[&player.entity_id].is_some() {
                                 let ent = self.entities.as_ref().unwrap()[&player.entity_id]
                                     .as_ref()

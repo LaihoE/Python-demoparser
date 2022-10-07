@@ -157,7 +157,7 @@ impl Demo {
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         self.wanted_ent_ids.push(ui.entity_id.clone());
-                        self.players.insert(ui.entity_id.clone(), ui);
+                        self.players.insert(ui.xuid.clone(), ui);
                     }
                 } else {
                     let size = buf.read_nbits(14);
@@ -172,7 +172,7 @@ impl Demo {
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         self.wanted_ent_ids.push(ui.entity_id.clone());
-                        self.players.insert(ui.entity_id.clone(), ui);
+                        self.players.insert(ui.xuid.clone(), ui);
                     }
                 }
                 if history.len() == 32 {
@@ -278,7 +278,7 @@ impl Demo {
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         //println!("Created player: {} {}", ui.name, ui.entity_id);
                         self.wanted_ent_ids.push(ui.entity_id.clone());
-                        self.players.insert(ui.entity_id.clone(), ui);
+                        self.players.insert(ui.xuid.clone(), ui);
                     }
                 } else {
                     let size = buf.read_nbits(14);
@@ -301,7 +301,7 @@ impl Demo {
                                     ui.name = ui.name.trim_end_matches("\x00").to_string();
                                     //println!("Created player: {} {}", ui.name, ui.entity_id);
                                     self.wanted_ent_ids.push(ui.entity_id.clone());
-                                    self.players.insert(ui.entity_id.clone(), ui);
+                                    self.players.insert(ui.xuid.clone(), ui);
                                 }
                             }
                         }

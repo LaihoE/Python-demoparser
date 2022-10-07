@@ -32,7 +32,7 @@ fn parse_key(key: &Key_t) -> KeyData {
     }
 }
 
-fn parse_key_steamid(key: &Key_t, players: &HashMap<u32, UserInfo>) -> KeyData {
+fn parse_key_steamid(key: &Key_t, players: &HashMap<u64, UserInfo>) -> KeyData {
     let ent_id = key.val_short();
     for (_, player) in players {
         if player.entity_id as i32 == ent_id {
@@ -48,7 +48,7 @@ fn parse_key_steamid(key: &Key_t, players: &HashMap<u32, UserInfo>) -> KeyData {
     }
 }
 
-fn parse_key_steam_name(key: &Key_t, players: &HashMap<u32, UserInfo>) -> KeyData {
+fn parse_key_steam_name(key: &Key_t, players: &HashMap<u64, UserInfo>) -> KeyData {
     let ent_id = key.val_short();
     for (_, player) in players {
         if player.entity_id as i32 == ent_id {
@@ -128,7 +128,7 @@ pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
     tick: &i32,
-    players: &HashMap<u32, UserInfo>,
+    players: &HashMap<u64, UserInfo>,
     round: i32,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it

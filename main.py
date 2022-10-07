@@ -43,8 +43,8 @@ def parse(file):
     number_of_kills = 5
 
     parser = DemoParser(file)
-    wanted_props = ["m_vecOrigin_X", "m_iHealth"]
-    wanted_players = [76561198977304502] # Empty for all players
+    wanted_props = ["m_vecOrigin_X", "m_iHealth", "m_angEyeAngles[0]"]
+    wanted_players = [] # Empty for all players
     wanted_ticks = [x for x in range(10000, 15000)] # =10000..11000
 
     parser = DemoParser(file)
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     import tqdm
 
     files = glob.glob("/home/laiho/Documents/demos/faceits/clean_unzompr/*")
-    files = files[:1]
+    #files = files[:1]
 
     with mp.Pool(processes=1) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(parse, files), total=len(files)))

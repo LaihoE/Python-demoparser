@@ -167,7 +167,8 @@ impl DemoParser {
                 wanted_props.push("steamid".to_string());
                 wanted_props.push("name".to_string());
                 let mut all_series = vec![];
-
+                // println!("{:?}", wanted_props);
+                // println!("{:?}", data.keys());
                 for prop_name in &wanted_props {
                     if data.contains_key(prop_name) {
                         if let parsing::parser::VarVec::F32(data) = &data[prop_name].data {

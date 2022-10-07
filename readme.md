@@ -64,8 +64,7 @@ m_vecOrigin --> (m_vecOrigin_X, m_vecOrigin_Y).
 List of possible values comming soon.
 ## Performance
 
-Performance can be split in two parts. Reading the demo and parsing the demo. 
-Performance will vary mostly based on reading speed.
+Your performance will mostly depend on how fast your HDD/SSD is.
 
 For reference here are some very rough numbers for reading speeds assuming an average demo size of 80MB.
 ### Reading
@@ -80,19 +79,16 @@ For reference here are some very rough numbers for reading speeds assuming an av
 Time taken for the parsing (VERY roughly):
 | Action      | Time |
 | ----------- | ---- |
-| Game events | 30ms |
+| Game events | 50ms |
 | Player data | 1s   |
 
-Numbers are with a ryzen 5900x
+The parsing numbers are with a single process, but it's trivial to multiprocess across demos (see examples).  
 
 
-As you can see there is a huge difference between time taken for events and props. This is not a surprise since most of data is inside props. The parser only parses the part you are interested in.
+If parsing in parallel then game events will almost certainly be I/O bottlenecked. While it uses mmap, you can use above reading speed table for ok estimates for performance. This means that if you only need game events information then you can parse >50 demos per second with a fast SSD.
 
-Performance still has lots of room for improvement.
-
+Parsing props performance can roughly be estimated as 1 demo per second per core.
 
 ## Other notes
-- The full demo is read into memory in when creating Demoparser class
-    - Allows multiple parses without having to read the file multiple times
-- Supports .gz files (faceit demos directly)
+- Parse props reads all bytes into memory before parsing, while all other methods use mmap.
 

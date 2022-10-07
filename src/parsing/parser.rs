@@ -62,7 +62,7 @@ pub struct Demo {
     pub players_connected: i32,
     pub only_players: bool,
     pub only_header: bool,
-    pub wanted_ent_ids: Vec<u32>,
+    pub userid_sid_map: HashMap<u32, u64>,
     pub playback_frames: usize,
 }
 
@@ -183,7 +183,7 @@ impl Demo {
         }
         wanted_props.extend(extra_wanted_props);
         Ok(Self {
-            wanted_ent_ids: Vec::new(),
+            userid_sid_map: HashMap::new(),
             bytes: BytesVariant::Mmap(bytes),
             fp: 0,
             cmd: 0,
@@ -240,7 +240,7 @@ impl Demo {
         }
         wanted_props.extend(extra_wanted_props);
         Ok(Self {
-            wanted_ent_ids: Vec::new(),
+            userid_sid_map: HashMap::new(),
             bytes: BytesVariant::Vec(bytes),
             fp: 0,
             cmd: 0,

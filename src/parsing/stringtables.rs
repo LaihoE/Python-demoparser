@@ -156,7 +156,7 @@ impl Demo {
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        self.wanted_ent_ids.push(ui.entity_id.clone());
+                        self.userid_sid_map.insert(ui.user_id.clone(), ui.xuid.clone());
                         self.players.insert(ui.xuid.clone(), ui);
                     }
                 } else {
@@ -171,7 +171,7 @@ impl Demo {
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        self.wanted_ent_ids.push(ui.entity_id.clone());
+                        self.userid_sid_map.insert(ui.user_id.clone(), ui.xuid.clone());
                         self.players.insert(ui.xuid.clone(), ui);
                     }
                 }
@@ -277,7 +277,7 @@ impl Demo {
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         //println!("Created player: {} {}", ui.name, ui.entity_id);
-                        self.wanted_ent_ids.push(ui.entity_id.clone());
+                        self.userid_sid_map.insert(ui.user_id.clone(), ui.xuid.clone());
                         self.players.insert(ui.xuid.clone(), ui);
                     }
                 } else {
@@ -290,7 +290,6 @@ impl Demo {
                             let temp_id = (st.data[index as usize].entry).parse::<u32>();
                             match temp_id {
                                 Err(e) => {
-                                    println!("{} {}", ui.name, st.data[index as usize].entry);
                                     ui.entity_id = 99999
                                 }
                                 Ok(ok) => {
@@ -303,7 +302,7 @@ impl Demo {
                                         ui.friends_name.trim_end_matches("\x00").to_string();
                                     ui.name = ui.name.trim_end_matches("\x00").to_string();
                                     //println!("Created player: {} {}", ui.name, ui.entity_id);
-                                    self.wanted_ent_ids.push(ui.entity_id.clone());
+                                    self.userid_sid_map.insert(ui.user_id.clone(), ui.xuid.clone());
                                     self.players.insert(ui.xuid.clone(), ui);
                                 }
                             }

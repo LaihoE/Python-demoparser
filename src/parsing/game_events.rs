@@ -32,50 +32,42 @@ fn parse_key(key: &Key_t) -> KeyData {
     }
 }
 
-fn parse_key_steamid(key: &Key_t, players: &HashMap<u64, UserInfo>) -> KeyData {
+fn parse_key_steamid(key: &Key_t, uid_sid_map: &HashMap<u32, u64>) -> KeyData {
     let user_id = key.val_short();
-    for (_, player) in players {
-        if player.user_id as i32 == user_id {
-            match key.type_() {
-                4 => return KeyData::StrData(player.xuid.to_string()),
-                _ => panic!("KEYDATA FAILED"),
-            }
+    
+    match uid_sid_map.get(&(user_id as u32)) {
+        None => {KeyData::StrData("NONE".to_string())}//panic!("USERID: {} not found in mapping to steamid", user_id),
+        Some(u) => {
+            return KeyData::StrData(u.to_string());
         }
-    }
-    /*
-    println!("Coulnt find:{}", user_id);
-    for (_, player) in players {
-        print!(" ({}, {}) ", player.name, player.user_id)
-    }
-    */
-    match key.type_() {
-        4 => return KeyData::StrData(key.val_short().to_string()),
-        _ => panic!("KEYDATA FAILED"),
     }
 }
 
-fn parse_key_steam_name(key: &Key_t, players: &HashMap<u64, UserInfo>) -> KeyData {
-    let ent_id = key.val_short();
-    for (_, player) in players {
-        if player.entity_id as i32 == ent_id {
-            match key.type_() {
-                4 => {
-                    return KeyData::StrData(
-                        player
-                            .name
-                            .to_string()
-                            .trim_matches(char::from(0))
-                            .to_string(),
-                    )
+fn parse_key_steam_name(key: &Key_t, players: &HashMap<u64, UserInfo>, uid_sid_map: &HashMap<u32, u64>) -> KeyData {
+    let uid = key.val_short();
+    match uid_sid_map.get(&(uid as u32)) {
+        None => return KeyData::StrData("None".to_string()),
+        Some(sid) =>{
+            for (_, player) in players {
+                if &player.xuid == sid {
+                    match key.type_() {
+                        4 => {
+                            return KeyData::StrData(
+                                player
+                                    .name
+                                    .to_string()
+                                    .trim_matches(char::from(0))
+                                    .to_string(),
+                            )
+                        }
+                        _ =>{
+                            }
+                    }
                 }
-                _ => panic!("KEYDATA FAILED"),
             }
         }
     }
-    match key.type_() {
-        4 => return KeyData::StrData(key.val_short().to_string()),
-        _ => panic!("KEYDATA FAILED"),
-    }
+    return KeyData::StrData("None".to_string());
 }
 
 #[derive(Debug)]
@@ -134,6 +126,7 @@ pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
     tick: &i32,
+    uid_sid_map: &HashMap<u32, u64>,
     players: &HashMap<u64, UserInfo>,
     round: i32,
 ) -> Vec<NameDataPair> {
@@ -146,24 +139,24 @@ pub fn gen_name_val_pairs(
 
         match desc.name() {
             "userid" => {
-                let steamid = parse_key_steamid(ge, &players);
+                let steamid = parse_key_steamid(ge, uid_sid_map);
                 kv_pairs.push(NameDataPair {
                     name: "player_id".to_string(),
                     data: steamid,
                 });
-                let steam_name = parse_key_steam_name(ge, &players);
+                let steam_name = parse_key_steam_name(ge, &players, uid_sid_map);
                 kv_pairs.push(NameDataPair {
                     name: "player_name".to_string(),
                     data: steam_name,
                 });
             }
             "attacker" => {
-                let steamid = parse_key_steamid(ge, &players);
+                let steamid = parse_key_steamid(ge, uid_sid_map);
                 kv_pairs.push(NameDataPair {
                     name: "attacker_id".to_string(),
                     data: steamid,
                 });
-                let steam_name = parse_key_steam_name(ge, &players);
+                let steam_name = parse_key_steam_name(ge, &players, uid_sid_map);
                 kv_pairs.push(NameDataPair {
                     name: "attacker_name".to_string(),
                     data: steam_name,
@@ -221,6 +214,7 @@ impl Demo {
                     &game_event,
                     &event_desc,
                     &self.tick,
+                    &self.userid_sid_map,
                     &self.players,
                     self.round,
                 );

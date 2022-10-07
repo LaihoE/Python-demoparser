@@ -1,38 +1,25 @@
-use numpy::ndarray::{Array1, ArrayD, ArrayView1, ArrayViewD, ArrayViewMutD, Zip};
-use numpy::{
-    datetime::{units, Timedelta},
-    Complex64, IntoPyArray, PyArray1, PyArrayDyn, PyReadonlyArray1, PyReadonlyArrayDyn,
-    PyReadwriteArray1, PyReadwriteArrayDyn,
-};
 mod parsing;
 use fxhash::FxHashMap;
-use hashbrown::{HashMap, HashSet};
 use parsing::header::Header;
 use parsing::parser::Demo;
-//use polars::prelude::*;
-//use polars::series::Series;
-use crate::parsing::stringtables::UserInfo;
 use arrow::ffi;
 use flate2::read::GzDecoder;
-use memmap::{Mmap, MmapOptions};
-use polars::prelude::*;
+use memmap::{MmapOptions};
+use polars::prelude::ArrowField;
 use polars_arrow::export::arrow;
 use pyo3::exceptions::PyFileNotFoundError;
-use pyo3::exceptions::PyValueError;
 use pyo3::ffi::Py_uintptr_t;
 use pyo3::prelude::*;
-use pyo3::prelude::*;
-use pyo3::types::IntoPyDict;
-use pyo3::types::PyDict;
-use pyo3::types::PyList;
 use pyo3::{PyAny, PyObject, PyResult};
 use pyo3::{PyErr, Python};
-use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use std::time::Instant;
 use std::{io, result, vec};
+use polars::series::Series;
+use polars_arrow::prelude::ArrayRef;
+use polars::prelude::NamedFrom;
+
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
 pub(crate) fn to_py_array(py: Python, pyarrow: &PyModule, array: ArrayRef) -> PyResult<PyObject> {

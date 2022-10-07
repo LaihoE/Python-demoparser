@@ -15,7 +15,8 @@ print(time.time() - before)
 
 df = pd.DataFrame(parser.parse_events("player_death"))
 players = parser.parse_players()
-print(set(df["player_name"]))"""
+print(set(df["player_name"]))
+"""
 
 
 def parse(file):
@@ -24,14 +25,12 @@ def parse(file):
     df = pd.DataFrame(parser.parse_events("player_death"))
     players = parser.parse_players()
     print(set(df["player_name"]))
-    for player in players:
-        print(sorted(player.items(), key=lambda x: x))
-
 
 if __name__ == "__main__":
     import tqdm
 
-    files = glob.glob("/home/laiho/Documents/demos/faceits/clean_unzompr/*")
+    #files = glob.glob("/mnt/c/Users/emill/got/x/*")
+    files = glob.glob("/mnt/d/5kcheaters/5/a/*")
     #files = glob.glob("/home/laiho/Documents/demos/mygames/*")
     #files = files[:1]
 

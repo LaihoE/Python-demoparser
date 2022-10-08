@@ -1,4 +1,3 @@
-use crate::Demo;
 use memmap::Mmap;
 
 // Some of these could be combined

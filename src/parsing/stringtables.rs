@@ -1,9 +1,6 @@
-use core::num;
-use csgoproto::cstrike15_gcmessages::score_leaderboard_data::Entry;
-use csgoproto::netmessages::{CSVCMsg_SendTable, CSVCMsg_UpdateStringTable};
+use csgoproto::netmessages::CSVCMsg_UpdateStringTable;
 use pyo3::{Py, Python};
 use std::convert::TryInto;
-use std::hash::Hash;
 //use hashbrown::HashMap;
 use crate::parsing::read_bits::BitReader;
 use crate::Demo;
@@ -139,7 +136,7 @@ impl Demo {
                     btc = buf.read_nbits(5);
                     let substring = "";
                     let suffix = buf.read_string_lossy(0);
-                    entry = (substring.to_string() + &suffix.to_owned());
+                    entry = substring.to_string() + &suffix.to_owned();
                 } else {
                     entry = buf.read_string_lossy(0);
                 }

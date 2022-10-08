@@ -1,9 +1,11 @@
 use super::game_events::GameEvent;
-use super::read_bits::PropData;
+use super::variants::PropData;
+use crate::parsing::collect_data;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
+pub use crate::parsing::variants::*;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::*;
 use fxhash::FxHashMap;
@@ -22,19 +24,6 @@ pub struct Frame {
     pub cmd: u8,
     pub tick: i32,
     pub playerslot: u8,
-}
-#[derive(Debug, Clone)]
-pub enum VarVec {
-    U64(Vec<Option<u64>>),
-    F32(Vec<Option<f32>>),
-    I64(Vec<Option<i64>>),
-    I32(Vec<Option<i32>>),
-    String(Vec<Option<String>>),
-}
-#[derive(Debug, Clone)]
-pub struct PropColumn {
-    pub dtype: String,
-    pub data: VarVec,
 }
 
 pub struct Demo {
@@ -64,93 +53,6 @@ pub struct Demo {
     pub only_header: bool,
     pub userid_sid_map: HashMap<u32, u64>,
     pub playback_frames: usize,
-}
-
-impl VarVec {
-    pub fn push_propdata(&mut self, item: PropData) {
-        match item {
-            PropData::F32(p) => match self {
-                VarVec::F32(f) => f.push(Some(p)),
-                _ => {
-                    panic!("Tried to push a {:?} into a {:?} column", item, self);
-                }
-            },
-            PropData::I32(p) => match self {
-                VarVec::I32(f) => f.push(Some(p)),
-                _ => {
-                    panic!("Tried to push a {:?} into a {:?} column", item, self);
-                }
-            },
-            PropData::I64(p) => match self {
-                VarVec::I64(f) => f.push(Some(p)),
-                _ => {
-                    panic!("Tried to push a {:?} into a {:?} column", item, self);
-                }
-            },
-            PropData::String(p) => match self {
-                VarVec::String(f) => f.push(Some(p)),
-                _ => {
-                    panic!("Tried to push a {:?} into a string column", p);
-                }
-            },
-            _ => panic!("bad type for prop"),
-        }
-    }
-    pub fn push_string(&mut self, data: String) {
-        match self {
-            VarVec::String(f) => f.push(Some(data)),
-            _ => {}
-        }
-    }
-    pub fn push_string_none(&mut self) {
-        match self {
-            VarVec::String(f) => f.push(None),
-            _ => {}
-        }
-    }
-    pub fn push_float_none(&mut self) {
-        match self {
-            VarVec::F32(f) => f.push(None),
-            _ => {}
-        }
-    }
-    pub fn push_i32_none(&mut self) {
-        match self {
-            VarVec::I32(f) => f.push(None),
-            _ => {}
-        }
-    }
-}
-
-pub enum BytesVariant {
-    Mmap(Mmap),
-    Vec(Vec<u8>),
-}
-
-impl<Idx> std::ops::Index<Idx> for BytesVariant
-where
-    Idx: std::slice::SliceIndex<[u8]>,
-{
-    type Output = Idx::Output;
-    #[inline(always)]
-    fn index(&self, i: Idx) -> &Self::Output {
-        match self {
-            Self::Mmap(m) => {
-                return &m[i];
-            }
-            Self::Vec(v) => {
-                return &v[i];
-            }
-        }
-    }
-}
-impl BytesVariant {
-    pub fn get_len(&self) -> usize {
-        match self {
-            Self::Mmap(m) => m.len(),
-            Self::Vec(v) => v.len(),
-        }
-    }
 }
 
 impl Demo {
@@ -286,167 +188,16 @@ impl Demo {
             if self.only_header {
                 break;
             }
-            for (_, player) in &self.players {
-                if player.xuid == 0 || player.name == "GOTV" {
-                    continue;
-                };
-                if self.wanted_ticks.contains(&self.tick) || self.wanted_ticks.len() == 0 {
-                    if self.wanted_players.contains(&player.xuid) || self.wanted_players.len() == 0
-                    {
-                        if self
-                            .entities
-                            .as_ref()
-                            .unwrap()
-                            .contains_key(&player.entity_id)
-                        {
-                            //println!("X");
-                            if self.entities.as_ref().unwrap()[&player.entity_id].is_some() {
-                                let ent = self.entities.as_ref().unwrap()[&player.entity_id]
-                                    .as_ref()
-                                    .unwrap();
-
-                                for prop_name in props_names {
-                                    let prop_type = TYPEHM[prop_name];
-                                    match ent.props.get(prop_name) {
-                                        None => {
-                                            match prop_type {
-                                                // INT
-                                                0 => {
-                                                    ticks_props
-                                                        .entry(prop_name.to_string())
-                                                        .or_insert_with(|| PropColumn {
-                                                            dtype: "f32".to_string(),
-                                                            data: VarVec::I32(Vec::with_capacity(
-                                                                self.playback_frames,
-                                                            )),
-                                                        })
-                                                        .data
-                                                        .push_i32_none();
-                                                }
-                                                // FLOAT
-                                                1 => {
-                                                    ticks_props
-                                                        .entry(prop_name.to_string())
-                                                        .or_insert_with(|| PropColumn {
-                                                            dtype: "f32".to_string(),
-                                                            data: VarVec::F32(Vec::with_capacity(
-                                                                self.playback_frames,
-                                                            )),
-                                                        })
-                                                        .data
-                                                        .push_float_none();
-                                                }
-                                                // Vec
-                                                2 => {
-                                                    ticks_props
-                                                        .entry(prop_name.to_string())
-                                                        .or_insert_with(|| PropColumn {
-                                                            dtype: "f32".to_string(),
-                                                            data: VarVec::F32(Vec::with_capacity(
-                                                                self.playback_frames,
-                                                            )),
-                                                        })
-                                                        .data
-                                                        .push_float_none();
-                                                }
-                                                // STRING
-                                                4 => {
-                                                    ticks_props
-                                                        .entry(prop_name.to_string())
-                                                        .or_insert_with(|| PropColumn {
-                                                            dtype: "f32".to_string(),
-                                                            data: VarVec::String(
-                                                                Vec::with_capacity(
-                                                                    self.playback_frames,
-                                                                ),
-                                                            ),
-                                                        })
-                                                        .data
-                                                        .push_string_none();
-                                                }
-                                                _ => {
-                                                    println!("UNK TYPE");
-                                                }
-                                            }
-                                        }
-                                        Some(e) => match prop_type {
-                                            0 => {
-                                                ticks_props
-                                                    .entry(prop_name.to_string())
-                                                    .or_insert_with(|| PropColumn {
-                                                        dtype: "f32".to_string(),
-                                                        data: VarVec::I32(Vec::with_capacity(
-                                                            self.playback_frames,
-                                                        )),
-                                                    })
-                                                    .data
-                                                    .push_propdata(e.data.clone());
-                                            }
-                                            1 => {
-                                                ticks_props
-                                                    .entry(prop_name.to_string())
-                                                    .or_insert_with(|| PropColumn {
-                                                        dtype: "f32".to_string(),
-                                                        data: VarVec::F32(Vec::with_capacity(
-                                                            self.playback_frames,
-                                                        )),
-                                                    })
-                                                    .data
-                                                    .push_propdata(e.data.clone());
-                                            }
-                                            4 => {
-                                                ticks_props
-                                                    .entry(prop_name.to_string())
-                                                    .or_insert_with(|| PropColumn {
-                                                        dtype: "f32".to_string(),
-                                                        data: VarVec::String(Vec::with_capacity(
-                                                            self.playback_frames,
-                                                        )),
-                                                    })
-                                                    .data
-                                                    .push_propdata(e.data.clone());
-                                            }
-                                            _ => panic!("UNKOWN PROP TYPE"),
-                                        },
-                                    }
-                                }
-                                // EXTRA
-                                ticks_props
-                                    .entry("tick".to_string())
-                                    .or_insert_with(|| PropColumn {
-                                        dtype: "i32".to_string(),
-                                        data: VarVec::String(Vec::with_capacity(
-                                            self.playback_frames,
-                                        )),
-                                    })
-                                    .data
-                                    .push_string(self.tick.to_string());
-
-                                ticks_props
-                                    .entry("steamid".to_string())
-                                    .or_insert_with(|| PropColumn {
-                                        dtype: "u64".to_string(),
-                                        data: VarVec::String(Vec::with_capacity(
-                                            self.playback_frames,
-                                        )),
-                                    })
-                                    .data
-                                    .push_string(player.xuid.to_string());
-                                ticks_props
-                                    .entry("name".to_string())
-                                    .or_insert_with(|| PropColumn {
-                                        dtype: "u64".to_string(),
-                                        data: VarVec::String(Vec::with_capacity(
-                                            self.playback_frames,
-                                        )),
-                                    })
-                                    .data
-                                    .push_string(player.name.to_string());
-                            }
-                        }
-                    }
-                }
-            }
+            Demo::collect_player_data(
+                &self.players,
+                &self.tick,
+                &self.wanted_ticks,
+                &self.wanted_players,
+                &self.entities,
+                props_names,
+                &mut ticks_props,
+                self.playback_frames,
+            );
             self.parse_cmd(f.cmd);
         }
         ticks_props

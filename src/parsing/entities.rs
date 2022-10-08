@@ -1,7 +1,7 @@
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::read_bits::BitReader;
-use crate::parsing::read_bits::PropAtom;
-use crate::parsing::read_bits::PropData;
+use crate::parsing::variants::PropAtom;
+use crate::parsing::variants::PropData;
 use crate::Demo;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;

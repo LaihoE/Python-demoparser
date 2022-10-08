@@ -156,7 +156,8 @@ impl Demo {
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        self.userid_sid_map.insert(ui.user_id.clone(), ui.xuid.clone());
+                        self.userid_sid_map
+                            .insert(ui.user_id.clone(), ui.xuid.clone());
                         self.players.insert(ui.xuid.clone(), ui);
                     }
                 } else {
@@ -171,7 +172,8 @@ impl Demo {
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        self.userid_sid_map.insert(ui.user_id.clone(), ui.xuid.clone());
+                        self.userid_sid_map
+                            .insert(ui.user_id.clone(), ui.xuid.clone());
                         self.players.insert(ui.xuid.clone(), ui);
                     }
                 }
@@ -229,7 +231,7 @@ impl Demo {
         let mut buf = BitReader::new(data.string_data(), left_over);
         buf.read_uneven_end_bits();
 
-        let mut entry_bits = (st.max_entries as f32).log2() as i32;
+        let entry_bits = (st.max_entries as f32).log2() as i32;
         let mut index = 0;
         let mut last_inx: i32 = -1;
         let mut idx = 0;
@@ -258,7 +260,7 @@ impl Demo {
                     btc = buf.read_nbits(5);
                     let substring = "";
                     let suffix = buf.read_string_lossy(0);
-                    entry = (substring.to_string() + &suffix.to_owned());
+                    entry = substring.to_string() + &suffix.to_owned();
                 } else {
                     entry = buf.read_string_lossy(0);
                 }
@@ -277,7 +279,8 @@ impl Demo {
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         //println!("Created player: {} {}", ui.name, ui.entity_id);
-                        self.userid_sid_map.insert(ui.user_id.clone(), ui.xuid.clone());
+                        self.userid_sid_map
+                            .insert(ui.user_id.clone(), ui.xuid.clone());
                         self.players.insert(ui.xuid.clone(), ui);
                     }
                 } else {
@@ -289,9 +292,7 @@ impl Demo {
                         if st.data[index as usize].entry != "" {
                             let temp_id = (st.data[index as usize].entry).parse::<u32>();
                             match temp_id {
-                                Err(e) => {
-                                    ui.entity_id = 99999
-                                }
+                                Err(e) => ui.entity_id = 99999,
                                 Ok(ok) => {
                                     ui.entity_id =
                                         (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
@@ -301,8 +302,8 @@ impl Demo {
                                     ui.friends_name =
                                         ui.friends_name.trim_end_matches("\x00").to_string();
                                     ui.name = ui.name.trim_end_matches("\x00").to_string();
-                                    //println!("Created player: {} {}", ui.name, ui.entity_id);
-                                    self.userid_sid_map.insert(ui.user_id.clone(), ui.xuid.clone());
+                                    self.userid_sid_map
+                                        .insert(ui.user_id.clone(), ui.xuid.clone());
                                     self.players.insert(ui.xuid.clone(), ui);
                                 }
                             }

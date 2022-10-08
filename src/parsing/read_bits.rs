@@ -1,8 +1,8 @@
+use crate::parsing::entities::Prop;
+use crate::parsing::variants::PropData;
+use core::panic;
 use protobuf::Message;
 use protobuf::MessageDyn;
-
-use crate::parsing::entities::Prop;
-use core::panic;
 use pyo3::prelude::*;
 use std::any::Any;
 use std::convert::TryInto;
@@ -47,24 +47,6 @@ static MASKS: [u32; NBITS + 1] = [
     u32::MAX >> 1,
     u32::MAX,
 ];
-
-#[derive(Debug, Clone)]
-pub enum PropData {
-    I32(i32),
-    F32(f32),
-    I64(i64),
-    String(String),
-    VecXY(Vec<f32>),
-    VecXYZ(Vec<f32>),
-    Vec(Vec<i32>),
-}
-
-#[derive(Debug)]
-pub struct PropAtom {
-    pub prop_name: String,
-    pub data: PropData,
-    pub tick: i32,
-}
 
 pub struct BitReader<R: io::Read> {
     inner: R,

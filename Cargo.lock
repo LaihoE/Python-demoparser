@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "demoparser"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "bitreader",
  "csgoproto",

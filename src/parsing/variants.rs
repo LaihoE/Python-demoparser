@@ -2,6 +2,36 @@ use crate::Demo;
 use memmap::Mmap;
 
 // Some of these could be combined
+#[derive(Debug, Clone)]
+pub enum VarVec {
+    U64(Vec<Option<u64>>),
+    F32(Vec<Option<f32>>),
+    I64(Vec<Option<i64>>),
+    I32(Vec<Option<i32>>),
+    String(Vec<Option<String>>),
+}
+#[derive(Debug, Clone)]
+pub struct PropColumn {
+    pub data: VarVec,
+}
+
+#[derive(Debug, Clone)]
+pub enum PropData {
+    I32(i32),
+    F32(f32),
+    I64(i64),
+    String(String),
+    VecXY(Vec<f32>),
+    VecXYZ(Vec<f32>),
+    Vec(Vec<i32>),
+}
+
+#[derive(Debug)]
+pub struct PropAtom {
+    pub prop_name: String,
+    pub data: PropData,
+    pub tick: i32,
+}
 
 impl VarVec {
     pub fn push_propdata(&mut self, item: PropData) {
@@ -57,6 +87,26 @@ impl VarVec {
             _ => {}
         }
     }
+    pub fn push_none(&mut self) {
+        match self {
+            VarVec::I32(f) => f.push(None),
+            VarVec::F32(f) => f.push(None),
+            VarVec::String(f) => f.push(None),
+            _ => panic!("unk col while pushing none"),
+        }
+    }
+    pub fn push_u64(&mut self, data: u64) {
+        match self {
+            VarVec::U64(f) => f.push(Some(data)),
+            _ => panic!("TRIED TO PUSH SMALLER TYPE TO U64"),
+        }
+    }
+    pub fn push_i32(&mut self, data: i32) {
+        match self {
+            VarVec::I32(f) => f.push(Some(data)),
+            _ => panic!("i32 push panic"),
+        }
+    }
 }
 
 pub enum BytesVariant {
@@ -88,35 +138,4 @@ impl BytesVariant {
             Self::Vec(v) => v.len(),
         }
     }
-}
-#[derive(Debug, Clone)]
-pub enum VarVec {
-    U64(Vec<Option<u64>>),
-    F32(Vec<Option<f32>>),
-    I64(Vec<Option<i64>>),
-    I32(Vec<Option<i32>>),
-    String(Vec<Option<String>>),
-}
-#[derive(Debug, Clone)]
-pub struct PropColumn {
-    pub dtype: String,
-    pub data: VarVec,
-}
-
-#[derive(Debug, Clone)]
-pub enum PropData {
-    I32(i32),
-    F32(f32),
-    I64(i64),
-    String(String),
-    VecXY(Vec<f32>),
-    VecXYZ(Vec<f32>),
-    Vec(Vec<i32>),
-}
-
-#[derive(Debug)]
-pub struct PropAtom {
-    pub prop_name: String,
-    pub data: PropData,
-    pub tick: i32,
 }

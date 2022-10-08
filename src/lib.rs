@@ -104,7 +104,8 @@ impl DemoParser {
             Err(e) => Err(PyFileNotFoundError::new_err("ERROR READING FILE")),
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
-                let _ = parser.parse_frame(&vec!["".to_owned()]);
+
+                let _ = parser.start_parsing(&vec!["".to_owned()]);
                 let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
 
                 // Create Hashmap with <string, pyobject> to be able to convert to python dict
@@ -148,7 +149,7 @@ impl DemoParser {
                 let h: Header = parser.parse_demo_header();
                 parser.playback_frames = h.playback_frames as usize;
 
-                let data = parser.parse_frame(&wanted_props);
+                let data = parser.start_parsing(&wanted_props);
                 wanted_props.push("tick".to_string());
                 wanted_props.push("steamid".to_string());
                 wanted_props.push("name".to_string());
@@ -172,6 +173,11 @@ impl DemoParser {
                             let py_series = rust_series_to_py_series(&s).unwrap();
                             all_series.push(py_series);
                         }
+                        if let parsing::parser::VarVec::U64(data) = &data[prop_name].data {
+                            let s = Series::new(prop_name, data);
+                            let py_series = rust_series_to_py_series(&s).unwrap();
+                            all_series.push(py_series);
+                        }
                     } else {
                         println!(
                             "{:?} Column not found. Maybe your prop is incorrect?",
@@ -179,6 +185,7 @@ impl DemoParser {
                         );
                     }
                 }
+                //println!("{:?}", data.get("steamid"));
                 let polars = py.import("polars")?;
                 let all_series_py = all_series.to_object(py);
                 let df = polars.call_method1("DataFrame", (all_series_py,))?;
@@ -207,7 +214,7 @@ impl DemoParser {
             Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
-                let _ = parser.parse_frame(&vec![]);
+                let _ = parser.start_parsing(&vec![]);
                 let players = parser.players;
                 let mut py_players = vec![];
                 for (_, player) in players {

@@ -173,7 +173,7 @@ impl Demo {
 }
 
 impl Demo {
-    pub fn parse_frame(&mut self, props_names: &Vec<String>) -> FxHashMap<String, PropColumn> {
+    pub fn start_parsing(&mut self, props_names: &Vec<String>) -> FxHashMap<String, PropColumn> {
         let mut ticks_props: FxHashMap<String, PropColumn> = FxHashMap::default();
         while self.fp < self.bytes.get_len() as usize {
             let f = self.read_frame_bytes();
@@ -268,7 +268,7 @@ impl Demo {
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;
-                                self.parse_packet_entities(pack_ents, parse_props);
+                                self.parse_packet_entities(pack_ents);
                             }
                             Err(e) => panic!(
                                 "Failed to parse Packet entities at tick {}. Error: {e}",

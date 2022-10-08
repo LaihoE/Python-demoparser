@@ -34,20 +34,24 @@ fn parse_key(key: &Key_t) -> KeyData {
 
 fn parse_key_steamid(key: &Key_t, uid_sid_map: &HashMap<u32, u64>) -> KeyData {
     let user_id = key.val_short();
-    
+
     match uid_sid_map.get(&(user_id as u32)) {
-        None => {KeyData::StrData("NONE".to_string())}//panic!("USERID: {} not found in mapping to steamid", user_id),
+        None => KeyData::StrData("NONE".to_string()), //panic!("USERID: {} not found in mapping to steamid", user_id),
         Some(u) => {
             return KeyData::StrData(u.to_string());
         }
     }
 }
 
-fn parse_key_steam_name(key: &Key_t, players: &HashMap<u64, UserInfo>, uid_sid_map: &HashMap<u32, u64>) -> KeyData {
+fn parse_key_steam_name(
+    key: &Key_t,
+    players: &HashMap<u64, UserInfo>,
+    uid_sid_map: &HashMap<u32, u64>,
+) -> KeyData {
     let uid = key.val_short();
     match uid_sid_map.get(&(uid as u32)) {
         None => return KeyData::StrData("None".to_string()),
-        Some(sid) =>{
+        Some(sid) => {
             for (_, player) in players {
                 if &player.xuid == sid {
                     match key.type_() {
@@ -60,8 +64,7 @@ fn parse_key_steam_name(key: &Key_t, players: &HashMap<u64, UserInfo>, uid_sid_m
                                     .to_string(),
                             )
                         }
-                        _ =>{
-                            }
+                        _ => {}
                     }
                 }
             }
@@ -86,15 +89,15 @@ impl Default for KeyData {
     }
 }
 impl KeyData {
-    pub fn to_string_py(&self) -> String {
+    pub fn to_string_py(&self, py: Python<'_>) -> PyObject {
         match self {
-            KeyData::StrData(f) => f.to_string(),
-            KeyData::FloatData(f) => f.to_string(),
-            KeyData::LongData(f) => f.to_string(),
-            KeyData::ShortData(f) => f.to_string(),
-            KeyData::ByteData(f) => f.to_string(),
-            KeyData::BoolData(f) => f.to_string(),
-            KeyData::Uint64Data(f) => f.to_string(),
+            KeyData::StrData(f) => f.to_string().to_object(py),
+            KeyData::FloatData(f) => f.to_object(py),
+            KeyData::LongData(f) => f.to_object(py),
+            KeyData::ShortData(f) => f.to_object(py),
+            KeyData::ByteData(f) => f.to_object(py),
+            KeyData::BoolData(f) => f.to_object(py),
+            KeyData::Uint64Data(f) => f.to_object(py),
         }
     }
 }
@@ -115,7 +118,7 @@ impl GameEvent {
         let mut py_tuples: Vec<(String, PyObject)> = Vec::new();
         for pair in &self.fields {
             let name = &pair.name;
-            let val = pair.data.to_string_py().to_object(py);
+            let val = pair.data.to_string_py(py);
             py_tuples.push((name.to_string(), val));
         }
         py_tuples

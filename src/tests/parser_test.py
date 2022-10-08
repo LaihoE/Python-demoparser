@@ -5,6 +5,8 @@ import numpy as np
 import os
 import glob
 from demoparser import DemoParser
+import gzip
+
 
 
 class TestFullDemo(unittest.TestCase):
@@ -15,9 +17,9 @@ class TestFullDemo(unittest.TestCase):
     def test_events(self):
         events = self.parser.parse_events("player_hurt")
         correct_path = os.path.join(os.path.dirname(__file__), 'correct_outputs', 'events.json')
-        with open(correct_path) as f:
-            correct = json.load(f)
-        self.assertEqual(events, correct)
+        with gzip.open("test.dem", 'rt', encoding='UTF-8') as zipfile:
+            data = json.load(zipfile)
+        self.assertEqual(events, data)
     
     def test_no_duplicate_players(self):
         players = self.parser.parse_players()

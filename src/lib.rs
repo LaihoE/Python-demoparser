@@ -1,12 +1,15 @@
 mod parsing;
-use fxhash::FxHashMap;
-use parsing::header::Header;
-use parsing::parser::Demo;
 use arrow::ffi;
 use flate2::read::GzDecoder;
-use memmap::{MmapOptions};
+use fxhash::FxHashMap;
+use memmap::MmapOptions;
+use parsing::header::Header;
+use parsing::parser::Demo;
 use polars::prelude::ArrowField;
+use polars::prelude::NamedFrom;
+use polars::series::Series;
 use polars_arrow::export::arrow;
+use polars_arrow::prelude::ArrayRef;
 use pyo3::exceptions::PyFileNotFoundError;
 use pyo3::ffi::Py_uintptr_t;
 use pyo3::prelude::*;
@@ -16,10 +19,6 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::{io, result, vec};
-use polars::series::Series;
-use polars_arrow::prelude::ArrayRef;
-use polars::prelude::NamedFrom;
-
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
 pub(crate) fn to_py_array(py: Python, pyarrow: &PyModule, array: ArrayRef) -> PyResult<PyObject> {

@@ -1,11 +1,9 @@
 use crate::Demo;
-use pyo3::{Py, Python};
+use pyo3::Py;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::hash::Hash;
 use std::str;
 //use hashbrown::HashMap;
-use crate::parsing::read_bits::BitReader;
 use pyo3::PyAny;
 use pyo3::ToPyObject;
 
@@ -49,7 +47,7 @@ impl Header {
         hm.insert("signon_length".to_string(), self.signon_length.to_string());
         hm
     }
-    pub fn to_py_hashmap(&self, py: Python<'_>) -> Py<PyAny> {
+    pub fn to_py_hashmap(&self) -> Py<PyAny> {
         let hm = self.to_hashmap();
         let dict = pyo3::Python::with_gil(|py| hm.to_object(py));
         dict

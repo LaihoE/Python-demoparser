@@ -1,6 +1,4 @@
 use super::game_events::GameEvent;
-use super::variants::PropData;
-use crate::parsing::collect_data;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
 use crate::parsing::stringtables::StringTable;
@@ -15,8 +13,6 @@ use memmap::Mmap;
 use phf::phf_map;
 use protobuf;
 use protobuf::Message;
-use std::io::Read;
-use std::ops::Index;
 use std::u8;
 
 #[allow(dead_code)]
@@ -69,7 +65,7 @@ impl Demo {
         let mut extra_wanted_props = vec![];
         for p in &wanted_props {
             match TYPEHM.get(&p) {
-                Some(n) => {
+                Some(_) => {
                     if &p[(p.len() - 1)..] == "X" {
                         extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
                     } else if &p[(p.len() - 1)..] == "Y" {
@@ -126,7 +122,7 @@ impl Demo {
         let mut extra_wanted_props = vec![];
         for p in &wanted_props {
             match TYPEHM.get(&p) {
-                Some(n) => {
+                Some(_) => {
                     if &p[(p.len() - 1)..] == "X" {
                         extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
                     } else if &p[(p.len() - 1)..] == "Y" {

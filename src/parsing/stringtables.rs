@@ -272,10 +272,8 @@ impl Demo {
                         if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                             self.players_connected += 1;
                         }
-
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        //println!("Created player: {} {}", ui.name, ui.entity_id);
                         self.userid_sid_map
                             .insert(ui.user_id.clone(), ui.xuid.clone());
                         self.players.insert(ui.xuid.clone(), ui);

@@ -49,17 +49,6 @@ impl Demo {
         self.fp += 4;
         i
     }
-    pub fn read_n_chars_to_string(&mut self, n: u32) -> String {
-        let bytearr = self.read_n_bytes(n);
-        let s = String::from_utf8(bytearr.to_vec()).unwrap();
-        s
-    }
-    #[inline]
-    pub fn read_u64(&mut self) -> u64 {
-        let i = u64::from_le_bytes(self.bytes[self.fp..self.fp + 4].try_into().unwrap());
-        self.fp += 8;
-        i
-    }
     #[inline]
     pub fn read_byte(&mut self) -> u8 {
         let b = self.bytes[self.fp];

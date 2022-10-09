@@ -13,12 +13,12 @@ use polars_arrow::prelude::ArrayRef;
 use pyo3::exceptions::PyFileNotFoundError;
 use pyo3::ffi::Py_uintptr_t;
 use pyo3::prelude::*;
+use pyo3::Python;
 use pyo3::{PyAny, PyObject, PyResult};
-use pyo3::{PyErr, Python};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use std::{io, result, vec};
+use std::vec;
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
 pub(crate) fn to_py_array(py: Python, pyarrow: &PyModule, array: ArrayRef) -> PyResult<PyObject> {
@@ -228,7 +228,7 @@ impl DemoParser {
         }
     }
 
-    pub fn parse_header(&self, py: Python<'_>) -> PyResult<(Py<PyAny>)> {
+    pub fn parse_header(&self) -> PyResult<(Py<PyAny>)> {
         let file = File::open(self.path.clone()).unwrap();
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         let parser = Demo::new_mmap(
@@ -245,7 +245,7 @@ impl DemoParser {
             Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
-                let dict = h.to_py_hashmap(py);
+                let dict = h.to_py_hashmap();
                 Ok(dict)
             }
         }

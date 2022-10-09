@@ -25,9 +25,18 @@ pub struct Prop {
     pub col: i32,
     pub data: Option<PropData>,
 }
-
-#[inline]
-pub fn is_wanted_prop(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
+#[inline(always)]
+fn is_wanted_tick(wanted_ticks: &hashbrown::HashSet<i32>, tick: i32) -> bool {
+    if wanted_ticks.len() != 0 {
+        match wanted_ticks.get(&tick) {
+            Some(_) => return true,
+            None => return false,
+        }
+    }
+    true
+}
+#[inline(always)]
+fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
     let this_prop_name = this_prop.prop.var_name();
     for prop in wanted_props {
         if prop == this_prop_name {
@@ -37,147 +46,154 @@ pub fn is_wanted_prop(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
     false
 }
 
+#[inline(always)]
+pub fn is_wanted_prop(
+    this_prop: &Prop,
+    wanted_props: &Vec<String>,
+    wanted_ticks: &hashbrown::HashSet<i32>,
+    tick: i32,
+) -> bool {
+    /*
+    let wanted_tick = is_wanted_tick(wanted_ticks, tick);
+    let wanted_prop = is_wanted_prop_name(this_prop, wanted_props);
+    if wanted_prop && wanted_tick {
+        return true;
+    } else {
+        false
+    }
+    */
+    is_wanted_prop_name(this_prop, wanted_props)
+}
+
 impl Demo {
-    pub fn parse_packet_entities(&mut self, pack_ents: CSVCMsg_PacketEntities) {
+    pub fn parse_packet_entities(
+        cls_map: &HashMap<u16, ServerClass>,
+        tick: i32,
+        cls_bits: usize,
+        pack_ents: CSVCMsg_PacketEntities,
+        entities: &mut HashMap<u32, Entity>,
+        wanted_props: &Vec<String>,
+        wanted_ticks: &hashbrown::HashSet<i32>,
+    ) {
         let n_upd_ents = pack_ents.updated_entries();
         let left_over = (pack_ents.entity_data().len() % 4) as i32;
         let mut b = BitReader::new(pack_ents.entity_data(), left_over);
         b.read_uneven_end_bits();
         let mut entity_id: i32 = -1;
-
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var() as i32);
 
             if b.read_bool() {
                 b.read_bool();
             } else if b.read_bool() {
-                let cls_id = b.read_nbits(self.class_bits.try_into().unwrap());
+                // IF ENTITY DOES NOT EXIST
+
+                let cls_id = b.read_nbits(cls_bits);
                 let serial = b.read_nbits(10);
-
-                let new_entitiy = Entity {
-                    class_id: cls_id,
-                    entity_id: entity_id.try_into().unwrap(),
-                    serial: serial,
-                    props: HashMap::default(),
-                };
-
-                self.entities
-                    .as_mut()
-                    .unwrap()
-                    .insert(entity_id.try_into().unwrap(), Some(new_entitiy));
 
                 let mut e = Entity {
                     class_id: cls_id,
-                    entity_id: entity_id.try_into().unwrap(),
+                    entity_id: entity_id as u32,
                     serial: serial,
-                    props: HashMap::default(),
+                    props: HashMap::new(),
                 };
-
-                let data = self.read_new_ent(&e, &mut b);
-
-                for pa in data {
-                    if self.wanted_props.contains(&pa.prop_name) {
-                        e.props.insert(pa.prop_name.clone(), pa);
-                    }
-                }
+                update_entity(&mut e, &mut b, cls_map, wanted_props, tick, wanted_ticks);
+                entities.insert(entity_id as u32, e);
             } else {
-                let hm = self.entities.as_ref().unwrap();
-                let ent = hm.get(&(entity_id.try_into().unwrap()));
+                // IF ENTITY DOES EXIST
 
-                if ent.as_ref().unwrap().is_some() {
-                    let ent = ent.as_ref().unwrap().as_ref().unwrap();
-                    let data = self.read_new_ent(&ent, &mut b);
-
-                    let mhm = self.entities.as_mut().unwrap();
-                    let mut_ent = mhm.get_mut(&(entity_id as u32));
-
-                    let e = &mut mut_ent.unwrap().as_mut().unwrap().props;
-
-                    for pa in data {
-                        if self.wanted_props.contains(&pa.prop_name) {
-                            e.insert(pa.prop_name.clone(), pa);
-                        }
+                let ent = entities.get_mut(&(entity_id.try_into().unwrap()));
+                match ent {
+                    Some(e) => {
+                        update_entity(e, &mut b, cls_map, wanted_props, tick, wanted_ticks);
                     }
-                } else {
-                    println!("ENTITY: {} NOT FOUND!", entity_id);
-                    panic!("f");
+                    None => {
+                        println!("DEMO SAID ENTITY: {} EXISTS BUT IT DID NOT!", entity_id);
+                        panic!("f");
+                    }
                 }
             }
         }
     }
+}
 
-    pub fn handle_entity_upd(
-        &self,
-        sv_cls: &ServerClass,
-        b: &mut BitReader<&[u8]>,
-    ) -> Vec<PropAtom> {
-        let mut val = -1;
-        let new_way = b.read_bool();
-        let mut indicies = Vec::with_capacity(128);
+pub fn parse_ent_props(
+    ent: &mut Entity,
+    sv_cls: &ServerClass,
+    b: &mut BitReader<&[u8]>,
+    wanted_props: &Vec<String>,
+    tick: i32,
+    wanted_ticks: &hashbrown::HashSet<i32>,
+) {
+    let mut val = -1;
+    let new_way = b.read_bool();
+    let mut indicies = Vec::with_capacity(128);
 
-        loop {
-            val = b.read_inx(val, new_way);
-            if val == -1 {
-                break;
-            }
-            indicies.push(val);
+    loop {
+        val = b.read_inx(val, new_way);
+        if val == -1 {
+            break;
         }
+        indicies.push(val);
+    }
+    for inx in indicies {
+        let prop = &sv_cls.props[inx as usize];
+        let pdata = b.decode(prop);
 
-        let mut props: Vec<PropAtom> = Vec::with_capacity(self.wanted_props.len() + 3);
-
-        for inx in indicies {
-            let prop = &sv_cls.fprops[inx as usize];
-            let pdata = b.decode(prop);
-
-            if !is_wanted_prop(prop, &self.wanted_props) {
-                continue;
-            }
-
-            match pdata {
-                PropData::VecXY(v) => {
-                    let endings = ["_X", "_Y"];
-                    for inx in 0..2 {
-                        let data = PropData::F32(v[inx]);
-                        let name = prop.prop.var_name().to_string() + endings[inx];
-                        let atom = PropAtom {
-                            prop_name: name,
-                            data: data,
-                            tick: self.tick,
-                        };
-                        props.push(atom);
-                    }
-                }
-                PropData::VecXYZ(v) => {
-                    let endings = ["_X", "_Y", "_Z"];
-                    for inx in 0..3 {
-                        let data = PropData::F32(v[inx]);
-                        let name = prop.prop.var_name().to_string() + endings[inx];
-                        let atom = PropAtom {
-                            prop_name: name,
-                            data: data,
-                            tick: self.tick,
-                        };
-                        props.push(atom);
-                    }
-                }
-
-                _ => {
+        if !is_wanted_prop(prop, &wanted_props, &wanted_ticks, tick) {
+            continue;
+        }
+        //println!("HERE");
+        match pdata {
+            PropData::VecXY(v) => {
+                let endings = ["_X", "_Y"];
+                for inx in 0..2 {
+                    let data = PropData::F32(v[inx]);
+                    let name = prop.prop.var_name().to_string() + endings[inx];
                     let atom = PropAtom {
-                        prop_name: prop.prop.var_name().to_string(),
-                        data: pdata,
-                        tick: self.tick,
+                        prop_name: name,
+                        data: data,
+                        tick: tick,
                     };
-                    props.push(atom);
+                    ent.props.insert(atom.prop_name.clone(), atom);
+                    //props.push(atom);
                 }
             }
+            PropData::VecXYZ(v) => {
+                let endings = ["_X", "_Y", "_Z"];
+                for inx in 0..3 {
+                    let data = PropData::F32(v[inx]);
+                    let name = prop.prop.var_name().to_string() + endings[inx];
+                    let atom = PropAtom {
+                        prop_name: name,
+                        data: data,
+                        tick: tick,
+                    };
+                    ent.props.insert(atom.prop_name.clone(), atom);
+                    //props.push(atom);
+                }
+            }
+            _ => {
+                let atom = PropAtom {
+                    prop_name: prop.prop.var_name().to_string(),
+                    data: pdata,
+                    tick: tick,
+                };
+                ent.props.insert(atom.prop_name.clone(), atom);
+                //props.push(atom);
+            }
         }
-        //println!("{:?}", props);
-        props
     }
+}
 
-    pub fn read_new_ent(&self, ent: &Entity, b: &mut BitReader<&[u8]>) -> Vec<PropAtom> {
-        let sv_cls = &self.serverclass_map[&(ent.class_id.try_into().unwrap())];
-        let props = self.handle_entity_upd(sv_cls, b);
-        props
-    }
+pub fn update_entity(
+    ent: &mut Entity,
+    b: &mut BitReader<&[u8]>,
+    cls_map: &HashMap<u16, ServerClass>,
+    wanted_props: &Vec<String>,
+    tick: i32,
+    wanted_ticks: &hashbrown::HashSet<i32>,
+) {
+    let sv_cls = &cls_map[&(ent.class_id.try_into().unwrap())];
+    parse_ent_props(ent, sv_cls, b, wanted_props, tick, wanted_ticks);
 }

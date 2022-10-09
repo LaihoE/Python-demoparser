@@ -72,7 +72,7 @@ impl Demo {
         tick: &i32,
         wanted_ticks: &hashbrown::HashSet<i32>,
         wanted_players: &Vec<u64>,
-        entities: &Option<HashMap<u32, Option<Entity>>>,
+        entities: &HashMap<u32, Entity>,
         props_names: &Vec<String>,
         ticks_props: &mut FxHashMap<String, PropColumn>,
         playback_frames: usize,
@@ -86,11 +86,9 @@ impl Demo {
             if wanted_ticks.contains(tick) || wanted_ticks.len() == 0 {
                 // Check that we want the player
                 if wanted_players.contains(&player.xuid) || wanted_players.len() == 0 {
-                    if entities.as_ref().unwrap().contains_key(&player.entity_id) {
-                        if entities.as_ref().unwrap()[&player.entity_id].is_some() {
-                            let ent = entities.as_ref().unwrap()[&player.entity_id]
-                                .as_ref()
-                                .unwrap();
+                    if entities.contains_key(&player.entity_id) {
+                        if entities.contains_key(&player.entity_id) {
+                            let ent = &entities[&player.entity_id];
                             // Insert all wanted props
                             for prop_name in props_names {
                                 let prop_type = TYPEHM[prop_name];

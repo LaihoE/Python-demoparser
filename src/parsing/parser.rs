@@ -32,7 +32,7 @@ pub struct Demo {
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
     pub serverclass_map: HashMap<u16, ServerClass>,
-    pub entities: Option<HashMap<u32, Option<Entity>>>,
+    pub entities: HashMap<u32, Entity>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
     pub players: HashMap<u64, UserInfo>,
@@ -96,7 +96,7 @@ impl Demo {
             bad: Vec::new(),
             dt_map: Some(HashMap::default()),
             serverclass_map: HashMap::default(),
-            entities: Some(HashMap::default()),
+            entities: HashMap::default(),
             stringtables: Vec::new(),
             players: HashMap::new(),
             wanted_props: wanted_props,
@@ -153,7 +153,7 @@ impl Demo {
             bad: Vec::new(),
             dt_map: Some(HashMap::default()),
             serverclass_map: HashMap::default(),
-            entities: Some(HashMap::default()),
+            entities: HashMap::default(),
             stringtables: Vec::new(),
             players: HashMap::new(),
             wanted_props: wanted_props,
@@ -194,6 +194,7 @@ impl Demo {
                 &mut ticks_props,
                 self.playback_frames,
             );
+            //println!("{}", self.tick);
             self.parse_cmd(f.cmd);
         }
         ticks_props
@@ -230,31 +231,35 @@ impl Demo {
             match msg as i32 {
                 // Game event
                 25 => {
-                    let game_event = Message::parse_from_bytes(&data);
-                    match game_event {
-                        Ok(ge) => {
-                            let game_event = ge;
-                            let game_events = self.parse_game_events(game_event);
-                            self.game_events.extend(game_events);
+                    if !parse_props {
+                        let game_event = Message::parse_from_bytes(&data);
+                        match game_event {
+                            Ok(ge) => {
+                                let game_event = ge;
+                                let game_events = self.parse_game_events(game_event);
+                                self.game_events.extend(game_events);
+                            }
+                            Err(e) => panic!(
+                                "Failed to parse game event at tick {}. Error: {e}",
+                                self.tick
+                            ),
                         }
-                        Err(e) => panic!(
-                            "Failed to parse game event at tick {}. Error: {e}",
-                            self.tick
-                        ),
                     }
                 }
                 // Game event list
                 30 => {
-                    let event_list = Message::parse_from_bytes(&data);
-                    match event_list {
-                        Ok(ev) => {
-                            let event_list = ev;
-                            self.parse_game_event_map(event_list)
+                    if !parse_props {
+                        let event_list = Message::parse_from_bytes(&data);
+                        match event_list {
+                            Ok(ev) => {
+                                let event_list = ev;
+                                self.parse_game_event_map(event_list)
+                            }
+                            Err(e) => panic!(
+                                "Failed to parse game event LIST at tick {}. Error: {e}",
+                                self.tick
+                            ),
                         }
-                        Err(e) => panic!(
-                            "Failed to parse game event LIST at tick {}. Error: {e}",
-                            self.tick
-                        ),
                     }
                 }
                 // Packet entites
@@ -264,7 +269,15 @@ impl Demo {
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;
-                                self.parse_packet_entities(pack_ents);
+                                Demo::parse_packet_entities(
+                                    &self.serverclass_map,
+                                    self.tick,
+                                    self.class_bits as usize,
+                                    pack_ents,
+                                    &mut self.entities,
+                                    &self.wanted_props,
+                                    &self.wanted_ticks,
+                                );
                             }
                             Err(e) => panic!(
                                 "Failed to parse Packet entities at tick {}. Error: {e}",

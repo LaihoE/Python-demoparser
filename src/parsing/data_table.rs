@@ -12,7 +12,7 @@ pub struct ServerClass {
     pub id: u16,
     pub name: String,
     pub dt: String,
-    pub fprops: Vec<Prop>,
+    pub props: Vec<Prop>,
 }
 
 impl Demo {
@@ -60,7 +60,7 @@ impl Demo {
                         id: my_id,
                         name: name,
                         dt: dt,
-                        fprops: props,
+                        props: props,
                     },
                 );
             }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::parsing::entities::Prop;
 use crate::parsing::variants::PropData;
 use core::panic;
@@ -89,12 +91,11 @@ impl<R: io::Read> BitReader<R> {
     }
 
     #[inline(always)]
-    pub fn ensure_bits(&mut self) -> io::Result<()> {
+    pub fn ensure_bits(&mut self) {
         let mut buf = [0; NBITS / 8];
         let had_enough = self.inner.read_exact(&mut buf);
         self.bits = unsafe { mem::transmute(buf) };
         self.available = NBITS;
-        Ok(())
     }
     #[inline(always)]
     pub fn consume(&mut self, n: usize) {
@@ -115,8 +116,6 @@ impl<R: io::Read> BitReader<R> {
     }
     #[inline(always)]
     pub fn read_nbits(&mut self, n: usize) -> u32 {
-        //assert!(n <= NBITS);
-
         if self.available >= n {
             let ret = self.bits & MASKS[n];
             self.consume(n);
@@ -206,11 +205,11 @@ impl<R: io::Read> BitReader<R> {
     }
     #[inline(always)]
     pub fn decode(&mut self, prop: &Prop) -> PropData {
-        match prop.prop.type_() {
-            0 => PropData::I32(self.decode_int(prop) as i32),
+        match prop.prop.type_.unwrap_or_else(|| 9) {
             1 => PropData::F32(self.decode_float(prop)),
-            2 => PropData::VecXY(self.decode_vec(prop)),
-            3 => PropData::VecXYZ(self.decode_vec_xy(prop)),
+            0 => PropData::I32(self.decode_int(prop) as i32),
+            3 => PropData::VecXY(self.decode_vec_xy(prop)),
+            2 => PropData::VecXYZ(self.decode_vec(prop)),
             4 => PropData::String(self.decode_string()),
             5 => PropData::Vec(self.decode_array(prop)),
             _ => panic!("EEK"),
@@ -226,16 +225,15 @@ impl<R: io::Read> BitReader<R> {
 
         for _ in 0..num_elements {
             let pro = Prop {
+                name: prop.name.to_string(),
                 prop: p.clone(),
                 arr: None,
-                table_id: "umom".to_string(), //table: prop.table.clone(),
                 col: 0,
                 data: None,
             };
             let val = self.decode(&pro);
             elems.push(val);
         }
-        //println!("{:?}", elems);
         vec![0, 0, 0]
     }
     #[inline(always)]
@@ -275,33 +273,31 @@ impl<R: io::Read> BitReader<R> {
         out.to_string()
     }
     #[inline(always)]
-    pub fn decode_vec(&mut self, prop: &Prop) -> Vec<f32> {
+    pub fn decode_vec(&mut self, prop: &Prop) -> [f32; 3] {
         let x = self.decode_float(prop);
         let y = self.decode_float(prop);
         let mut z = 0.0;
         if prop.prop.flags() & (1 << 5) == 0 {
             z = self.decode_float(prop);
+            return [x, y, z];
         } else {
             let sign = self.read_bool();
             let temp = (x * x) + (y * y);
+            let mut z = 0.0;
             if temp < 1.0 {
                 z = (1.0 - temp).sqrt();
-            } else {
-                z = 0.0;
             }
             if sign {
-                z = -z
+                return [x, y, -z];
             }
+            [x, y, z]
         }
-        let v = vec![x, y, z];
-        //println!("X:{} Y:{} Z:{}", x, y, z);
-        v
     }
     #[inline(always)]
-    pub fn decode_vec_xy(&mut self, prop: &Prop) -> Vec<f32> {
+    pub fn decode_vec_xy(&mut self, prop: &Prop) -> [f32; 2] {
         let x = self.decode_float(prop);
         let y = self.decode_float(prop);
-        let v = vec![x, y, 0.0];
+        let v = [x, y];
         v
     }
     #[inline(always)]
@@ -373,7 +369,7 @@ impl<R: io::Read> BitReader<R> {
     #[inline(always)]
     pub fn read_bits(&mut self, n: i32) -> f32 {
         let mut bitsleft = n;
-        let eight = 8.try_into().unwrap();
+        let eight = 8 as usize;
         let mut bytarr: [u8; 4] = [0, 0, 0, 0];
         while bitsleft >= 32 {
             bytarr[0] = self.read_nbits(eight).try_into().unwrap();

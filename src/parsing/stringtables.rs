@@ -16,13 +16,11 @@ pub struct StringTable {
     max_entries: i32,
     uds: i32,
     udfs: bool,
-    udsb: i32,
     data: Vec<StField>,
 }
 #[derive(Clone)]
 pub struct StField {
     entry: String,
-    udata: String,
 }
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserInfo {
@@ -192,13 +190,11 @@ impl Demo {
             max_entries: data.max_entries(),
             udfs: data.user_data_fixed_size(),
             uds: data.user_data_size(),
-            udsb: data.user_data_size_bits(),
             data: Vec::new(),
         };
         for _ in 1..50000 {
             st.data.push(StField {
                 entry: "".to_string(),
-                udata: "".to_string(),
             })
         }
         let ui = st.userinfo;

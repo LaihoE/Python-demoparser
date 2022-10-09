@@ -21,9 +21,9 @@ pub struct Entity {
 
 #[derive(Debug)]
 pub struct Prop {
+    pub name: String,
     pub prop: Sendprop_t,
     pub arr: Option<Sendprop_t>,
-    pub table_id: String,
     pub col: i32,
     pub data: Option<PropData>,
 }
@@ -39,9 +39,8 @@ fn is_wanted_tick(wanted_ticks: &HashSet<i32, RandomState>, tick: i32) -> bool {
 }
 #[inline(always)]
 fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
-    let this_prop_name = this_prop.prop.var_name();
     for prop in wanted_props {
-        if prop == this_prop_name {
+        if prop == &this_prop.name {
             return true;
         }
     }
@@ -104,7 +103,7 @@ impl Demo {
             } else {
                 // IF ENTITY DOES EXIST
 
-                let ent = entities.get_mut(&(entity_id.try_into().unwrap()));
+                let ent = entities.get_mut(&(entity_id.try_into().unwrap_or(99999999)));
                 match ent {
                     Some(e) => {
                         update_entity(e, &mut b, cls_map, wanted_props, tick, wanted_ticks);
@@ -138,6 +137,7 @@ pub fn parse_ent_props(
         }
         indicies.push(val);
     }
+    //println!("{}", indicies.len());
     for inx in indicies {
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);

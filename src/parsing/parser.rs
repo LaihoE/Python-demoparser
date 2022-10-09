@@ -54,6 +54,7 @@ pub struct Demo {
     pub only_header: bool,
     pub userid_sid_map: HashMap<u32, u64, RandomState>,
     pub playback_frames: usize,
+    pub bench: HashMap<i32, i32>,
 }
 
 impl Demo {
@@ -109,6 +110,7 @@ impl Demo {
             only_header: only_header,
             only_players: only_players,
             playback_frames: 0,
+            bench: HashMap::default(),
         })
     }
     pub fn new(
@@ -163,6 +165,7 @@ impl Demo {
             only_header: only_header,
             only_players: only_players,
             playback_frames: 0,
+            bench: HashMap::default(),
         })
     }
 }
@@ -269,7 +272,7 @@ impl Demo {
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;
-                                Demo::parse_packet_entities(
+                                let x = Demo::parse_packet_entities(
                                     &self.serverclass_map,
                                     self.tick,
                                     self.class_bits as usize,

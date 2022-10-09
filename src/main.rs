@@ -38,5 +38,5 @@ fn main() {
         let data = parser.start_parsing(&props_names);
     }
     let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 5);
+    println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 35);
 }

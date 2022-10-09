@@ -20,8 +20,8 @@ pub enum PropData {
     F32(f32),
     I64(i64),
     String(String),
-    VecXY(Vec<f32>),
-    VecXYZ(Vec<f32>),
+    VecXY([f32; 2]),
+    VecXYZ([f32; 3]),
     Vec(Vec<i32>),
 }
 

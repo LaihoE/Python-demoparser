@@ -59,8 +59,8 @@ impl Demo {
             }
         }
     }
-    pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 64]> {
-        let mut excl: SmallVec<[Sendprop_t; 64]> = smallvec![];
+    pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 32]> {
+        let mut excl: SmallVec<[Sendprop_t; 32]> = smallvec![];
 
         for prop in &table.props {
             if prop.flags() & (1 << 6) != 0 {
@@ -114,7 +114,7 @@ impl Demo {
     #[inline]
     pub fn is_prop_excl(
         &self,
-        excl: &SmallVec<[Sendprop_t; 64]>,
+        excl: &SmallVec<[Sendprop_t; 32]>,
         table: &CSVCMsg_SendTable,
         prop: &Sendprop_t,
     ) -> bool {
@@ -130,7 +130,7 @@ impl Demo {
         &self,
         table: &CSVCMsg_SendTable,
         table_id: String,
-        excl: &SmallVec<[Sendprop_t; 64]>,
+        excl: &SmallVec<[Sendprop_t; 32]>,
     ) -> Vec<Prop> {
         let mut flat: Vec<Prop> = Vec::new();
         let mut cnt = 0;
@@ -159,18 +159,18 @@ impl Demo {
                 }
             } else if prop.type_() == 5 {
                 let prop_arr = Prop {
+                    name: prop.var_name().to_string(),
                     prop: prop.clone(),
                     arr: Some(table.props[cnt].clone()),
-                    table_id: table_id.to_string(),
                     col: 1,
                     data: None,
                 };
                 flat.push(prop_arr);
             } else {
                 let prop = Prop {
+                    name: prop.var_name().to_string(),
                     prop: prop.clone(),
                     arr: None,
-                    table_id: table_id.to_string(),
                     col: 1,
                     data: None,
                 };

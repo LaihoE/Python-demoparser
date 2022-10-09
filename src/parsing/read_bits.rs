@@ -150,29 +150,29 @@ impl<R: io::Read> BitReader<R> {
     }
     #[inline(always)]
     pub fn read_inx(&mut self, last: i32, new_way: bool) -> i32 {
-        let mut ret = 0;
-        let mut val = 0;
-
         if new_way && self.read_bool() {
             return last + 1;
         }
         if new_way && self.read_bool() {
-            ret = self.read_nbits(3);
+            let index = self.read_nbits(3);
+            if index == 0xfff {
+                return -1;
+            }
+            return last + 1 + index as i32;
         } else {
-            ret = self.read_nbits(7);
-            val = ret & (32 | 64);
+            let mut index = self.read_nbits(7);
+            let val = index & (32 | 64);
             match val {
-                32 => ret = (ret & !96) | (self.read_nbits(2) << 5),
-                64 => ret = (ret & !96) | (self.read_nbits(4) << 5),
-                96 => ret = (ret & !96) | (self.read_nbits(7) << 5),
+                32 => index = (index & !96) | (self.read_nbits(2) << 5),
+                64 => index = (index & !96) | (self.read_nbits(4) << 5),
+                96 => index = (index & !96) | (self.read_nbits(7) << 5),
                 _ => {}
             }
+            if index == 0xfff {
+                return -1;
+            }
+            return last + 1 + index as i32;
         }
-        if ret == 0xfff {
-            return -1;
-        }
-        let y: i32 = ret.try_into().unwrap();
-        return last + 1 + y;
     }
     #[inline(always)]
     pub fn read_varint(&mut self) -> u32 {

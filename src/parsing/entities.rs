@@ -140,7 +140,7 @@ pub fn parse_ent_props(
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);
 
-        if !is_wanted_prop(prop, &wanted_props, &wanted_ticks, tick) {
+        if !is_wanted_prop_name(prop, &wanted_props) {
             continue;
         }
         //println!("HERE");

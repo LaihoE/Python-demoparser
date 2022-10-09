@@ -15,6 +15,11 @@ use protobuf;
 use protobuf::Message;
 use std::u8;
 
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 #[allow(dead_code)]
 pub struct Frame {
     pub cmd: u8,

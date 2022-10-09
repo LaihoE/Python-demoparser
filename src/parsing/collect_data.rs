@@ -83,10 +83,11 @@ impl Demo {
             if player.xuid == 0 || player.name == "GOTV" {
                 continue;
             };
+
             // Check that we want the tick
             if wanted_ticks.contains(tick) || wanted_ticks.is_empty() {
                 // Check that we want the player
-                if wanted_players.contains(&player.xuid) || wanted_ticks.is_empty() {
+                if wanted_players.contains(&player.xuid) || wanted_players.is_empty() {
                     if entities.contains_key(&player.entity_id) {
                         let ent = &entities[&player.entity_id];
                         // Insert all wanted props

@@ -24,7 +24,7 @@ fn main() {
         let mut parser = Demo::new_mmap(
             mmap,
             true,
-            vec![69696],
+            (0..50000).collect(),
             vec![],
             vec![],
             "".to_string(),

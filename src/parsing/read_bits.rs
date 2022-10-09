@@ -276,9 +276,8 @@ impl<R: io::Read> BitReader<R> {
     pub fn decode_vec(&mut self, prop: &Prop) -> [f32; 3] {
         let x = self.decode_float(prop);
         let y = self.decode_float(prop);
-        let mut z = 0.0;
         if prop.prop.flags() & (1 << 5) == 0 {
-            z = self.decode_float(prop);
+            let z = self.decode_float(prop);
             return [x, y, z];
         } else {
             let sign = self.read_bool();

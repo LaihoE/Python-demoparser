@@ -13,6 +13,8 @@ use polars_arrow::prelude::ArrayRef;
 use pyo3::exceptions::PyFileNotFoundError;
 use pyo3::ffi::Py_uintptr_t;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
+use pyo3::types::PyTuple;
 use pyo3::Python;
 use pyo3::{PyAny, PyObject, PyResult};
 use std::fs::File;
@@ -75,6 +77,29 @@ pub fn read_file(demo_path: String) -> Result<Vec<u8>, std::io::Error> {
     }
 }
 
+pub fn parse_kwargs(kwargs: Option<&PyDict>) -> (Vec<u64>, Vec<i32>) {
+    match kwargs {
+        Some(k) => {
+            let mut players: Vec<u64> = vec![];
+            let mut ticks: Vec<i32> = vec![];
+            match k.get_item("players") {
+                Some(p) => {
+                    players = p.extract().unwrap();
+                }
+                None => {}
+            }
+            match k.get_item("ticks") {
+                Some(t) => {
+                    ticks = t.extract().unwrap();
+                }
+                None => {}
+            }
+            return (players, ticks);
+        }
+        None => (vec![], vec![]),
+    }
+}
+
 #[pyclass]
 struct DemoParser {
     path: String,
@@ -124,14 +149,16 @@ impl DemoParser {
         }
     }
 
+    #[args(py_kwargs = "**")]
     pub fn parse_props(
         &self,
         py: Python,
         mut wanted_props: Vec<String>,
-        wanted_ticks: Vec<i32>,
-        wanted_players: Vec<u64>,
+        py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
         let bytes = read_file(self.path.clone()).unwrap();
+
+        let (wanted_players, wanted_ticks) = parse_kwargs(py_kwargs);
         let parser = Demo::new(
             bytes,
             true,

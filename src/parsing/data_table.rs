@@ -4,6 +4,8 @@ use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf;
 use protobuf::Message;
+use smallvec::{smallvec, SmallVec};
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::vec;
 
@@ -51,14 +53,14 @@ impl Demo {
             let _ = self.read_string();
             let dt = self.read_string();
             if self.parse_props {
-                let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt]);
+                let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt], dt.clone());
                 self.serverclass_map
                     .insert(id, ServerClass { id, dt, props });
             }
         }
     }
-    pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> Vec<Sendprop_t> {
-        let mut excl = vec![];
+    pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 64]> {
+        let mut excl: SmallVec<[Sendprop_t; 64]> = smallvec![];
 
         for prop in &table.props {
             if prop.flags() & (1 << 6) != 0 {
@@ -73,9 +75,9 @@ impl Demo {
         excl
     }
 
-    pub fn flatten_dt(&self, table: &CSVCMsg_SendTable) -> Vec<Prop> {
+    pub fn flatten_dt(&self, table: &CSVCMsg_SendTable, table_id: String) -> Vec<Prop> {
         let excl = self.get_excl_props(table);
-        let mut newp = self.get_props(table, &excl);
+        let mut newp = self.get_props(table, table_id, &excl);
         let mut prios = vec![];
         for p in &newp {
             prios.push(p.prop.priority());
@@ -112,7 +114,7 @@ impl Demo {
     #[inline]
     pub fn is_prop_excl(
         &self,
-        excl: &Vec<Sendprop_t>,
+        excl: &SmallVec<[Sendprop_t; 64]>,
         table: &CSVCMsg_SendTable,
         prop: &Sendprop_t,
     ) -> bool {
@@ -124,9 +126,15 @@ impl Demo {
         false
     }
 
-    pub fn get_props(&self, table: &CSVCMsg_SendTable, excl: &Vec<Sendprop_t>) -> Vec<Prop> {
+    pub fn get_props(
+        &self,
+        table: &CSVCMsg_SendTable,
+        table_id: String,
+        excl: &SmallVec<[Sendprop_t; 64]>,
+    ) -> Vec<Prop> {
         let mut flat: Vec<Prop> = Vec::new();
         let mut cnt = 0;
+
         for prop in &table.props {
             if (prop.flags() & (1 << 8) != 0)
                 || (prop.flags() & (1 << 6) != 0)
@@ -137,7 +145,7 @@ impl Demo {
 
             if prop.type_() == 6 {
                 let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
-                let child_props = self.get_props(sub_table, excl);
+                let child_props = self.get_props(sub_table, prop.dt_name().to_string(), excl);
 
                 if (prop.flags() & (1 << 11)) == 0 {
                     for mut p in child_props {
@@ -153,7 +161,7 @@ impl Demo {
                 let prop_arr = Prop {
                     prop: prop.clone(),
                     arr: Some(table.props[cnt].clone()),
-                    table: table.clone(),
+                    table_id: table_id.to_string(),
                     col: 1,
                     data: None,
                 };
@@ -162,7 +170,7 @@ impl Demo {
                 let prop = Prop {
                     prop: prop.clone(),
                     arr: None,
-                    table: table.clone(),
+                    table_id: table_id.to_string(),
                     col: 1,
                     data: None,
                 };

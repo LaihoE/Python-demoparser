@@ -24,6 +24,7 @@ phf = { version = "0.11", features = ["macros"] }
 memmap = "0.7.0"
 mimalloc = { version = "*", default-features = false }
 ahash = "0.8.0"
+smallvec = "1.10.0"
 
 [dependencies.csgoproto]
 path = "src/parsing/csgoproto"
@@ -36,7 +37,7 @@ overflow-checks = false
 
 [profile.release]
 opt-level = 3
-#lto = "thin"
-#codegen-units = 1
+lto = "thin"
+codegen-units = 1
 panic = "abort"
 #debug = true

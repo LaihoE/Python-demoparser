@@ -94,7 +94,6 @@ impl<R: io::Read> BitReader<R> {
         let had_enough = self.inner.read_exact(&mut buf);
         self.bits = unsafe { mem::transmute(buf) };
         self.available = NBITS;
-
         Ok(())
     }
     #[inline(always)]
@@ -229,7 +228,7 @@ impl<R: io::Read> BitReader<R> {
             let pro = Prop {
                 prop: p.clone(),
                 arr: None,
-                table: prop.table.clone(),
+                table_id: "umom".to_string(), //table: prop.table.clone(),
                 col: 0,
                 data: None,
             };

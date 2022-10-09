@@ -7,10 +7,10 @@ use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
+use smallvec::{smallvec, SmallVec};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
-
 #[derive(Debug)]
 pub struct Entity {
     pub class_id: u32,
@@ -23,7 +23,7 @@ pub struct Entity {
 pub struct Prop {
     pub prop: Sendprop_t,
     pub arr: Option<Sendprop_t>,
-    pub table: CSVCMsg_SendTable,
+    pub table_id: String,
     pub col: i32,
     pub data: Option<PropData>,
 }
@@ -129,7 +129,7 @@ pub fn parse_ent_props(
 ) {
     let mut val = -1;
     let new_way = b.read_bool();
-    let mut indicies = Vec::with_capacity(128);
+    let mut indicies: SmallVec<[i32; 128]> = smallvec![];
 
     loop {
         val = b.read_inx(val, new_way);

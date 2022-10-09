@@ -20,6 +20,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57e6e951cfbb2db8de1828d49073a113a29fd7117b1596caa781a258c7e38d72"
+dependencies = [
+ "cfg-if",
+ "getrandom",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -49,7 +61,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bdea100ad0a48ef595adef8bcff646d22ae3c908713da39133e52893c69fe25"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "bytemuck",
  "chrono",
  "dyn-clone",
@@ -284,12 +296,12 @@ dependencies = [
 name = "demoparser"
 version = "0.1.3"
 dependencies = [
+ "ahash 0.8.0",
  "bitreader",
  "csgoproto",
  "csv",
  "flate2",
  "fxhash",
- "hashbrown",
  "memmap",
  "mimalloc",
  "ndarray",
@@ -395,7 +407,7 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "rayon",
 ]
 
@@ -785,7 +797,7 @@ version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6522ac2e780f532432a7c7f5dbadbfcea9ff1cf4dd858fb509ca13061a928413"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "libc",
  "ndarray",
  "num-complex",
@@ -896,7 +908,7 @@ version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d72cc715f79e808a18c46bd28b3e03b63f710a03acd2f03dbb5c22e2c7d192a5"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "anyhow",
  "arrow2",
  "bitflags",
@@ -921,7 +933,7 @@ version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1ef64ab407a16876b6cbd26c3ac50901b7f848970e709d7aef11fe3fcfa70dc"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "anyhow",
  "arrow2",
  "csv-core",
@@ -947,7 +959,7 @@ version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c96ff67f24c8e0ae9155d9edf9d6980b51b414b73066238a702d31f0d9a26288"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "bitflags",
  "glob",
  "polars-arrow",

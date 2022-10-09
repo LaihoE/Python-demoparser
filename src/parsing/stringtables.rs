@@ -1,14 +1,13 @@
-use csgoproto::netmessages::CSVCMsg_UpdateStringTable;
-use pyo3::{Py, Python};
-use std::convert::TryInto;
-//use hashbrown::HashMap;
 use crate::parsing::read_bits::BitReader;
 use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
+use csgoproto::netmessages::CSVCMsg_UpdateStringTable;
 use pyo3::PyAny;
 use pyo3::ToPyObject;
+use pyo3::{Py, Python};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 #[derive(Clone)]
 pub struct StringTable {
@@ -153,9 +152,8 @@ impl Demo {
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        self.userid_sid_map
-                            .insert(ui.user_id.clone(), ui.xuid.clone());
-                        self.players.insert(ui.xuid.clone(), ui);
+                        self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                        self.players.insert(ui.xuid, ui);
                     }
                 } else {
                     let size = buf.read_nbits(14);
@@ -169,9 +167,8 @@ impl Demo {
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        self.userid_sid_map
-                            .insert(ui.user_id.clone(), ui.xuid.clone());
-                        self.players.insert(ui.xuid.clone(), ui);
+                        self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                        self.players.insert(ui.xuid, ui);
                     }
                 }
                 if history.len() == 32 {
@@ -274,9 +271,8 @@ impl Demo {
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        self.userid_sid_map
-                            .insert(ui.user_id.clone(), ui.xuid.clone());
-                        self.players.insert(ui.xuid.clone(), ui);
+                        self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                        self.players.insert(ui.xuid, ui);
                     }
                 } else {
                     let size = buf.read_nbits(14);
@@ -297,9 +293,8 @@ impl Demo {
                                     ui.friends_name =
                                         ui.friends_name.trim_end_matches("\x00").to_string();
                                     ui.name = ui.name.trim_end_matches("\x00").to_string();
-                                    self.userid_sid_map
-                                        .insert(ui.user_id.clone(), ui.xuid.clone());
-                                    self.players.insert(ui.xuid.clone(), ui);
+                                    self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                                    self.players.insert(ui.xuid, ui);
                                 }
                             }
                         }

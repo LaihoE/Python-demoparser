@@ -13,7 +13,6 @@ bitreader = "0.3.6"
 protobuf = "3.1.0"
 numpy = "0.17.1"
 fxhash = "0.2.1"
-hashbrown = "0.12.3"
 flate2 = "1.0.24"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
@@ -24,6 +23,7 @@ csv = "1.1"
 phf = { version = "0.11", features = ["macros"] }
 memmap = "0.7.0"
 mimalloc = { version = "*", default-features = false }
+ahash = "0.8.0"
 
 [dependencies.csgoproto]
 path = "src/parsing/csgoproto"
@@ -36,7 +36,7 @@ overflow-checks = false
 
 [profile.release]
 opt-level = 3
-lto = "fat"
-codegen-units = 1
+#lto = "thin"
+#codegen-units = 1
 panic = "abort"
-debug = true
+#debug = true

@@ -63,27 +63,23 @@ impl VarVec {
         }
     }
     pub fn push_string(&mut self, data: String) {
-        match self {
-            VarVec::String(f) => f.push(Some(data)),
-            _ => {}
+        if let VarVec::String(f) = self {
+            f.push(None)
         }
     }
     pub fn push_string_none(&mut self) {
-        match self {
-            VarVec::String(f) => f.push(None),
-            _ => {}
+        if let VarVec::String(f) = self {
+            f.push(None)
         }
     }
     pub fn push_float_none(&mut self) {
-        match self {
-            VarVec::F32(f) => f.push(None),
-            _ => {}
+        if let VarVec::F32(f) = self {
+            f.push(None)
         }
     }
     pub fn push_i32_none(&mut self) {
-        match self {
-            VarVec::I32(f) => f.push(None),
-            _ => {}
+        if let VarVec::I32(f) = self {
+            f.push(None)
         }
     }
     pub fn push_none(&mut self) {

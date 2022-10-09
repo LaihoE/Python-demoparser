@@ -1,11 +1,12 @@
 use super::stringtables::UserInfo;
 use crate::Demo;
+use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event::Key_t;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
-use hashbrown::HashMap;
 use pyo3::prelude::*;
+use std::collections::HashMap;
 
 #[derive(Debug, Default)]
 pub struct HurtEvent {
@@ -32,7 +33,7 @@ fn parse_key(key: &Key_t) -> KeyData {
     }
 }
 
-fn parse_key_steamid(key: &Key_t, uid_sid_map: &HashMap<u32, u64>) -> KeyData {
+fn parse_key_steamid(key: &Key_t, uid_sid_map: &HashMap<u32, u64, RandomState>) -> KeyData {
     let user_id = key.val_short();
 
     match uid_sid_map.get(&(user_id as u32)) {
@@ -45,14 +46,14 @@ fn parse_key_steamid(key: &Key_t, uid_sid_map: &HashMap<u32, u64>) -> KeyData {
 
 fn parse_key_steam_name(
     key: &Key_t,
-    players: &HashMap<u64, UserInfo>,
-    uid_sid_map: &HashMap<u32, u64>,
+    players: &HashMap<u64, UserInfo, RandomState>,
+    uid_sid_map: &HashMap<u32, u64, RandomState>,
 ) -> KeyData {
     let uid = key.val_short();
     match uid_sid_map.get(&(uid as u32)) {
         None => return KeyData::StrData("None".to_string()),
         Some(sid) => {
-            for (_, player) in players {
+            for player in players.values() {
                 if &player.xuid == sid {
                     match key.type_() {
                         4 => {
@@ -129,8 +130,8 @@ pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
     tick: &i32,
-    uid_sid_map: &HashMap<u32, u64>,
-    players: &HashMap<u64, UserInfo>,
+    uid_sid_map: &HashMap<u32, u64, RandomState>,
+    players: &HashMap<u64, UserInfo, RandomState>,
     round: i32,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
@@ -191,11 +192,7 @@ pub fn gen_name_val_pairs(
 }
 
 pub fn match_data_to_game_event(event_name: &str, wanted: &String) -> bool {
-    if event_name.contains(wanted) {
-        return true;
-    } else {
-        return false;
-    }
+    return event_name.contains(wanted);
 }
 
 pub fn is_round_changed(event_name: &str) -> bool {
@@ -252,7 +249,7 @@ impl Demo {
         game_events
     }
     pub fn parse_game_event_map(&mut self, event_list: CSVCMsg_GameEventList) {
-        let mut hm: HashMap<i32, Descriptor_t> = HashMap::default();
+        let mut hm: HashMap<i32, Descriptor_t, RandomState> = HashMap::default();
 
         for event_desc in event_list.descriptors {
             hm.insert(event_desc.eventid(), event_desc);

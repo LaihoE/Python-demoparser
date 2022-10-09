@@ -4,15 +4,15 @@ use crate::parsing::entities::Entity;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
 pub use crate::parsing::variants::*;
+use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::*;
-use fxhash::FxHashMap;
-use hashbrown::HashMap;
-use hashbrown::HashSet;
 use memmap::Mmap;
 use phf::phf_map;
 use protobuf;
 use protobuf::Message;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::u8;
 
 use mimalloc::MiMalloc;
@@ -34,25 +34,25 @@ pub struct Demo {
     pub bytes: BytesVariant,
     pub class_bits: u32,
     pub event_list: Option<CSVCMsg_GameEventList>,
-    pub event_map: Option<HashMap<i32, Descriptor_t>>,
-    pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
-    pub serverclass_map: HashMap<u16, ServerClass>,
-    pub entities: HashMap<u32, Entity>,
+    pub event_map: Option<HashMap<i32, Descriptor_t, RandomState>>,
+    pub dt_map: Option<HashMap<String, CSVCMsg_SendTable, RandomState>>,
+    pub serverclass_map: HashMap<u16, ServerClass, RandomState>,
+    pub entities: HashMap<u32, Entity, RandomState>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
-    pub players: HashMap<u64, UserInfo>,
+    pub players: HashMap<u64, UserInfo, RandomState>,
     pub parse_props: bool,
     pub game_events: Vec<GameEvent>,
     pub event_name: String,
     pub cnt: i32,
     pub wanted_props: Vec<String>,
-    pub wanted_ticks: HashSet<i32>,
+    pub wanted_ticks: HashSet<i32, RandomState>,
     pub wanted_players: Vec<u64>,
     pub round: i32,
     pub players_connected: i32,
     pub only_players: bool,
     pub only_header: bool,
-    pub userid_sid_map: HashMap<u32, u64>,
+    pub userid_sid_map: HashMap<u32, u64, RandomState>,
     pub playback_frames: usize,
 }
 
@@ -70,15 +70,12 @@ impl Demo {
         let mut extra_wanted_props = vec![];
         for p in &wanted_props {
             match TYPEHM.get(&p) {
-                Some(_) => {
-                    if &p[(p.len() - 1)..] == "X" {
-                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
-                    } else if &p[(p.len() - 1)..] == "Y" {
-                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
-                    } else if &p[(p.len() - 1)..] == "Z" {
-                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
-                    }
-                }
+                Some(_) => match &p[(p.len() - 1)..] {
+                    "X" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
+                    "Y" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
+                    "Z" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
+                    _ => {}
+                },
                 None => {
                     panic!("Prop: {} not found", p);
                 }
@@ -86,7 +83,7 @@ impl Demo {
         }
         wanted_props.extend(extra_wanted_props);
         Ok(Self {
-            userid_sid_map: HashMap::new(),
+            userid_sid_map: HashMap::default(),
             bytes: BytesVariant::Mmap(bytes),
             fp: 0,
             cmd: 0,
@@ -103,7 +100,7 @@ impl Demo {
             serverclass_map: HashMap::default(),
             entities: HashMap::default(),
             stringtables: Vec::new(),
-            players: HashMap::new(),
+            players: HashMap::default(),
             wanted_props: wanted_props,
             game_events: Vec::new(),
             wanted_players: wanted_players,
@@ -127,15 +124,12 @@ impl Demo {
         let mut extra_wanted_props = vec![];
         for p in &wanted_props {
             match TYPEHM.get(&p) {
-                Some(_) => {
-                    if &p[(p.len() - 1)..] == "X" {
-                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
-                    } else if &p[(p.len() - 1)..] == "Y" {
-                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
-                    } else if &p[(p.len() - 1)..] == "Z" {
-                        extra_wanted_props.push((&p[..p.len() - 2]).to_owned());
-                    }
-                }
+                Some(_) => match &p[(p.len() - 1)..] {
+                    "X" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
+                    "Y" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
+                    "Z" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
+                    _ => {}
+                },
                 None => {
                     panic!("Prop: {} not found", p);
                 }
@@ -143,7 +137,7 @@ impl Demo {
         }
         wanted_props.extend(extra_wanted_props);
         Ok(Self {
-            userid_sid_map: HashMap::new(),
+            userid_sid_map: HashMap::default(),
             bytes: BytesVariant::Vec(bytes),
             fp: 0,
             cmd: 0,
@@ -160,7 +154,7 @@ impl Demo {
             serverclass_map: HashMap::default(),
             entities: HashMap::default(),
             stringtables: Vec::new(),
-            players: HashMap::new(),
+            players: HashMap::default(),
             wanted_props: wanted_props,
             game_events: Vec::new(),
             wanted_players: wanted_players,
@@ -174,16 +168,17 @@ impl Demo {
 }
 
 impl Demo {
-    pub fn start_parsing(&mut self, props_names: &Vec<String>) -> FxHashMap<String, PropColumn> {
-        let mut ticks_props: FxHashMap<String, PropColumn> = FxHashMap::default();
+    pub fn start_parsing(
+        &mut self,
+        props_names: &Vec<String>,
+    ) -> HashMap<String, PropColumn, RandomState> {
+        let mut ticks_props: HashMap<String, PropColumn, RandomState> = HashMap::default();
         while self.fp < self.bytes.get_len() as usize {
             let f = self.read_frame_bytes();
             self.tick = f.tick;
             // EARLY EXIT
-            if self.only_players {
-                if Demo::all_players_connected(self.players_connected) {
-                    break;
-                }
+            if self.only_players && Demo::all_players_connected(self.players_connected) {
+                break;
             }
             // EARLY EXIT
             if self.only_header {

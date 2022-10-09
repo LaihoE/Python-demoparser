@@ -10,7 +10,6 @@ use std::vec;
 #[derive(Debug)]
 pub struct ServerClass {
     pub id: u16,
-    pub name: String,
     pub dt: String,
     pub props: Vec<Prop>,
 }
@@ -48,21 +47,13 @@ impl Demo {
         self.class_bits = (class_count as f32 + 1.).log2().ceil() as u32;
 
         for _ in 0..class_count {
-            let my_id = self.read_short();
-            let name = self.read_string();
+            let id = self.read_short();
+            let _ = self.read_string();
             let dt = self.read_string();
             if self.parse_props {
                 let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt]);
-
-                self.serverclass_map.insert(
-                    my_id,
-                    ServerClass {
-                        id: my_id,
-                        name: name,
-                        dt: dt,
-                        props: props,
-                    },
-                );
+                self.serverclass_map
+                    .insert(id, ServerClass { id, dt, props });
             }
         }
     }
@@ -96,15 +87,12 @@ impl Demo {
         prios.sort();
         let mut start = 0;
 
-        for prio_inx in 0..prios.len() {
-            let priority = prios[prio_inx];
+        for prio in prios {
             loop {
                 let mut currentprop = start;
                 while currentprop < newp.len() {
                     let prop = newp[currentprop].prop.clone();
-                    if prop.priority() == priority
-                        || priority == 64 && ((prop.flags() & (1 << 18)) != 0)
-                    {
+                    if prop.priority() == prio || prio == 64 && ((prop.flags() & (1 << 18)) != 0) {
                         if start != currentprop {
                             newp.swap(start, currentprop);
                         }
@@ -117,6 +105,7 @@ impl Demo {
                 }
             }
         }
+
         newp
     }
 

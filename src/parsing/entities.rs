@@ -3,10 +3,12 @@ use crate::parsing::read_bits::BitReader;
 use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
 use crate::Demo;
+use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
-use hashbrown::HashMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::convert::TryInto;
 
 #[derive(Debug)]
@@ -14,7 +16,7 @@ pub struct Entity {
     pub class_id: u32,
     pub entity_id: u32,
     pub serial: u32,
-    pub props: HashMap<String, PropAtom>,
+    pub props: HashMap<String, PropAtom, RandomState>,
 }
 
 #[derive(Debug)]
@@ -26,7 +28,7 @@ pub struct Prop {
     pub data: Option<PropData>,
 }
 #[inline(always)]
-fn is_wanted_tick(wanted_ticks: &hashbrown::HashSet<i32>, tick: i32) -> bool {
+fn is_wanted_tick(wanted_ticks: &HashSet<i32, RandomState>, tick: i32) -> bool {
     if wanted_ticks.len() != 0 {
         match wanted_ticks.get(&tick) {
             Some(_) => return true,
@@ -50,7 +52,7 @@ fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
 pub fn is_wanted_prop(
     this_prop: &Prop,
     wanted_props: &Vec<String>,
-    wanted_ticks: &hashbrown::HashSet<i32>,
+    wanted_ticks: &HashSet<i32, RandomState>,
     tick: i32,
 ) -> bool {
     /*
@@ -67,13 +69,13 @@ pub fn is_wanted_prop(
 
 impl Demo {
     pub fn parse_packet_entities(
-        cls_map: &HashMap<u16, ServerClass>,
+        cls_map: &HashMap<u16, ServerClass, RandomState>,
         tick: i32,
         cls_bits: usize,
         pack_ents: CSVCMsg_PacketEntities,
-        entities: &mut HashMap<u32, Entity>,
+        entities: &mut HashMap<u32, Entity, RandomState>,
         wanted_props: &Vec<String>,
-        wanted_ticks: &hashbrown::HashSet<i32>,
+        wanted_ticks: &HashSet<i32, RandomState>,
     ) {
         let n_upd_ents = pack_ents.updated_entries();
         let left_over = (pack_ents.entity_data().len() % 4) as i32;
@@ -95,7 +97,7 @@ impl Demo {
                     class_id: cls_id,
                     entity_id: entity_id as u32,
                     serial: serial,
-                    props: HashMap::new(),
+                    props: HashMap::default(),
                 };
                 update_entity(&mut e, &mut b, cls_map, wanted_props, tick, wanted_ticks);
                 entities.insert(entity_id as u32, e);
@@ -123,7 +125,7 @@ pub fn parse_ent_props(
     b: &mut BitReader<&[u8]>,
     wanted_props: &Vec<String>,
     tick: i32,
-    wanted_ticks: &hashbrown::HashSet<i32>,
+    wanted_ticks: &HashSet<i32, RandomState>,
 ) {
     let mut val = -1;
     let new_way = b.read_bool();
@@ -189,10 +191,10 @@ pub fn parse_ent_props(
 pub fn update_entity(
     ent: &mut Entity,
     b: &mut BitReader<&[u8]>,
-    cls_map: &HashMap<u16, ServerClass>,
+    cls_map: &HashMap<u16, ServerClass, RandomState>,
     wanted_props: &Vec<String>,
     tick: i32,
-    wanted_ticks: &hashbrown::HashSet<i32>,
+    wanted_ticks: &HashSet<i32, RandomState>,
 ) {
     let sv_cls = &cls_map[&(ent.class_id.try_into().unwrap())];
     parse_ent_props(ent, sv_cls, b, wanted_props, tick, wanted_ticks);

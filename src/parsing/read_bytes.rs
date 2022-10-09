@@ -17,7 +17,7 @@ impl Demo {
             self.fp += 1;
             result |= (b & 127) << (7 * count);
             count += 1;
-            if !(b & 0x80 != 0) {
+            if b & 0x80 == 0 {
                 break;
             }
         }

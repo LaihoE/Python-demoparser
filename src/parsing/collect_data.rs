@@ -3,9 +3,10 @@ use crate::parsing::stringtables::UserInfo;
 use crate::parsing::variants::PropColumn;
 use crate::parsing::variants::VarVec;
 use crate::Demo;
-use fxhash::FxHashMap;
-use hashbrown::HashMap;
+use ahash::RandomState;
 use phf::phf_map;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 fn create_default(col_type: i32, playback_frames: usize) -> PropColumn {
     let v = match col_type {
@@ -20,7 +21,7 @@ fn create_default(col_type: i32, playback_frames: usize) -> PropColumn {
 }
 
 fn insert_propcolumn(
-    ticks_props: &mut FxHashMap<String, PropColumn>,
+    ticks_props: &mut HashMap<String, PropColumn, RandomState>,
     ent: &Entity,
     prop_name: &String,
     playback_frames: usize,
@@ -44,7 +45,7 @@ fn insert_metadata(
     name: String,
     tick: i32,
     xuid: u64,
-    ticks_props: &mut FxHashMap<String, PropColumn>,
+    ticks_props: &mut HashMap<String, PropColumn, RandomState>,
     playback_frames: usize,
 ) {
     ticks_props
@@ -68,47 +69,45 @@ fn insert_metadata(
 
 impl Demo {
     pub fn collect_player_data(
-        players: &HashMap<u64, UserInfo>,
+        players: &HashMap<u64, UserInfo, RandomState>,
         tick: &i32,
-        wanted_ticks: &hashbrown::HashSet<i32>,
+        wanted_ticks: &HashSet<i32, RandomState>,
         wanted_players: &Vec<u64>,
-        entities: &HashMap<u32, Entity>,
+        entities: &HashMap<u32, Entity, RandomState>,
         props_names: &Vec<String>,
-        ticks_props: &mut FxHashMap<String, PropColumn>,
+        ticks_props: &mut HashMap<String, PropColumn, RandomState>,
         playback_frames: usize,
     ) {
         // Collect wanted props from players
-        for (_, player) in players {
+        for player in players.values() {
             if player.xuid == 0 || player.name == "GOTV" {
                 continue;
             };
             // Check that we want the tick
-            if wanted_ticks.contains(tick) || wanted_ticks.len() == 0 {
+            if wanted_ticks.contains(tick) || wanted_ticks.is_empty() {
                 // Check that we want the player
-                if wanted_players.contains(&player.xuid) || wanted_players.len() == 0 {
+                if wanted_players.contains(&player.xuid) || wanted_ticks.is_empty() {
                     if entities.contains_key(&player.entity_id) {
-                        if entities.contains_key(&player.entity_id) {
-                            let ent = &entities[&player.entity_id];
-                            // Insert all wanted props
-                            for prop_name in props_names {
-                                let prop_type = TYPEHM[prop_name];
-                                insert_propcolumn(
-                                    ticks_props,
-                                    ent,
-                                    prop_name,
-                                    playback_frames,
-                                    prop_type,
-                                );
-                            }
-                            // Insert tick, steamid, name
-                            insert_metadata(
-                                player.name.clone(),
-                                *tick,
-                                player.xuid,
+                        let ent = &entities[&player.entity_id];
+                        // Insert all wanted props
+                        for prop_name in props_names {
+                            let prop_type = TYPEHM[prop_name];
+                            insert_propcolumn(
                                 ticks_props,
+                                ent,
+                                prop_name,
                                 playback_frames,
-                            )
+                                prop_type,
+                            );
                         }
+                        // Insert tick, steamid, name
+                        insert_metadata(
+                            player.name.clone(),
+                            *tick,
+                            player.xuid,
+                            ticks_props,
+                            playback_frames,
+                        )
                     }
                 }
             }

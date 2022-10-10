@@ -102,6 +102,14 @@ impl VarVec {
             _ => panic!("i32 push panic"),
         }
     }
+    pub fn get_len(&self) -> usize {
+        match self {
+            VarVec::I32(v) => v.len(),
+            VarVec::F32(v) => v.len(),
+            VarVec::String(v) => v.len(),
+            _ => panic!("bad len type"),
+        }
+    }
 }
 
 pub enum BytesVariant {

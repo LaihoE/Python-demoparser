@@ -55,6 +55,7 @@ pub struct Demo {
     pub userid_sid_map: HashMap<u32, u64, RandomState>,
     pub playback_frames: usize,
     pub bench: HashMap<i32, i32>,
+    pub frames_parsed: i32,
 }
 
 impl Demo {
@@ -111,6 +112,7 @@ impl Demo {
             only_players: only_players,
             playback_frames: 0,
             bench: HashMap::default(),
+            frames_parsed: 0,
         })
     }
     pub fn new(
@@ -166,6 +168,7 @@ impl Demo {
             only_players: only_players,
             playback_frames: 0,
             bench: HashMap::default(),
+            frames_parsed: 0,
         })
     }
 }
@@ -177,6 +180,7 @@ impl Demo {
     ) -> HashMap<String, PropColumn, RandomState> {
         let mut ticks_props: HashMap<String, PropColumn, RandomState> = HashMap::default();
         while self.fp < self.bytes.get_len() as usize {
+            self.frames_parsed += 1;
             let f = self.read_frame_bytes();
             self.tick = f.tick;
             // EARLY EXIT

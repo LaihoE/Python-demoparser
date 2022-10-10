@@ -7,6 +7,7 @@ use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use csgoproto::netmessages::CSVCMsg_SendTable;
+use polars::export::num::Float;
 use smallvec::{smallvec, SmallVec};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -18,14 +19,34 @@ pub struct Entity {
     pub serial: u32,
     pub props: HashMap<String, PropAtom, RandomState>,
 }
+// Elapsed: 18.50s (avg: 528.68ms)
 
-#[derive(Debug)]
+/*
+optional int32 type = 1;
+        optional string var_name = 2;
+        optional int32 flags = 3;
+        optional int32 priority = 4;
+        optional string dt_name = 5;
+        optional int32 num_elements = 6;
+        optional float low_value = 7;
+        optional float high_value = 8;
+        optional int32 num_bits = 9;
+*/
+
+#[derive(Debug, Clone)]
 pub struct Prop {
     pub name: String,
-    pub prop: Sendprop_t,
+    //pub prop: Sendprop_t,
     pub arr: Option<Sendprop_t>,
     pub col: i32,
     pub data: Option<PropData>,
+    pub flags: i32,
+    pub num_elements: i32,
+    pub num_bits: i32,
+    pub low_value: f32,
+    pub high_value: f32,
+    pub priority: i32,
+    pub p_type: i32,
 }
 #[inline(always)]
 fn is_wanted_tick(wanted_ticks: &HashSet<i32, RandomState>, tick: i32) -> bool {
@@ -151,7 +172,7 @@ pub fn parse_ent_props(
                 let endings = ["_X", "_Y"];
                 for inx in 0..2 {
                     let data = PropData::F32(v[inx]);
-                    let name = prop.prop.var_name().to_string() + endings[inx];
+                    let name = prop.name.to_string() + endings[inx];
                     let atom = PropAtom {
                         prop_name: name,
                         data: data,
@@ -165,7 +186,7 @@ pub fn parse_ent_props(
                 let endings = ["_X", "_Y", "_Z"];
                 for inx in 0..3 {
                     let data = PropData::F32(v[inx]);
-                    let name = prop.prop.var_name().to_string() + endings[inx];
+                    let name = prop.name.to_string() + endings[inx];
                     let atom = PropAtom {
                         prop_name: name,
                         data: data,
@@ -177,7 +198,7 @@ pub fn parse_ent_props(
             }
             _ => {
                 let atom = PropAtom {
-                    prop_name: prop.prop.var_name().to_string(),
+                    prop_name: prop.name.to_string(),
                     data: pdata,
                     tick: tick,
                 };

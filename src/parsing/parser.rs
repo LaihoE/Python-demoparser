@@ -201,7 +201,6 @@ impl Demo {
                 &mut ticks_props,
                 self.playback_frames,
             );
-            //println!("{}", self.tick);
             self.parse_cmd(f.cmd);
         }
         ticks_props

@@ -80,7 +80,7 @@ impl Demo {
         let mut newp = self.get_props(table, table_id, &excl);
         let mut prios = vec![];
         for p in &newp {
-            prios.push(p.prop.priority());
+            prios.push(p.priority);
         }
 
         let set: HashSet<_> = prios.drain(..).collect();
@@ -93,8 +93,8 @@ impl Demo {
             loop {
                 let mut currentprop = start;
                 while currentprop < newp.len() {
-                    let prop = newp[currentprop].prop.clone();
-                    if prop.priority() == prio || prio == 64 && ((prop.flags() & (1 << 18)) != 0) {
+                    let prop = &newp[currentprop];
+                    if prop.priority == prio || prio == 64 && ((prop.flags & (1 << 18)) != 0) {
                         if start != currentprop {
                             newp.swap(start, currentprop);
                         }
@@ -160,19 +160,33 @@ impl Demo {
             } else if prop.type_() == 5 {
                 let prop_arr = Prop {
                     name: prop.var_name().to_string(),
-                    prop: prop.clone(),
+                    //prop: prop.clone(),
                     arr: Some(table.props[cnt].clone()),
                     col: 1,
                     data: None,
+                    flags: prop.flags(),
+                    num_elements: prop.num_elements(),
+                    num_bits: prop.num_bits(),
+                    low_value: prop.high_value(),
+                    high_value: prop.high_value(),
+                    priority: prop.priority(),
+                    p_type: prop.type_(),
                 };
                 flat.push(prop_arr);
             } else {
                 let prop = Prop {
                     name: prop.var_name().to_string(),
-                    prop: prop.clone(),
+                    //prop: prop.clone(),
                     arr: None,
                     col: 1,
                     data: None,
+                    flags: prop.flags(),
+                    num_elements: prop.num_elements(),
+                    num_bits: prop.num_bits(),
+                    low_value: prop.high_value(),
+                    high_value: prop.high_value(),
+                    priority: prop.priority(),
+                    p_type: prop.type_(),
                 };
                 flat.push(prop);
             }

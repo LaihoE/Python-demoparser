@@ -205,7 +205,7 @@ impl<R: io::Read> BitReader<R> {
     }
     #[inline(always)]
     pub fn decode(&mut self, prop: &Prop) -> PropData {
-        match prop.prop.type_.unwrap_or_else(|| 9) {
+        match prop.p_type {
             1 => PropData::F32(self.decode_float(prop)),
             0 => PropData::I32(self.decode_int(prop) as i32),
             3 => PropData::VecXY(self.decode_vec_xy(prop)),
@@ -217,7 +217,7 @@ impl<R: io::Read> BitReader<R> {
     }
 
     pub fn decode_array(&mut self, prop: &Prop) -> Vec<i32> {
-        let b = (prop.prop.num_elements() as f32).log2().floor() + 1.0;
+        let b = (prop.num_elements as f32).log2().floor() + 1.0;
         let num_elements = self.read_nbits(b as usize);
 
         let p = prop.arr.as_ref().unwrap();
@@ -225,11 +225,17 @@ impl<R: io::Read> BitReader<R> {
 
         for _ in 0..num_elements {
             let pro = Prop {
-                name: prop.name.to_string(),
-                prop: p.clone(),
+                name: p.to_string(),
                 arr: None,
                 col: 0,
                 data: None,
+                flags: p.flags(),
+                num_elements: p.num_elements(),
+                num_bits: p.num_bits(),
+                low_value: p.high_value(),
+                high_value: p.high_value(),
+                priority: p.priority(),
+                p_type: p.type_(),
             };
             let val = self.decode(&pro);
             elems.push(val);
@@ -276,7 +282,7 @@ impl<R: io::Read> BitReader<R> {
     pub fn decode_vec(&mut self, prop: &Prop) -> [f32; 3] {
         let x = self.decode_float(prop);
         let y = self.decode_float(prop);
-        if prop.prop.flags() & (1 << 5) == 0 {
+        if prop.flags & (1 << 5) == 0 {
             let z = self.decode_float(prop);
             return [x, y, z];
         } else {
@@ -393,7 +399,7 @@ impl<R: io::Read> BitReader<R> {
     #[inline(always)]
     pub fn decode_special_float(&mut self, prop: &Prop) -> f32 {
         let mut val = 0.0;
-        let flags = prop.prop.flags();
+        let flags = prop.flags;
         if flags & (1 << 1) != 0 {
             val = self.read_bit_coord() as f32;
         } else if flags & (1 << 2) != 0 {
@@ -401,11 +407,11 @@ impl<R: io::Read> BitReader<R> {
         } else if flags & (1 << 5) != 0 {
             val = self.read_bit_normal() as f32;
         } else if flags & (1 << 15) != 0 {
-            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 0) as f32;
+            val = self.read_bit_cell_coord(prop.num_bits as usize, 0) as f32;
         } else if flags & (1 << 16) != 0 {
-            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 1) as f32;
+            val = self.read_bit_cell_coord(prop.num_bits as usize, 1) as f32;
         } else if flags & (1 << 17) != 0 {
-            val = self.read_bit_cell_coord(prop.prop.num_bits() as usize, 2) as f32;
+            val = self.read_bit_cell_coord(prop.num_bits as usize, 2) as f32;
         }
         val
     }
@@ -417,18 +423,17 @@ impl<R: io::Read> BitReader<R> {
             return val as f32;
         } else {
             let mut interp = 1;
-            if prop.prop.num_bits() != -1 {
-                interp = self.read_nbits(prop.prop.num_bits().try_into().unwrap());
+            if prop.num_bits != -1 {
+                interp = self.read_nbits(prop.num_bits as usize);
             }
-            let mut val = (interp / (1 << prop.prop.num_bits() - 1)) as f32;
-            val = prop.prop.low_value()
-                + (prop.prop.high_value() - prop.prop.low_value()) * (val as f32);
+            let mut val = (interp / (1 << prop.num_bits - 1)) as f32;
+            val = prop.low_value + (prop.high_value - prop.low_value) * (val as f32);
             val
         }
     }
     #[inline(always)]
     pub fn decode_int(&mut self, prop: &Prop) -> u32 {
-        let flags = prop.prop.flags();
+        let flags = prop.flags;
         if flags & (1 << 19) != 0 {
             if flags & (1 << 0) != 0 {
                 let result: i32 = self.read_varint().try_into().unwrap();
@@ -440,16 +445,17 @@ impl<R: io::Read> BitReader<R> {
             }
         } else {
             if flags & (1 << 0) != 0 {
-                if prop.prop.num_bits() == 1 {
+                if prop.num_bits == 1 {
                     let result = self.read_nbits(1);
                     result as u32
                 } else {
-                    let result: u32 = self.read_nbits(prop.prop.num_bits().try_into().unwrap());
+                    let result: u32 = self.read_nbits(prop.num_bits as usize);
                     result as u32
                 }
             } else {
-                let result = self.read_sbit_long(prop.prop.num_bits().try_into().unwrap());
-                result as u32
+                // WTF
+                let result = self.read_sbit_long(prop.num_bits.try_into().unwrap());
+                result as u32 //.try_into().unwrap()
             }
         }
     }

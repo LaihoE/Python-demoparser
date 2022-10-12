@@ -73,7 +73,7 @@ impl Demo {
         tick: &i32,
         wanted_ticks: &HashSet<i32, RandomState>,
         wanted_players: &Vec<u64>,
-        entities: &HashMap<u32, Entity, RandomState>,
+        entities: &mut Vec<(u32, Entity)>,
         props_names: &Vec<String>,
         ticks_props: &mut HashMap<String, PropColumn, RandomState>,
         playback_frames: usize,
@@ -88,14 +88,15 @@ impl Demo {
             if wanted_ticks.contains(tick) || wanted_ticks.is_empty() {
                 // Check that we want the player
                 if wanted_players.contains(&player.xuid) || wanted_players.is_empty() {
-                    if entities.contains_key(&player.entity_id) {
-                        let ent = &entities[&player.entity_id];
+                    let pl = &mut entities[player.entity_id as usize];
+                    if pl.0 != 4206969 {
+                        let ent = &entities[player.entity_id as usize];
                         // Insert all wanted props
                         for prop_name in props_names {
                             let prop_type = TYPEHM[prop_name];
                             insert_propcolumn(
                                 ticks_props,
-                                ent,
+                                &ent.1,
                                 prop_name,
                                 playback_frames,
                                 prop_type,

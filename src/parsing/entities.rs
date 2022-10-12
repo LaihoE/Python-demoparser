@@ -93,15 +93,18 @@ impl Demo {
         tick: i32,
         cls_bits: usize,
         pack_ents: CSVCMsg_PacketEntities,
-        entities: &mut HashMap<u32, Entity, RandomState>,
+        entities: &mut Vec<(u32, Entity)>,
         wanted_props: &Vec<String>,
         wanted_ticks: &HashSet<i32, RandomState>,
+        ent_id_player: &HashMap<u32, u64>,
+        workhorse: &mut Vec<i32>,
     ) {
         let n_upd_ents = pack_ents.updated_entries();
         let left_over = (pack_ents.entity_data().len() % 4) as i32;
         let mut b = BitReader::new(pack_ents.entity_data(), left_over);
         b.read_uneven_end_bits();
         let mut entity_id: i32 = -1;
+
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var() as i32);
 
@@ -119,21 +122,30 @@ impl Demo {
                     serial: serial,
                     props: HashMap::default(),
                 };
-                update_entity(&mut e, &mut b, cls_map, wanted_props, tick, wanted_ticks);
-                entities.insert(entity_id as u32, e);
+                update_entity(
+                    &mut e,
+                    &mut b,
+                    cls_map,
+                    wanted_props,
+                    tick,
+                    wanted_ticks,
+                    workhorse,
+                );
+                entities[entity_id as usize] = (entity_id as u32, e);
             } else {
                 // IF ENTITY DOES EXIST
 
-                let ent = entities.get_mut(&(entity_id.try_into().unwrap_or(99999999)));
-                match ent {
-                    Some(e) => {
-                        update_entity(e, &mut b, cls_map, wanted_props, tick, wanted_ticks);
-                    }
-                    None => {
-                        println!("DEMO SAID ENTITY: {} EXISTS BUT IT DID NOT!", entity_id);
-                        panic!("f");
-                    }
-                }
+                //let ent = entities.get_mut(&(entity_id.try_into().unwrap_or(99999999)));
+                let ent = &mut entities[entity_id as usize];
+                update_entity(
+                    &mut ent.1,
+                    &mut b,
+                    cls_map,
+                    wanted_props,
+                    tick,
+                    wanted_ticks,
+                    workhorse,
+                );
             }
         }
     }
@@ -146,20 +158,24 @@ pub fn parse_ent_props(
     wanted_props: &Vec<String>,
     tick: i32,
     wanted_ticks: &HashSet<i32, RandomState>,
+    workhorse: &mut Vec<i32>,
 ) {
     let mut val = -1;
     let new_way = b.read_bool();
-    let mut indicies: SmallVec<[i32; 128]> = smallvec![];
-
+    //let mut indicies: SmallVec<[i32; 128]> = smallvec![];
+    let mut upd = 0;
     loop {
         val = b.read_inx(val, new_way);
         if val == -1 {
             break;
         }
-        indicies.push(val);
+        upd += 1;
+        workhorse[upd] = val;
     }
     //println!("{}", indicies.len());
-    for inx in indicies {
+    for i in 0..upd {
+        println!("{} {}", i, upd);
+        let inx = workhorse[i];
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);
 
@@ -179,7 +195,7 @@ pub fn parse_ent_props(
                         tick: tick,
                     };
                     ent.props.insert(atom.prop_name.clone(), atom);
-                    //props.push(atom);
+                    // props.push(atom);
                 }
             }
             PropData::VecXYZ(v) => {
@@ -193,7 +209,7 @@ pub fn parse_ent_props(
                         tick: tick,
                     };
                     ent.props.insert(atom.prop_name.clone(), atom);
-                    //props.push(atom);
+                    // props.push(atom);
                 }
             }
             _ => {
@@ -203,7 +219,7 @@ pub fn parse_ent_props(
                     tick: tick,
                 };
                 ent.props.insert(atom.prop_name.clone(), atom);
-                //props.push(atom);
+                // props.push(atom);
             }
         }
     }
@@ -216,7 +232,8 @@ pub fn update_entity(
     wanted_props: &Vec<String>,
     tick: i32,
     wanted_ticks: &HashSet<i32, RandomState>,
+    workhorse: &mut Vec<i32>,
 ) {
     let sv_cls = &cls_map[&(ent.class_id.try_into().unwrap())];
-    parse_ent_props(ent, sv_cls, b, wanted_props, tick, wanted_ticks);
+    parse_ent_props(ent, sv_cls, b, wanted_props, tick, wanted_ticks, workhorse);
 }

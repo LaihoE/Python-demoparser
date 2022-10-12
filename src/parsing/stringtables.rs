@@ -109,16 +109,12 @@ impl Demo {
         let mut last_inx: i32 = -1;
         let mut idx = 0;
         let mut btc = 0;
-        let mut history: Vec<String> = Vec::with_capacity(50000);
+        let mut history: Vec<String> = Vec::new();
         let mut entry = String::new();
         let mut user_data: [u8; 340] = [0; 340];
         buf.read_bool();
 
-        for i in 1..50000 {
-            history.push("".to_string())
-        }
-
-        for i in 0..num_entries {
+        for _i in 0..num_entries {
             index = last_inx + 1;
             if buf.read_bool() == false {
                 index = buf
@@ -151,6 +147,7 @@ impl Demo {
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                        self.entid_is_player.insert(ui.entity_id, ui.xuid);
                         self.players.insert(ui.xuid, ui);
                     }
                 } else {
@@ -166,6 +163,7 @@ impl Demo {
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                        self.entid_is_player.insert(ui.entity_id, ui.xuid);
                         self.players.insert(ui.xuid, ui);
                     }
                 }
@@ -231,10 +229,6 @@ impl Demo {
         let mut user_data: [u8; 340] = [0; 340];
         buf.read_bool();
 
-        for i in 1..50000 {
-            history.push("".to_string())
-        }
-
         for i in 0..st.max_entries {
             index = last_inx + 1;
             if buf.read_bool() == false {
@@ -268,6 +262,7 @@ impl Demo {
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                         ui.name = ui.name.trim_end_matches("\x00").to_string();
                         self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                        self.entid_is_player.insert(ui.entity_id, ui.xuid);
                         self.players.insert(ui.xuid, ui);
                     }
                 } else {
@@ -290,6 +285,7 @@ impl Demo {
                                         ui.friends_name.trim_end_matches("\x00").to_string();
                                     ui.name = ui.name.trim_end_matches("\x00").to_string();
                                     self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                                    self.entid_is_player.insert(ui.entity_id, ui.xuid);
                                     self.players.insert(ui.xuid, ui);
                                 }
                             }

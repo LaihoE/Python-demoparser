@@ -62,7 +62,7 @@ impl Demo {
         s
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn read_frame_bytes(&mut self) -> Frame {
         Frame {
             cmd: self.read_byte(),

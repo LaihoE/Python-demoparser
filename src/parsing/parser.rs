@@ -37,7 +37,7 @@ pub struct Demo {
     pub event_map: Option<HashMap<i32, Descriptor_t, RandomState>>,
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable, RandomState>>,
     pub serverclass_map: HashMap<u16, ServerClass, RandomState>,
-    pub entities: HashMap<u32, Entity, RandomState>,
+    pub entities: Vec<(u32, Entity)>,
     pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
     pub players: HashMap<u64, UserInfo, RandomState>,
@@ -56,6 +56,8 @@ pub struct Demo {
     pub playback_frames: usize,
     pub bench: HashMap<i32, i32>,
     pub frames_parsed: i32,
+    pub entid_is_player: HashMap<u32, u64>,
+    pub workhorse: Vec<i32>,
 }
 
 impl Demo {
@@ -100,7 +102,7 @@ impl Demo {
             bad: Vec::new(),
             dt_map: Some(HashMap::default()),
             serverclass_map: HashMap::default(),
-            entities: HashMap::default(),
+            entities: vec![],
             stringtables: Vec::new(),
             players: HashMap::default(),
             wanted_props: wanted_props,
@@ -113,6 +115,8 @@ impl Demo {
             playback_frames: 0,
             bench: HashMap::default(),
             frames_parsed: 0,
+            entid_is_player: HashMap::default(),
+            workhorse: Vec::new(),
         })
     }
     pub fn new(
@@ -156,7 +160,7 @@ impl Demo {
             bad: Vec::new(),
             dt_map: Some(HashMap::default()),
             serverclass_map: HashMap::default(),
-            entities: HashMap::default(),
+            entities: vec![],
             stringtables: Vec::new(),
             players: HashMap::default(),
             wanted_props: wanted_props,
@@ -169,6 +173,8 @@ impl Demo {
             playback_frames: 0,
             bench: HashMap::default(),
             frames_parsed: 0,
+            entid_is_player: HashMap::default(),
+            workhorse: Vec::new(),
         })
     }
 }
@@ -179,6 +185,19 @@ impl Demo {
         props_names: &Vec<String>,
     ) -> HashMap<String, PropColumn, RandomState> {
         let mut ticks_props: HashMap<String, PropColumn, RandomState> = HashMap::default();
+        for i in 0..10000 {
+            self.entities.push((
+                4206969,
+                Entity {
+                    class_id: 0,
+                    entity_id: 496885,
+                    props: HashMap::default(),
+                    serial: 5146,
+                },
+            ));
+            self.workhorse.push(i);
+        }
+
         while self.fp < self.bytes.get_len() as usize {
             self.frames_parsed += 1;
             let f = self.read_frame_bytes();
@@ -196,7 +215,7 @@ impl Demo {
                 &self.tick,
                 &self.wanted_ticks,
                 &self.wanted_players,
-                &self.entities,
+                &mut self.entities,
                 props_names,
                 &mut ticks_props,
                 self.playback_frames,
@@ -283,6 +302,8 @@ impl Demo {
                                     &mut self.entities,
                                     &self.wanted_props,
                                     &self.wanted_ticks,
+                                    &self.entid_is_player,
+                                    &mut self.workhorse,
                                 );
                             }
                             Err(e) => panic!(

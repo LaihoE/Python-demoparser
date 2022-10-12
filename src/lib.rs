@@ -160,11 +160,12 @@ impl DemoParser {
         mut wanted_props: Vec<String>,
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
-        let bytes = read_file(self.path.clone()).unwrap();
-
+        let file = File::open(self.path.clone()).unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         let (wanted_players, wanted_ticks) = parse_kwargs(py_kwargs);
-        let parser = Demo::new(
-            bytes,
+
+        let parser = Demo::new_mmap(
+            mmap,
             true,
             wanted_ticks,
             wanted_players,

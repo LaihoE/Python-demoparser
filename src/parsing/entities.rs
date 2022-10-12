@@ -1,5 +1,6 @@
 use crate::parsing::data_table::ServerClass;
-use crate::parsing::read_bits::BitReader;
+//use crate::parsing::read_bits::BitReader;
+use crate::parsing::read_bits_skip::BitReader;
 use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
 use crate::Demo;
@@ -169,12 +170,11 @@ pub fn parse_ent_props(
         if val == -1 {
             break;
         }
-        upd += 1;
         workhorse[upd] = val;
+        upd += 1;
     }
-    //println!("{}", indicies.len());
+
     for i in 0..upd {
-        println!("{} {}", i, upd);
         let inx = workhorse[i];
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);
@@ -182,7 +182,7 @@ pub fn parse_ent_props(
         if !is_wanted_prop_name(prop, &wanted_props) {
             continue;
         }
-        //println!("HERE");
+
         match pdata {
             PropData::VecXY(v) => {
                 let endings = ["_X", "_Y"];

@@ -114,10 +114,6 @@ impl Demo {
         let mut user_data: [u8; 340] = [0; 340];
         buf.read_bool();
 
-        for i in 1..50000 {
-            history.push("".to_string())
-        }
-
         for i in 0..num_entries {
             index = last_inx + 1;
             if buf.read_bool() == false {
@@ -231,9 +227,6 @@ impl Demo {
         let mut user_data: [u8; 340] = [0; 340];
         buf.read_bool();
 
-        for i in 1..50000 {
-            history.push("".to_string())
-        }
 
         for i in 0..st.max_entries {
             index = last_inx + 1;

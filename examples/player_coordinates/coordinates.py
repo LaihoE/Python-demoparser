@@ -8,13 +8,13 @@ import tqdm
 def util_dmg(file):
     #print(file)
     wanted_props = ["m_vecOrigin_X", "m_angEyeAngles[0]"]
-    wanted_players = [] # Empty for all players
-    wanted_ticks = [] # =10000..11000
+    wanted_players = [765195849165354]
+    wanted_ticks = [x for x in range(100000)]
 
     parser = DemoParser(file)
     df = parser.parse_props(wanted_props,
-                            wanted_ticks,
-                            wanted_players)
+                            ticks=wanted_ticks,
+                            players=wanted_players)
     return df
 
 

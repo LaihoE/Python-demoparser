@@ -18,13 +18,21 @@ events = parser.parse_events("player_death")
 from demoparser import DemoParser
 
 wanted_props = ["m_vecOrigin_X", "m_iHealth"]
-wanted_players = [76561197991348083] # Empty for all players
-wanted_ticks = [x for x in range(10000, 11000)] # =10000..11000
 
 parser = DemoParser("path_to_demo.dem")
-df = parser.parse_props(wanted_props,
-                        wanted_ticks,
-                        wanted_players)
+df = parser.parse_props(wanted_props)
+```
+parse_props also accepts optional arguments ticks and players like so:
+## Player data
+```python
+from demoparser import DemoParser
+
+wanted_props = ["m_vecOrigin_X", "m_iHealth"]
+players = [76561197991348083]
+ticks = [768, 897, 1848, 9443]
+
+parser = DemoParser("path_to_demo.dem")
+df = parser.parse_props(wanted_props, players=players, ticks=ticks)
 ```
 
 #### Example game event
@@ -77,10 +85,10 @@ For reference here are some very rough numbers for reading speeds assuming an av
 
 ### Parsing
 Time taken for the parsing (VERY roughly):
-| Action      | Time |
-| ----------- | ---- |
-| Game events | 50ms |
-| Player data | 1s   |
+| Action      | Time  |
+| ----------- | ----- |
+| Game events | 50ms  |
+| Player data | 500ms |
 
 The parsing numbers are with a single process, but it's trivial to multiprocess across demos (see examples).  
 

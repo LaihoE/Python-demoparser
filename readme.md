@@ -72,31 +72,19 @@ m_vecOrigin --> (m_vecOrigin_X, m_vecOrigin_Y).
 List of possible values comming soon.
 ## Performance
 
-Your performance will mostly depend on how fast your HDD/SSD is.
+Your performance will mostly depend on how fast your HDD/SSD is. Below are some rough estimates for parsing speeds excluding I/O.
 
-For reference here are some very rough numbers for reading speeds assuming an average demo size of 80MB.
-### Reading
-| Drive            | Read Speed | Time one demo | Demos/second |
-| ---------------- | ---------- | ------------- | ------------ |
-| HDD              | 100 MB/s   | 0.8s          | 1.25         |
-| Normal SSD       | 500 MB/s   | 0.160s        | 6.25         |
-| Average nvme SSD | 3000 MB/s  | 0.026s        | 37.5         |
-| Fast nvme SSD    | 7000 MB/s  | 0.0114s       | 87.5         |
 
-### Parsing
-Time taken for the parsing (VERY roughly):
+
+
 | Action      | Time  |
 | ----------- | ----- |
 | Game events | 50ms  |
-| Player data | 500ms |
+| Player data | 250ms |
 
-The parsing numbers are with a single process, but it's trivial to multiprocess across demos (see examples).  
+Time taken for the parsing (with ryzen 5900x and no I/O):
 
-
-If parsing in parallel then game events will almost certainly be I/O bottlenecked. While it uses mmap, you can use above reading speed table for ok estimates for performance. This means that if you only need game events information then you can parse >50 demos per second with a fast SSD.
-
-Parsing props performance can roughly be estimated as 1 demo per second per core.
 
 ## Other notes
-- Parse props reads all bytes into memory before parsing, while all other methods use mmap.
+- Parser uses mmap.
 

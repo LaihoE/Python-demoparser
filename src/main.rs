@@ -10,7 +10,7 @@ use std::time::Instant;
 
 fn main() {
     let now = Instant::now();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/test/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/broken/").unwrap();
     for demo_path in paths {
         //let demo_path = "/home/laiho/Documents/demos/faceits/clean_unzompr/1.dem";
         let props_names = vec!["m_angEyeAngles[0]".to_string()];
@@ -36,7 +36,8 @@ fn main() {
         let h: Header = parser.parse_demo_header();
         let mut event_names: Vec<String> = Vec::new();
         let data = parser.start_parsing(&props_names);
+        println!("{}", parser.frames_parsed)
     }
     let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 35);
+    println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 2);
 }

@@ -95,12 +95,12 @@ impl<R: io::Read> BitReader<R> {
         let mut buf = [0; NBITS / 8];
         let had_enough = self.inner.read_exact(&mut buf);
         self.bits = unsafe { mem::transmute(buf) };
-        self.available = NBITS;
+        self.available = 32;
     }
     #[inline(always)]
     pub fn consume(&mut self, n: usize) {
         self.bits = match n {
-            NBITS => 0,
+            32 => 0,
             n => self.bits >> n,
         };
         self.available -= n;
@@ -127,7 +127,7 @@ impl<R: io::Read> BitReader<R> {
             self.ensure_bits();
             let ret = in_buf | ((self.bits & MASKS[remaining]) << consumed);
             self.consume(remaining);
-            ret.to_le()
+            ret
         }
     }
     #[inline(always)]
@@ -136,13 +136,13 @@ impl<R: io::Read> BitReader<R> {
         //println!("{} {}", self.available, ret);
         if ret & 48 == 16 {
             ret = (ret & 15) | (self.read_nbits(4) << 4);
-            assert!(ret >= 16);
+            //assert!(ret >= 16);
         } else if ret & 48 == 32 {
             ret = (ret & 15) | (self.read_nbits(8) << 4);
-            assert!(ret >= 256);
+            //assert!(ret >= 256);
         } else if ret & 48 == 48 {
             ret = (ret & 15) | (self.read_nbits(28) << 4);
-            assert!(ret >= 4096);
+            //assert!(ret >= 4096);
         }
         ret
     }
@@ -311,28 +311,18 @@ impl<R: io::Read> BitReader<R> {
     }
     #[inline(always)]
     pub fn read_bit_cell_coord(&mut self, n: usize, coord_type: u32) -> u32 {
-        let frac_bits = 0;
-        let resolution = 0;
-        let low_prec = coord_type == 1;
-        let result = 0;
-        if coord_type == 2 {
-            let result = self.read_nbits(n);
-        } else {
-            if coord_type == 3 {
-                let frac_bits = low_prec;
-            } else {
-                let frac_bits = 5;
+        // SKIP FOR NOW, WATCH OUT
+        match coord_type {
+            2 => {
+                let _ = self.read_nbits(n);
+                return 0;
             }
-            if low_prec {
-                let resolution = 1.0 / (1 << 3) as f64;
-            } else {
-                let cr: f64 = 1.0 / (1 << 5) as f64;
+            _ => {
+                let frac_bits = if coord_type == 3 { 1 } else { 5 };
+                self.read_nbits(frac_bits);
+                return 0;
             }
-            let int_val = self.read_nbits(n);
-            let frac_val = self.read_nbits(frac_bits);
-            let result = int_val + (frac_val * resolution);
         }
-        return result;
     }
     #[inline(always)]
     pub fn read_bit_normal(&mut self) -> f64 {
@@ -371,20 +361,7 @@ impl<R: io::Read> BitReader<R> {
             result
         }
     }
-    #[inline(always)]
-    pub fn read_bits(&mut self, n: i32) -> f32 {
-        let mut bitsleft = n;
-        let eight = 8 as usize;
-        let mut bytarr: [u8; 4] = [0, 0, 0, 0];
-        while bitsleft >= 32 {
-            bytarr[0] = self.read_nbits(eight).try_into().unwrap();
-            bytarr[1] = self.read_nbits(eight).try_into().unwrap();
-            bytarr[2] = self.read_nbits(eight).try_into().unwrap();
-            bytarr[3] = self.read_nbits(eight).try_into().unwrap();
-            bitsleft -= 32;
-        }
-        f32::from_le_bytes(bytarr)
-    }
+
     #[inline(always)]
     pub fn read_bits_st(&mut self, n: i32) -> [u8; 340] {
         let mut res = 0;
@@ -403,7 +380,7 @@ impl<R: io::Read> BitReader<R> {
         if flags & (1 << 1) != 0 {
             val = self.read_bit_coord() as f32;
         } else if flags & (1 << 2) != 0 {
-            val = self.read_bits(32) as f32;
+            val = self.read_nbits(32) as f32;
         } else if flags & (1 << 5) != 0 {
             val = self.read_bit_normal() as f32;
         } else if flags & (1 << 15) != 0 {

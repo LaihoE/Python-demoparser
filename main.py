@@ -7,7 +7,7 @@ import tqdm
 
 
 def parse(file):
-    parser = DemoParser("q.dem")
+    parser = DemoParser(file)
     before = time.time()
     df = parser.parse_props(["m_hPlayerPing"], ticks=[x for x in range(20000, 200050)])
     print(df)

@@ -137,7 +137,6 @@ pub fn rm_user_friendly_names(names: Vec<String>) -> Vec<String>{
             _ => unfriendly_names.push(name),
         }
     }
-    println!("{:?}", unfriendly_names);
     unfriendly_names
 }
 

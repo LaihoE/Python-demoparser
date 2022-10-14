@@ -35,16 +35,7 @@ pub struct Prop {
     pub priority: i32,
     pub p_type: i32,
 }
-#[inline(always)]
-fn is_wanted_tick(wanted_ticks: &HashSet<i32, RandomState>, tick: i32) -> bool {
-    if wanted_ticks.len() != 0 {
-        match wanted_ticks.get(&tick) {
-            Some(_) => return true,
-            None => return false,
-        }
-    }
-    true
-}
+
 #[inline(always)]
 fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
     for prop in wanted_props {
@@ -53,25 +44,6 @@ fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
         }
     }
     false
-}
-
-#[inline(always)]
-pub fn is_wanted_prop(
-    this_prop: &Prop,
-    wanted_props: &Vec<String>,
-    wanted_ticks: &HashSet<i32, RandomState>,
-    tick: i32,
-) -> bool {
-    /*
-    let wanted_tick = is_wanted_tick(wanted_ticks, tick);
-    let wanted_prop = is_wanted_prop_name(this_prop, wanted_props);
-    if wanted_prop && wanted_tick {
-        return true;
-    } else {
-        false
-    }
-    */
-    is_wanted_prop_name(this_prop, wanted_props)
 }
 
 impl Demo {
@@ -98,7 +70,8 @@ impl Demo {
                 // IF ENTITY DOES NOT EXIST
 
                 let cls_id = b.read_nbits(cls_bits);
-                let _ = b.read_nbits(10);
+                let x = b.read_nbits(10);
+                //println!("SERIAL: {} {}, {:?}", entity_id, x, cls_map[&(cls_id as u16)].dt);
 
                 let mut e = Entity {
                     class_id: cls_id,

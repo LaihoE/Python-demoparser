@@ -52,6 +52,7 @@ impl Demo {
             let id = self.read_short();
             let _ = self.read_string();
             let dt = self.read_string();
+
             if self.parse_props {
                 let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt], dt.clone());
                 self.serverclass_map

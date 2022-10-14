@@ -453,9 +453,8 @@ impl<R: io::Read> BitReader<R> {
                     result as u32
                 }
             } else {
-                // WTF
                 let result = self.read_sbit_long(prop.num_bits.try_into().unwrap());
-                result as u32 //.try_into().unwrap()
+                result as u32
             }
         }
     }

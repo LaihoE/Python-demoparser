@@ -7,13 +7,14 @@ import tqdm
 
 
 def parse(file):
-    parser = DemoParser(file)
+    parser = DemoParser("q.dem")
     before = time.time()
-    evs = parser.parse_events("player_death")
-    #df = parser.parse_props(["m_vecVelocity[0]"], ticks=[x for x in range(10000, 10020)])
+    df = parser.parse_props(["m_hPlayerPing"], ticks=[x for x in range(20000, 200050)])
+    print(df)
     print(time.time() - before)
 
+
 if __name__ == "__main__":
-    files = glob.glob("/home/laiho/Documents/demos/mygames/*")
+    files = glob.glob("/mnt/d/test_demos/faceit/*")
     with mp.Pool(processes=1) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(parse, files), total=len(files)))

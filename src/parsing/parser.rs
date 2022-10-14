@@ -56,6 +56,7 @@ pub struct Demo {
     pub playback_frames: usize,
     pub bench: HashMap<i32, i32>,
     pub frames_parsed: i32,
+    pub all_props: HashSet<String>,
 }
 
 impl Demo {
@@ -113,6 +114,7 @@ impl Demo {
             playback_frames: 0,
             bench: HashMap::default(),
             frames_parsed: 0,
+            all_props: HashSet::new(),
         })
     }
     pub fn new(
@@ -169,6 +171,7 @@ impl Demo {
             playback_frames: 0,
             bench: HashMap::default(),
             frames_parsed: 0,
+            all_props: HashSet::new(),
         })
     }
 }

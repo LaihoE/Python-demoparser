@@ -64,7 +64,7 @@ impl VarVec {
     }
     pub fn push_string(&mut self, data: String) {
         if let VarVec::String(f) = self {
-            f.push(None)
+            f.push(Some(data))
         }
     }
     pub fn push_string_none(&mut self) {

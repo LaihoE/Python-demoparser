@@ -84,11 +84,9 @@ Your performance will mostly depend on how fast your HDD/SSD is. Below are some 
 
 Time taken for the parsing (with ryzen 5900x and no I/O):
 
-Current flamegraph of performance (player data)
-![](flamegraph.svg)
+Current flamegraph of performance [flamegraph](https://github.com/LaihoE/Python-demoparser/blob/main/flamegraph.svg). Save the image and open it in a browser to zoom.
 
 
 
 ## Other notes
 - Parser uses mmap.
-

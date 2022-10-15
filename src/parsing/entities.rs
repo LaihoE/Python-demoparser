@@ -17,7 +17,6 @@ use std::convert::TryInto;
 pub struct Entity {
     pub class_id: u32,
     pub entity_id: u32,
-    pub serial: u32,
     pub props: HashMap<String, PropAtom, RandomState>,
 }
 
@@ -72,12 +71,12 @@ impl Demo {
                 // IF ENTITY DOES NOT EXIST
 
                 let cls_id = b.read_nbits(cls_bits);
-                let serial = b.read_nbits(10);
+                let x = b.read_nbits(10);
+                //println!("SERIAL: {} {}, {:?}", entity_id, x, cls_map[&(cls_id as u16)].dt);
 
                 let mut e = Entity {
                     class_id: cls_id,
                     entity_id: entity_id as u32,
-                    serial: serial,
                     props: HashMap::default(),
                 };
                 update_entity(&mut e, &mut b, cls_map, wanted_props, tick, workhorse);

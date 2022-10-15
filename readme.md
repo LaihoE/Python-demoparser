@@ -18,13 +18,21 @@ events = parser.parse_events("player_death")
 from demoparser import DemoParser
 
 wanted_props = ["m_vecOrigin_X", "m_iHealth"]
-wanted_players = [76561197991348083] # Empty for all players
-wanted_ticks = [x for x in range(10000, 11000)] # =10000..11000
 
 parser = DemoParser("path_to_demo.dem")
-df = parser.parse_props(wanted_props,
-                        wanted_ticks,
-                        wanted_players)
+df = parser.parse_props(wanted_props)
+```
+parse_props also accepts optional arguments ticks and players like so:
+## Player data
+```python
+from demoparser import DemoParser
+
+wanted_props = ["m_vecOrigin_X", "m_iHealth"]
+players = [76561197991348083]
+ticks = [768, 897, 1848, 9443]
+
+parser = DemoParser("path_to_demo.dem")
+df = parser.parse_props(wanted_props, players=players, ticks=ticks)
 ```
 
 #### Example game event
@@ -64,31 +72,23 @@ m_vecOrigin --> (m_vecOrigin_X, m_vecOrigin_Y).
 List of possible values comming soon.
 ## Performance
 
-Your performance will mostly depend on how fast your HDD/SSD is.
-
-For reference here are some very rough numbers for reading speeds assuming an average demo size of 80MB.
-### Reading
-| Drive            | Read Speed | Time one demo | Demos/second |
-| ---------------- | ---------- | ------------- | ------------ |
-| HDD              | 100 MB/s   | 0.8s          | 1.25         |
-| Normal SSD       | 500 MB/s   | 0.160s        | 6.25         |
-| Average nvme SSD | 3000 MB/s  | 0.026s        | 37.5         |
-| Fast nvme SSD    | 7000 MB/s  | 0.0114s       | 87.5         |
-
-### Parsing
-Time taken for the parsing (VERY roughly):
-| Action      | Time |
-| ----------- | ---- |
-| Game events | 50ms |
-| Player data | 1s   |
-
-The parsing numbers are with a single process, but it's trivial to multiprocess across demos (see examples).  
+Your performance will mostly depend on how fast your HDD/SSD is. Below are some rough estimates for parsing speeds **excluding I/O and parsing only 50 rows**. The more values you query the slower it gets.
 
 
-If parsing in parallel then game events will almost certainly be I/O bottlenecked. While it uses mmap, you can use above reading speed table for ok estimates for performance. This means that if you only need game events information then you can parse >50 demos per second with a fast SSD.
 
-Parsing props performance can roughly be estimated as 1 demo per second per core.
+
+| Action      | Time  |
+| ----------- | ----- |
+| Game events | 50ms  |
+| Player data | 250ms |
+
+Time taken for the parsing (with ryzen 5900x and no I/O):
+
+Current flamegraph of performance (player data)
+![](flamegraph.svg)
+
+
 
 ## Other notes
-- Parse props reads all bytes into memory before parsing, while all other methods use mmap.
+- Parser uses mmap.
 

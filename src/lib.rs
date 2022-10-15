@@ -24,6 +24,7 @@ use std::env::args;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
+use std::string;
 use std::vec;
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
@@ -104,6 +105,40 @@ pub fn parse_kwargs(kwargs: Option<&PyDict>) -> (Vec<u64>, Vec<i32>) {
     }
 }
 
+pub fn rm_user_friendly_names(names: Vec<String>) -> Vec<String> {
+    let mut unfriendly_names = vec![];
+    for name in names {
+        match &name[..] {
+            "X" => unfriendly_names.push("m_vecOrigin_X".to_string()),
+            "Y" => unfriendly_names.push("m_vecOrigin_Y".to_string()),
+            "Z" => unfriendly_names.push("m_vecOrigin[2]".to_string()),
+
+            "velocity_X" => unfriendly_names.push("m_vecVelocity[0]".to_string()),
+            "velocity_Y" => unfriendly_names.push("m_vecVelocity[1]".to_string()),
+            "velocity_Z" => unfriendly_names.push("m_vecVelocity[2]".to_string()),
+
+            "viewangle_delta" => unfriendly_names.push("m_angEyeAngles[0]".to_string()),
+            "viewangle_pitch" => unfriendly_names.push("m_angEyeAngles[1]".to_string()),
+
+            "ducked" => unfriendly_names.push("m_bDucked".to_string()),
+            "in_buy_zone" => unfriendly_names.push("m_bInBuyZone".to_string()),
+            "scoped" => unfriendly_names.push("m_bIsScoped".to_string()),
+            "health" => unfriendly_names.push("m_iHealth".to_string()),
+            "flash_duration" => unfriendly_names.push("m_flFlashDuration".to_string()),
+
+            "aimpunch_X" => unfriendly_names.push("m_aimPunchAngle_X".to_string()),
+            "aimpunch_Y" => unfriendly_names.push("m_aimPunchAngle_Y".to_string()),
+            "aimpunch_Z" => unfriendly_names.push("m_aimPunchAngle_Z".to_string()),
+            "aimpunch_vel_X" => unfriendly_names.push("m_aimPunchAngleVel_X".to_string()),
+            "aimpunch_vel_Y" => unfriendly_names.push("m_aimPunchAngleVel_Y".to_string()),
+            "aimpunch_vel_Z" => unfriendly_names.push("m_aimPunchAngleVel_Z".to_string()),
+
+            _ => unfriendly_names.push(name),
+        }
+    }
+    unfriendly_names
+}
+
 #[pyclass]
 struct DemoParser {
     path: String,
@@ -160,16 +195,17 @@ impl DemoParser {
         mut wanted_props: Vec<String>,
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
+        let mut real_props = rm_user_friendly_names(wanted_props);
+
         let file = File::open(self.path.clone()).unwrap();
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         let (wanted_players, wanted_ticks) = parse_kwargs(py_kwargs);
-
         let parser = Demo::new_mmap(
             mmap,
             true,
             wanted_ticks,
             wanted_players,
-            wanted_props.clone(),
+            real_props.clone(),
             "".to_string(),
             false,
             false,
@@ -181,16 +217,17 @@ impl DemoParser {
                 let h: Header = parser.parse_demo_header();
                 parser.playback_frames = h.playback_frames as usize;
 
-                let data = parser.start_parsing(&wanted_props);
-                wanted_props.push("tick".to_string());
-                wanted_props.push("steamid".to_string());
-                wanted_props.push("name".to_string());
+                let data = parser.start_parsing(&real_props);
+
+                real_props.push("tick".to_string());
+                real_props.push("steamid".to_string());
+                real_props.push("name".to_string());
                 let mut all_series = vec![];
 
                 match data.get("tick") {
                     Some(d) => {
                         let df_len = d.data.get_len();
-                        for prop_name in &wanted_props {
+                        for prop_name in &real_props {
                             if data.contains_key(prop_name) {
                                 if let parsing::parser::VarVec::F32(data) = &data[prop_name].data {
                                     let s = Series::new(prop_name, data);
@@ -226,7 +263,7 @@ impl DemoParser {
                         let polars = py.import("polars")?;
                         let all_series_py = all_series.to_object(py);
                         let df = polars.call_method1("DataFrame", (all_series_py,))?;
-                        df.setattr("columns", wanted_props.to_object(py)).unwrap();
+                        df.setattr("columns", real_props.to_object(py)).unwrap();
                         let pandas_df = df.call_method0("to_pandas").unwrap();
                         Ok(pandas_df.to_object(py))
                     }
@@ -234,7 +271,7 @@ impl DemoParser {
                         return {
                             let pandas = py.import("pandas")?;
                             let mut dict = HashMap::new();
-                            dict.insert("columns", wanted_props.to_object(py));
+                            dict.insert("columns", real_props.to_object(py));
                             let py_dict = dict.into_py_dict(py);
                             let df = pandas.call_method("DataFrame", (), Some(py_dict)).unwrap();
                             Ok(df.to_object(py))

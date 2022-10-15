@@ -8,6 +8,7 @@ use phf::phf_map;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+#[inline(always)]
 fn create_default(col_type: i32, playback_frames: usize) -> PropColumn {
     let v = match col_type {
         0 => VarVec::I32(Vec::with_capacity(playback_frames)),
@@ -19,7 +20,7 @@ fn create_default(col_type: i32, playback_frames: usize) -> PropColumn {
     };
     PropColumn { data: v }
 }
-
+#[inline(always)]
 fn insert_propcolumn(
     ticks_props: &mut HashMap<String, PropColumn, RandomState>,
     ent: &Entity,
@@ -40,7 +41,7 @@ fn insert_propcolumn(
             .push_propdata(p.data.clone()),
     }
 }
-
+#[inline(always)]
 fn insert_metadata(
     name: String,
     tick: i32,
@@ -68,6 +69,7 @@ fn insert_metadata(
 }
 
 impl Demo {
+    #[inline(always)]
     pub fn collect_player_data(
         players: &HashMap<u64, UserInfo, RandomState>,
         tick: &i32,

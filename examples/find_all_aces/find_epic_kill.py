@@ -37,9 +37,7 @@ def parse(file):
 
 
 if __name__ == "__main__":
-
-    files = glob.glob("/mnt/d/5kcheaters/5/a/*")
-    #files = glob.glob("/home/laiho/Documents/demos/faceits/clean_unzompr/*")
+    files = glob.glob("/path/to/demos/*")
     with mp.Pool(processes=8) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(parse, files), total=len(files)))
 

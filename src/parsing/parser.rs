@@ -192,7 +192,6 @@ impl Demo {
                     class_id: 0,
                     entity_id: 496885,
                     props: HashMap::default(),
-                    serial: 5146,
                 },
             ));
             self.workhorse.push(i);

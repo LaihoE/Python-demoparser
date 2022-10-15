@@ -9,10 +9,11 @@ import gzip
 
 
 
+"""
 class TestFullDemo(unittest.TestCase):
     def setUp(self) -> None:
-        self.files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
-        self.parser = DemoParser(self.files[0])
+        #self.files = glob.glob("/home/laiho/Documents/demos/rclonetest/*")
+        self.parser = DemoParser("/home/laiho/Documents/programming/rust/demoparse/src/tests/test.dem")
     
     def test_events(self):
         events = self.parser.parse_events("player_hurt")
@@ -23,4 +24,4 @@ class TestFullDemo(unittest.TestCase):
     
     def test_no_duplicate_players(self):
         players = self.parser.parse_players()
-        
+"""

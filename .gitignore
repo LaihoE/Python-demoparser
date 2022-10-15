@@ -28,7 +28,6 @@ creds.js
 *.tsv
 *.tsv.gz
 *.xlsx
-*.svg
 *.data
 *.data.old
  

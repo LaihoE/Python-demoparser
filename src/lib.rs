@@ -129,6 +129,7 @@ pub fn rm_user_friendly_names(names: Vec<String>) -> Vec<String> {
             "aimpunch_X" => unfriendly_names.push("m_aimPunchAngle_X".to_string()),
             "aimpunch_Y" => unfriendly_names.push("m_aimPunchAngle_Y".to_string()),
             "aimpunch_Z" => unfriendly_names.push("m_aimPunchAngle_Z".to_string()),
+
             "aimpunch_vel_X" => unfriendly_names.push("m_aimPunchAngleVel_X".to_string()),
             "aimpunch_vel_Y" => unfriendly_names.push("m_aimPunchAngleVel_Y".to_string()),
             "aimpunch_vel_Z" => unfriendly_names.push("m_aimPunchAngleVel_Z".to_string()),
@@ -196,6 +197,7 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
         let mut real_props = rm_user_friendly_names(wanted_props);
+        println!("{:?}", real_props);
 
         let file = File::open(self.path.clone()).unwrap();
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };

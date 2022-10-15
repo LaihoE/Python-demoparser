@@ -43,7 +43,7 @@ df = parser.parse_props(wanted_props, players=players, ticks=ticks)
 'round': '0',
 'silenced': 'false',
 'weapon': 'weapon_ak47',
-'tick': '18',
+'tick': 18,
 'player_id': '76561197991348083'
 }
 ```
@@ -67,24 +67,23 @@ List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike
 
 [90916 rows x 6 columns]
 ```
-Player data uses the real names for the props with one exception. All "vector" props are rolled out into their own columns. For example:
-m_vecOrigin --> (m_vecOrigin_X, m_vecOrigin_Y).   
-List of possible values comming soon.
+
 ## Performance
 
-Your performance will mostly depend on how fast your HDD/SSD is. Below are some rough estimates for parsing speeds **excluding I/O and parsing only 50 rows**. The more values you query the slower it gets.
+Your performance will mostly depend on how fast your HDD/SSD is. Below are some rough estimates for parsing speeds **excluding I/O and exctracting only 50 values**. The more values you query the slower it gets. Unfortunately the demo format does not allow proper skipping of data, we have to parse all the data if we want at least 1 field from the player data. Game events can be parsed seperately and don't depend on player data.
 
 
 
 
-| Action      | Time  |
-| ----------- | ----- |
-| Game events | 50ms  |
-| Player data | 250ms |
+| Action                        | Time  |
+| ----------------------------- | ----- |
+| Game events                   | 50ms  |
+| Player data: 1 value          | 250ms |
+| Player data: 5 million values | 800ms |
 
 Time taken for the parsing (with ryzen 5900x and no I/O):
 
-Current flamegraph of performance [flamegraph](https://github.com/LaihoE/Python-demoparser/blob/main/flamegraph.svg). Save the image and open it in a browser to zoom.
+Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python-demoparser/blob/main/flamegraph.svg). Save the image and open it in a browser to zoom.
 
 
 

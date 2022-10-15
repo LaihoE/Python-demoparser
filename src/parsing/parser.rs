@@ -224,7 +224,7 @@ impl Demo {
         }
         ticks_props
     }
-
+    #[inline(always)]
     pub fn parse_cmd(&mut self, cmd: u8) {
         match cmd {
             1 => self.parse_packet(),
@@ -242,7 +242,7 @@ impl Demo {
         }
         return false;
     }
-
+    #[inline(always)]
     pub fn parse_packet(&mut self) {
         self.fp += 160;
         let packet_len = self.read_i32();
@@ -294,15 +294,13 @@ impl Demo {
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;
-                                let x = Demo::parse_packet_entities(
+                                Demo::parse_packet_entities(
                                     &self.serverclass_map,
                                     self.tick,
                                     self.class_bits as usize,
                                     pack_ents,
                                     &mut self.entities,
                                     &self.wanted_props,
-                                    &self.wanted_ticks,
-                                    &self.entid_is_player,
                                     &mut self.workhorse,
                                 );
                             }

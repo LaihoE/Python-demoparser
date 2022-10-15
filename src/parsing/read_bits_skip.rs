@@ -370,16 +370,20 @@ impl<R: io::Read> BitReader<R> {
     }
     #[inline(always)]
     pub fn decode_special_float(&mut self, prop: &Prop) -> f32 {
-        let result = 0.0;
-        match prop.flags.trailing_zeros() {
-            2 => return self.read_nbits(32) as f32,
-            15 => return self.read_bit_cell_coord(prop.num_bits as usize, 0) as f32,
-            1 => return self.read_bit_coord() as f32,
-            5 => return self.read_bit_coord() as f32,
-            16 => return self.read_bit_cell_coord(prop.num_bits as usize, 1) as f32,
-            17 => return self.read_bit_cell_coord(prop.num_bits as usize, 2) as f32,
-            _ => result,
+        if prop.flags & (1 << 2) != 0 {
+            self.read_nbits(32) as f32;
+        } else if prop.flags & (1 << 1) != 0 {
+            self.read_bit_coord() as f32;
+        } else if prop.flags & (1 << 5) != 0 {
+            self.read_bit_normal() as f32;
+        } else if prop.flags & (1 << 15) != 0 {
+            self.read_bit_cell_coord(prop.num_bits as usize, 0) as f32;
+        } else if prop.flags & (1 << 16) != 0 {
+            self.read_bit_cell_coord(prop.num_bits as usize, 1) as f32;
+        } else if prop.flags & (1 << 17) != 0 {
+            self.read_bit_cell_coord(prop.num_bits as usize, 2) as f32;
         }
+        0.0
     }
     /*
     #[inline(always)]
@@ -536,28 +540,18 @@ impl<R: io::Read> BitReader<R> {
 
     #[inline(always)]
     pub fn read_bit_cell_coord(&mut self, n: usize, coord_type: u32) -> u32 {
-        let frac_bits = 0;
-        let resolution = 0;
-        let low_prec = coord_type == 1;
-        let result = 0;
-        if coord_type == 2 {
-            let result = self.read_nbits(n);
-        } else {
-            if coord_type == 3 {
-                let frac_bits = low_prec;
-            } else {
-                let frac_bits = 5;
+        // SKIP FOR NOW, WATCH OUT
+        match coord_type {
+            2 => {
+                let _ = self.read_nbits(n);
+                return 0;
             }
-            if low_prec {
-                let resolution = 1.0 / (1 << 3) as f64;
-            } else {
-                let cr: f64 = 1.0 / (1 << 5) as f64;
+            _ => {
+                let frac_bits = if coord_type == 3 { 1 } else { 5 };
+                self.read_nbits(frac_bits);
+                return 0;
             }
-            let int_val = self.read_nbits(n);
-            let frac_val = self.read_nbits(frac_bits);
-            let result = int_val + (frac_val * resolution);
         }
-        return result;
     }
 
     #[inline(always)]

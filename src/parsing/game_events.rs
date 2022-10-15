@@ -37,9 +37,9 @@ fn parse_key_steamid(key: &Key_t, uid_sid_map: &HashMap<u32, u64, RandomState>) 
     let user_id = key.val_short();
 
     match uid_sid_map.get(&(user_id as u32)) {
-        None => KeyData::StrData("NONE".to_string()), //panic!("USERID: {} not found in mapping to steamid", user_id),
+        None => KeyData::LongData(0), //panic!("USERID: {} not found in mapping to steamid", user_id),
         Some(u) => {
-            return KeyData::StrData(u.to_string());
+            return KeyData::Uint64Data(*u);
         }
     }
 }

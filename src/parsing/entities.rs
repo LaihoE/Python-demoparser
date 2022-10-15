@@ -1,6 +1,6 @@
 use crate::parsing::data_table::ServerClass;
-//use crate::parsing::read_bits::BitReader;
-use crate::parsing::read_bits_skip::BitReader;
+use crate::parsing::read_bits::BitReader;
+//use crate::parsing::read_bits_skip::BitReader;
 use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
 use crate::Demo;
@@ -20,19 +20,6 @@ pub struct Entity {
     pub serial: u32,
     pub props: HashMap<String, PropAtom, RandomState>,
 }
-// Elapsed: 18.50s (avg: 528.68ms)
-
-/*
-optional int32 type = 1;
-        optional string var_name = 2;
-        optional int32 flags = 3;
-        optional int32 priority = 4;
-        optional string dt_name = 5;
-        optional int32 num_elements = 6;
-        optional float low_value = 7;
-        optional float high_value = 8;
-        optional int32 num_bits = 9;
-*/
 
 #[derive(Debug, Clone)]
 pub struct Prop {
@@ -49,16 +36,7 @@ pub struct Prop {
     pub priority: i32,
     pub p_type: i32,
 }
-#[inline(always)]
-fn is_wanted_tick(wanted_ticks: &HashSet<i32, RandomState>, tick: i32) -> bool {
-    if wanted_ticks.len() != 0 {
-        match wanted_ticks.get(&tick) {
-            Some(_) => return true,
-            None => return false,
-        }
-    }
-    true
-}
+
 #[inline(always)]
 fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
     for prop in wanted_props {
@@ -69,25 +47,6 @@ fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
     false
 }
 
-#[inline(always)]
-pub fn is_wanted_prop(
-    this_prop: &Prop,
-    wanted_props: &Vec<String>,
-    wanted_ticks: &HashSet<i32, RandomState>,
-    tick: i32,
-) -> bool {
-    /*
-    let wanted_tick = is_wanted_tick(wanted_ticks, tick);
-    let wanted_prop = is_wanted_prop_name(this_prop, wanted_props);
-    if wanted_prop && wanted_tick {
-        return true;
-    } else {
-        false
-    }
-    */
-    is_wanted_prop_name(this_prop, wanted_props)
-}
-
 impl Demo {
     pub fn parse_packet_entities(
         cls_map: &HashMap<u16, ServerClass, RandomState>,
@@ -96,8 +55,6 @@ impl Demo {
         pack_ents: CSVCMsg_PacketEntities,
         entities: &mut Vec<(u32, Entity)>,
         wanted_props: &Vec<String>,
-        wanted_ticks: &HashSet<i32, RandomState>,
-        ent_id_player: &HashMap<u32, u64>,
         workhorse: &mut Vec<i32>,
     ) {
         let n_upd_ents = pack_ents.updated_entries();
@@ -123,53 +80,36 @@ impl Demo {
                     serial: serial,
                     props: HashMap::default(),
                 };
-                update_entity(
-                    &mut e,
-                    &mut b,
-                    cls_map,
-                    wanted_props,
-                    tick,
-                    wanted_ticks,
-                    workhorse,
-                );
+                update_entity(&mut e, &mut b, cls_map, wanted_props, tick, workhorse);
                 entities[entity_id as usize] = (entity_id as u32, e);
             } else {
                 // IF ENTITY DOES EXIST
 
                 //let ent = entities.get_mut(&(entity_id.try_into().unwrap_or(99999999)));
                 let ent = &mut entities[entity_id as usize];
-                update_entity(
-                    &mut ent.1,
-                    &mut b,
-                    cls_map,
-                    wanted_props,
-                    tick,
-                    wanted_ticks,
-                    workhorse,
-                );
+                update_entity(&mut ent.1, &mut b, cls_map, wanted_props, tick, workhorse);
             }
         }
     }
 }
-
+#[inline(always)]
 pub fn parse_ent_props(
     ent: &mut Entity,
     sv_cls: &ServerClass,
     b: &mut BitReader<&[u8]>,
     wanted_props: &Vec<String>,
     tick: i32,
-    wanted_ticks: &HashSet<i32, RandomState>,
     workhorse: &mut Vec<i32>,
 ) {
     let mut val = -1;
     let new_way = b.read_bool();
-    //let mut indicies: SmallVec<[i32; 128]> = smallvec![];
     let mut upd = 0;
     loop {
         val = b.read_inx(val, new_way);
         if val == -1 {
             break;
         }
+        // Reuse same vec to avoid alloc vec every time
         workhorse[upd] = val;
         upd += 1;
     }
@@ -195,7 +135,6 @@ pub fn parse_ent_props(
                         tick: tick,
                     };
                     ent.props.insert(atom.prop_name.clone(), atom);
-                    // props.push(atom);
                 }
             }
             PropData::VecXYZ(v) => {
@@ -209,7 +148,6 @@ pub fn parse_ent_props(
                         tick: tick,
                     };
                     ent.props.insert(atom.prop_name.clone(), atom);
-                    // props.push(atom);
                 }
             }
             _ => {
@@ -219,21 +157,19 @@ pub fn parse_ent_props(
                     tick: tick,
                 };
                 ent.props.insert(atom.prop_name.clone(), atom);
-                // props.push(atom);
             }
         }
     }
 }
-
+#[inline(always)]
 pub fn update_entity(
     ent: &mut Entity,
     b: &mut BitReader<&[u8]>,
     cls_map: &HashMap<u16, ServerClass, RandomState>,
     wanted_props: &Vec<String>,
     tick: i32,
-    wanted_ticks: &HashSet<i32, RandomState>,
     workhorse: &mut Vec<i32>,
 ) {
     let sv_cls = &cls_map[&(ent.class_id.try_into().unwrap())];
-    parse_ent_props(ent, sv_cls, b, wanted_props, tick, wanted_ticks, workhorse);
+    parse_ent_props(ent, sv_cls, b, wanted_props, tick, workhorse);
 }

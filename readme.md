@@ -40,7 +40,7 @@ df = parser.parse_props(wanted_props, players=players, ticks=ticks)
 {
 'player_name': 'flusha',
 'event_name': 'weapon_fire',
-'round': '0',
+'round': 0,
 'silenced': 'false',
 'weapon': 'weapon_ak47',
 'tick': 18,

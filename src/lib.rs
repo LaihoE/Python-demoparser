@@ -117,8 +117,8 @@ pub fn rm_user_friendly_names(names: Vec<String>) -> Vec<String> {
             "velocity_Y" => unfriendly_names.push("m_vecVelocity[1]".to_string()),
             "velocity_Z" => unfriendly_names.push("m_vecVelocity[2]".to_string()),
 
-            "viewangle_delta" => unfriendly_names.push("m_angEyeAngles[0]".to_string()),
-            "viewangle_pitch" => unfriendly_names.push("m_angEyeAngles[1]".to_string()),
+            "viewangle_pitch" => unfriendly_names.push("m_angEyeAngles[0]".to_string()),
+            "viewangle_yaw" => unfriendly_names.push("m_angEyeAngles[1]".to_string()),
 
             "ducked" => unfriendly_names.push("m_bDucked".to_string()),
             "in_buy_zone" => unfriendly_names.push("m_bInBuyZone".to_string()),
@@ -164,6 +164,9 @@ impl DemoParser {
             event_name,
             false,
             false,
+            HashMap::default(),
+            false,
+            HashMap::default(),
         );
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err("ERROR READING FILE")),
@@ -197,7 +200,6 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
         let mut real_props = rm_user_friendly_names(wanted_props);
-        println!("{:?}", real_props);
 
         let file = File::open(self.path.clone()).unwrap();
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
@@ -211,6 +213,9 @@ impl DemoParser {
             "".to_string(),
             false,
             false,
+            HashMap::default(),
+            false,
+            HashMap::default(),
         );
 
         match parser {
@@ -296,6 +301,9 @@ impl DemoParser {
             "".to_string(),
             true,
             false,
+            HashMap::default(),
+            false,
+            HashMap::default(),
         );
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
@@ -327,6 +335,9 @@ impl DemoParser {
             "".to_string(),
             true,
             false,
+            HashMap::default(),
+            false,
+            HashMap::default(),
         );
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),

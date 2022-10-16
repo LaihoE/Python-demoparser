@@ -25,11 +25,11 @@ memmap = "0.7.0"
 mimalloc = { version = "*", default-features = false }
 ahash = "0.8.0"
 smallvec = "1.10.0"
+bitter = "0.6.0"
 
 [dependencies.csgoproto]
 path = "src/parsing/csgoproto"
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-
 
 
 [profile.dev]

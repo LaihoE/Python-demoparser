@@ -47,7 +47,7 @@ static MASKS: [u32; NBITS + 1] = [
 ];
 
 pub struct BitReader<R: io::Read> {
-    inner: R,
+    pub inner: R,
     bits: u32,
     available: usize,
     left_over: i32,
@@ -133,6 +133,8 @@ impl<R: io::Read> BitReader<R> {
     #[inline(always)]
     pub fn read_u_bit_var(&mut self) -> u32 {
         let mut ret = self.read_nbits(6);
+        println!("{}", ret);
+        //panic!("EEK");
         //println!("{} {}", self.available, ret);
         if ret & 48 == 16 {
             ret = (ret & 15) | (self.read_nbits(4) << 4);
@@ -311,28 +313,18 @@ impl<R: io::Read> BitReader<R> {
     }
     #[inline(always)]
     pub fn read_bit_cell_coord(&mut self, n: usize, coord_type: u32) -> u32 {
-        let frac_bits = 0;
-        let resolution = 0;
-        let low_prec = coord_type == 1;
-        let result = 0;
-        if coord_type == 2 {
-            let result = self.read_nbits(n);
-        } else {
-            if coord_type == 3 {
-                let frac_bits = low_prec;
-            } else {
-                let frac_bits = 5;
+        // SKIP FOR NOW, WATCH OUT
+        match coord_type {
+            2 => {
+                let _ = self.read_nbits(n);
+                return 0;
             }
-            if low_prec {
-                let resolution = 1.0 / (1 << 3) as f64;
-            } else {
-                let cr: f64 = 1.0 / (1 << 5) as f64;
+            _ => {
+                let frac_bits = if coord_type == 3 { 1 } else { 5 };
+                self.read_nbits(frac_bits);
+                return 0;
             }
-            let int_val = self.read_nbits(n);
-            let frac_val = self.read_nbits(frac_bits);
-            let result = int_val + (frac_val * resolution);
         }
-        return result;
     }
     #[inline(always)]
     pub fn read_bit_normal(&mut self) -> f64 {
@@ -426,7 +418,7 @@ impl<R: io::Read> BitReader<R> {
             if prop.num_bits != -1 {
                 interp = self.read_nbits(prop.num_bits as usize);
             }
-            let mut val = (interp / (1 << prop.num_bits - 1)) as f32;
+            let mut val = (interp / (1 << (prop.num_bits - 1))) as f32;
             val = prop.low_value + (prop.high_value - prop.low_value) * (val as f32);
             val
         }

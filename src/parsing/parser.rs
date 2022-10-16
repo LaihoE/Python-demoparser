@@ -58,9 +58,6 @@ pub struct Demo {
     pub frames_parsed: i32,
     pub entid_is_player: HashMap<u32, u64>,
     pub workhorse: Vec<i32>,
-    pub bit_sizes: HashMap<u32, HashSet<u16>, RandomState>,
-    pub insert: bool,
-    pub bit_lookup: HashMap<u32, u16, RandomState>,
 }
 
 impl Demo {
@@ -73,9 +70,6 @@ impl Demo {
         event_name: String,
         only_players: bool,
         only_header: bool,
-        bit_sizes: HashMap<u32, HashSet<u16>, RandomState>,
-        insert: bool,
-        bit_lookup: HashMap<u32, u16, RandomState>,
     ) -> Result<Self, std::io::Error> {
         let mut extra_wanted_props = vec![];
         for p in &wanted_props {
@@ -123,9 +117,6 @@ impl Demo {
             frames_parsed: 0,
             entid_is_player: HashMap::default(),
             workhorse: Vec::new(),
-            bit_sizes: bit_sizes,
-            insert: insert,
-            bit_lookup: bit_lookup,
         })
     }
     pub fn new(
@@ -137,9 +128,6 @@ impl Demo {
         event_name: String,
         only_players: bool,
         only_header: bool,
-        bit_sizes: HashMap<u32, HashSet<u16>, RandomState>,
-        insert: bool,
-        bit_lookup: HashMap<u32, u16, RandomState>,
     ) -> Result<Self, std::io::Error> {
         let mut extra_wanted_props = vec![];
         for p in &wanted_props {
@@ -187,9 +175,6 @@ impl Demo {
             frames_parsed: 0,
             entid_is_player: HashMap::default(),
             workhorse: Vec::new(),
-            bit_sizes: bit_sizes,
-            insert: insert,
-            bit_lookup: bit_lookup,
         })
     }
 }
@@ -316,9 +301,6 @@ impl Demo {
                                     &mut self.entities,
                                     &self.wanted_props,
                                     &mut self.workhorse,
-                                    &mut self.bit_sizes,
-                                    self.insert,
-                                    &self.bit_lookup,
                                 );
                             }
                             Err(e) => panic!(

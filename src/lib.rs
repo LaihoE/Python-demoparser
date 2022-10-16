@@ -25,6 +25,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::string;
+use std::time::Instant;
 use std::vec;
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
@@ -164,9 +165,6 @@ impl DemoParser {
             event_name,
             false,
             false,
-            HashMap::default(),
-            false,
-            HashMap::default(),
         );
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err("ERROR READING FILE")),
@@ -213,9 +211,6 @@ impl DemoParser {
             "".to_string(),
             false,
             false,
-            HashMap::default(),
-            false,
-            HashMap::default(),
         );
 
         match parser {
@@ -301,9 +296,6 @@ impl DemoParser {
             "".to_string(),
             true,
             false,
-            HashMap::default(),
-            false,
-            HashMap::default(),
         );
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
@@ -335,9 +327,6 @@ impl DemoParser {
             "".to_string(),
             true,
             false,
-            HashMap::default(),
-            false,
-            HashMap::default(),
         );
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),

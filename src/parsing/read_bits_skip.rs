@@ -69,15 +69,6 @@ impl<'a> MyBitreader<'a> {
     pub fn read_nbits(&mut self, n: u32) -> u32 {
         (self.reader.read_bits(n).unwrap() as u32) & MASKS[n as usize]
     }
-    /*
-    let in_buf = self.bits;
-    let consumed = self.available;
-    let remaining = n - consumed;
-    self.ensure_bits();
-    let ret = in_buf | ((self.bits & MASKS[remaining]) << consumed);
-    self.consume(remaining);
-    ret.to_le()
-    */
     #[inline(always)]
     pub fn read_boolie(&mut self) -> bool {
         self.reader.read_bit().unwrap()
@@ -88,13 +79,13 @@ impl<'a> MyBitreader<'a> {
         let mut ret = self.read_nbits(6);
         if ret & 48 == 16 {
             ret = (ret & 15) | (self.read_nbits(4) << 4);
-            //assert!(ret >= 16);
+            assert!(ret >= 16);
         } else if ret & 48 == 32 {
             ret = (ret & 15) | (self.read_nbits(8) << 4);
-            //assert!(ret >= 256);
+            assert!(ret >= 256);
         } else if ret & 48 == 48 {
             ret = (ret & 15) | (self.read_nbits(28) << 4);
-            //assert!(ret >= 4096);
+            assert!(ret >= 4096);
         }
         ret
     }

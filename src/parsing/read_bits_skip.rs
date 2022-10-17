@@ -11,56 +11,14 @@ use std::io;
 use std::mem;
 use std::u32;
 
-const NBITS: usize = 32;
-
-static MASKS: [u32; NBITS + 1] = [
-    0,
-    u32::MAX >> 31,
-    u32::MAX >> 30,
-    u32::MAX >> 29,
-    u32::MAX >> 28,
-    u32::MAX >> 27,
-    u32::MAX >> 26,
-    u32::MAX >> 25,
-    u32::MAX >> 24,
-    u32::MAX >> 23,
-    u32::MAX >> 22,
-    u32::MAX >> 21,
-    u32::MAX >> 20,
-    u32::MAX >> 19,
-    u32::MAX >> 18,
-    u32::MAX >> 17,
-    u32::MAX >> 16,
-    u32::MAX >> 15,
-    u32::MAX >> 14,
-    u32::MAX >> 13,
-    u32::MAX >> 12,
-    u32::MAX >> 11,
-    u32::MAX >> 10,
-    u32::MAX >> 9,
-    u32::MAX >> 8,
-    u32::MAX >> 7,
-    u32::MAX >> 6,
-    u32::MAX >> 5,
-    u32::MAX >> 4,
-    u32::MAX >> 3,
-    u32::MAX >> 2,
-    u32::MAX >> 1,
-    u32::MAX,
-];
-
 pub struct MyBitreader<'a> {
     pub reader: LittleEndianReader<'a>,
-    bits: usize,
-    available: u32,
 }
 
 impl<'a> MyBitreader<'a> {
     pub fn new(bytes: &'a [u8]) -> MyBitreader<'a> {
         let b = MyBitreader {
             reader: LittleEndianReader::new(bytes),
-            bits: 0,
-            available: 0,
         };
         b
     }
@@ -79,13 +37,10 @@ impl<'a> MyBitreader<'a> {
         let mut ret = self.read_nbits(6);
         if ret & 48 == 16 {
             ret = (ret & 15) | (self.read_nbits(4) << 4);
-            assert!(ret >= 16);
         } else if ret & 48 == 32 {
             ret = (ret & 15) | (self.read_nbits(8) << 4);
-            assert!(ret >= 256);
         } else if ret & 48 == 48 {
             ret = (ret & 15) | (self.read_nbits(28) << 4);
-            assert!(ret >= 4096);
         }
         ret
     }
@@ -323,7 +278,7 @@ impl<'a> MyBitreader<'a> {
         if flags & (1 << 1) != 0 {
             val = self.read_bit_coord() as f32;
         } else if flags & (1 << 2) != 0 {
-            val = self.read_nbits(32) as f32;
+            val = self.reader.read_f32().unwrap();
         } else if flags & (1 << 5) != 0 {
             val = self.read_bit_normal() as f32;
         } else if flags & (1 << 15) != 0 {
@@ -384,3 +339,39 @@ impl<'a> MyBitreader<'a> {
         return (nret << (32 - numbits)) >> (32 - numbits);
     }
 }
+
+static MASKS: [u32; 32 + 1] = [
+    0,
+    u32::MAX >> 31,
+    u32::MAX >> 30,
+    u32::MAX >> 29,
+    u32::MAX >> 28,
+    u32::MAX >> 27,
+    u32::MAX >> 26,
+    u32::MAX >> 25,
+    u32::MAX >> 24,
+    u32::MAX >> 23,
+    u32::MAX >> 22,
+    u32::MAX >> 21,
+    u32::MAX >> 20,
+    u32::MAX >> 19,
+    u32::MAX >> 18,
+    u32::MAX >> 17,
+    u32::MAX >> 16,
+    u32::MAX >> 15,
+    u32::MAX >> 14,
+    u32::MAX >> 13,
+    u32::MAX >> 12,
+    u32::MAX >> 11,
+    u32::MAX >> 10,
+    u32::MAX >> 9,
+    u32::MAX >> 8,
+    u32::MAX >> 7,
+    u32::MAX >> 6,
+    u32::MAX >> 5,
+    u32::MAX >> 4,
+    u32::MAX >> 3,
+    u32::MAX >> 2,
+    u32::MAX >> 1,
+    u32::MAX,
+];

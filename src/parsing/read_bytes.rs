@@ -56,12 +56,15 @@ impl Demo {
         b
     }
     #[inline]
+    pub fn skip_n_bytes(&mut self, n: u32) {
+        self.fp += n as usize;
+    }
+    #[inline]
     pub fn read_n_bytes(&mut self, n: u32) -> &[u8] {
         let s = &self.bytes[self.fp..self.fp + n as usize];
         self.fp += n as usize;
         s
     }
-
     #[inline(always)]
     pub fn read_frame_bytes(&mut self) -> Frame {
         Frame {

@@ -1,5 +1,4 @@
 mod parsing;
-use ahash::HashMapExt;
 use arrow::ffi;
 use flate2::read::GzDecoder;
 use fxhash::FxHashMap;
@@ -16,16 +15,12 @@ use pyo3::ffi::Py_uintptr_t;
 use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
-use pyo3::types::PyTuple;
 use pyo3::Python;
 use pyo3::{PyAny, PyObject, PyResult};
 use std::collections::HashMap;
-use std::env::args;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use std::string;
-use std::time::Instant;
 use std::vec;
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs

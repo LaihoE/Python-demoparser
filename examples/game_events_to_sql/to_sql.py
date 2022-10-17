@@ -6,12 +6,10 @@ import tqdm
 import sqlite3
 
 
-
 def parse(file):
     parser = DemoParser(file)
     df = pd.DataFrame(parser.parse_events("player_death"))
     return df
-
 
 
 if __name__ == "__main__":

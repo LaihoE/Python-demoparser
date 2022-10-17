@@ -23,7 +23,7 @@ fn boo() {}
 fn main() {
     let now = Instant::now();
     //let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/test/").unwrap();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/average/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     for demo_path in paths {
         let now = Instant::now();
 
@@ -37,7 +37,7 @@ fn main() {
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         let mut parser = Demo::new_mmap(
             mmap,
-            true,
+            false,
             (50..100).collect(),
             vec![],
             vec![],
@@ -50,6 +50,9 @@ fn main() {
         let h: Header = parser.parse_demo_header();
         let mut event_names: Vec<String> = Vec::new();
         let data = parser.start_parsing(&props_names);
+        println!("{:?}", data);
+        let elapsed = now.elapsed();
+        //println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 5);
     }
     let elapsed = now.elapsed();
 

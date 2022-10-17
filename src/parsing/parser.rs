@@ -187,10 +187,10 @@ impl Demo {
         let mut ticks_props: HashMap<String, PropColumn, RandomState> = HashMap::default();
         for i in 0..10000 {
             self.entities.push((
-                4206969,
+                1111111,
                 Entity {
                     class_id: 0,
-                    entity_id: 496885,
+                    entity_id: 1111111,
                     props: HashMap::default(),
                 },
             ));
@@ -209,16 +209,19 @@ impl Demo {
             if self.only_header {
                 break;
             }
-            Demo::collect_player_data(
-                &self.players,
-                &self.tick,
-                &self.wanted_ticks,
-                &self.wanted_players,
-                &mut self.entities,
-                props_names,
-                &mut ticks_props,
-                self.playback_frames,
-            );
+            if self.parse_props {
+                Demo::collect_player_data(
+                    &self.players,
+                    &self.tick,
+                    &self.wanted_ticks,
+                    &self.wanted_players,
+                    &mut self.entities,
+                    props_names,
+                    &mut ticks_props,
+                    self.playback_frames,
+                );
+            }
+
             self.parse_cmd(f.cmd);
         }
         ticks_props
@@ -229,9 +232,7 @@ impl Demo {
             1 => self.parse_packet(),
             2 => self.parse_packet(),
             6 => self.parse_datatable(),
-            _ => {
-                //println!("CMD {}", cmd); //panic!("UNK CMD")
-            } //,
+            _ => {}
         }
     }
 

@@ -1,4 +1,4 @@
-use crate::parsing::read_bits::BitReader;
+use crate::parsing::read_bits_old::BitReader;
 use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 use csgoproto::netmessages::CSVCMsg_UpdateStringTable;

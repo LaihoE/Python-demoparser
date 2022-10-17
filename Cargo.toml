@@ -33,7 +33,6 @@ path = "src/parsing/csgoproto"
 
 
 [profile.dev]
-overflow-checks = false
 
 [profile.release]
 opt-level = 3

@@ -20,19 +20,12 @@ from demoparser import DemoParser
 wanted_props = ["m_vecOrigin_X", "m_iHealth"]
 
 parser = DemoParser("path_to_demo.dem")
-df = parser.parse_props(wanted_props)
+df = parser.parse_ticks(wanted_props)
 ```
-parse_props also accepts optional arguments ticks and players like so:
-## Player data
+parse_props also accepts optional arguments for filtering players and ticks.
+
 ```python
-from demoparser import DemoParser
-
-wanted_props = ["m_vecOrigin_X", "m_iHealth"]
-players = [76561197991348083]
-ticks = [768, 897, 1848, 9443]
-
-parser = DemoParser("path_to_demo.dem")
-df = parser.parse_props(wanted_props, players=players, ticks=ticks)
+df = parser.parse_props(wanted_props, players=[76511958412365], ticks=[489, 5884])
 ```
 
 #### Example game event
@@ -70,22 +63,29 @@ List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike
 
 ## Performance
 
-Your performance will mostly depend on how fast your HDD/SSD is. Below are some rough estimates for parsing speeds **excluding I/O and exctracting only 50 values**. The more values you query the slower it gets. Unfortunately the demo format does not allow proper skipping of data, we have to parse all the data if we want at least 1 field from the player data. Game events can be parsed seperately and don't depend on player data.
+**Your performance will mostly depend on how fast your HDD/SSD is.**  
 
-
+Below are some rough estimates for parsing speeds **excluding I/O**. Unfortunately the demo format does not allow proper skipping of tick data, we have to parse all the data if we want at least 1 field from the tick data. Game events can be parsed seperately and don't depend on tick data.
 
 
 | Action                        | Time  |
 | ----------------------------- | ----- |
-| Game events                   | 50ms  |
+| Game events                   | 30ms  |
 | Player data: 1 value          | 250ms |
 | Player data: 5 million values | 800ms |
 
 Time taken for the parsing (with ryzen 5900x and no I/O):
+
+If you have a fast SSD then i strongly recommend multiprocessing your parsing. examples show how to multiprocess across demos. This type of multiprocessing is quite "safe". Multiprocessing will most likely max out your drive's reading speed. With multiprocessing ive been able to parse > 5GB/s (of game events) and >3GB/s (tick data). An average MM demo is around 90mb.
+
+
 
 Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python-demoparser/blob/main/flamegraph.svg). Save the image and open it in a browser to zoom.
 
 
 
 ## Other notes
-- Parser uses mmap.
+- Demo tickrate is not the same as server tickrate. Often demo tickrate is half of server tickrate. For example faceit demos are 64 tick and MM demos are 32 tick.
+- First and last ticks often have many NaN values. For example if player isn't connected this happens.
+- Game events have lots of information. Look there first.
+- Exact granade trajectories are currently not supported. What you can find is where the granade was thrown from ("weapon_fire" event) and where it detonated (for example "hegrenade_detonate" event). Detonate event also includes coordinates but the weapon fire does not.

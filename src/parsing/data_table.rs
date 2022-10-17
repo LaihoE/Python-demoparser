@@ -5,7 +5,6 @@ use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf;
 use protobuf::Message;
 use smallvec::{smallvec, SmallVec};
-use std::borrow::Cow;
 use std::collections::HashSet;
 use std::vec;
 

@@ -34,12 +34,9 @@ if __name__ == "__main__":
     import joblib
 
     files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")[:100]
-
+    files = ["test.dem"]
     with mp.Pool(processes=24) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(gen_tick_tests, files), total=len(files)))
-    d = dict(results)
+    print(results)
+    #d = dict(results)
     #joblib.dump(d, "sums.pkl")
-    c = joblib.load("sums.pkl")
-    #print(d)
-    for file in files:
-        print(abs(d[file] - c[file]))

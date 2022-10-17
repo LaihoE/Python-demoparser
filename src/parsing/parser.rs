@@ -194,9 +194,10 @@ impl Demo {
                     props: HashMap::default(),
                 },
             ));
+        }
+        for i in 0..20000 {
             self.workhorse.push(i);
         }
-
         while self.fp < self.bytes.get_len() as usize {
             self.frames_parsed += 1;
             let f = self.read_frame_bytes();

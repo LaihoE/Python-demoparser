@@ -7,28 +7,34 @@ import time
 import tqdm
 from collections import Counter
 import csv
+import numpy as np
 
 
-def parse(file):
-    print(file)
-    #before = time.time()
+def gen_tick_tests(file):
     parser = DemoParser(file)
-    evs = parser.parse_events("player_death")
-    #print(evs)
-    #print(time.time() - before)
-    #df = parser.parse_props(["X"], ticks=[x for x in range(10000)])
-    #print(df.isna().sum())
-    #print(evs)
-    return evs
+    df = parser.parse_ticks(["X","Y", "Z", "m_bIsScoped", "velocity_X",
+                            "velocity_Y", "velocity_Z",
+                            "viewangle_yaw", "viewangle_pitch",
+                            "health", "in_buy_zone",  "flash_duration"
+                            ])
+    print(df["steamid"].unique())
+    #df = df.drop("name", axis=1)
+    #df = df.drop("steamid", axis=1)
+    #s = int(np.nansum(df.to_numpy()))
+    #return file, s
 
 
 if __name__ == "__main__":
     import random
+    import joblib
 
-    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")
-    #files = glob.glob("/media/laiho/New Volume/b/b/*")
-
-    #x = random.shuffle(files)
-    with mp.Pool(processes=24) as pool:
-        results = pool.map(parse, files)
-        print(results)
+    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")[:10]
+    print(files)
+    with mp.Pool(processes=1) as pool:
+        results = list(tqdm.tqdm(pool.imap_unordered(gen_tick_tests, files), total=len(files)))
+    d = dict(results)
+    #joblib.dump(d, "sums.pkl")
+    c = joblib.load("sums.pkl")
+    #print(d)
+    for file in files:
+        print(abs(d[file] - c[file]))

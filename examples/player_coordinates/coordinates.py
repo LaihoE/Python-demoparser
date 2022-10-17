@@ -8,7 +8,7 @@ wanted_ticks = [x for x in range(100000)]
 
 parser = DemoParser("demo.dem")
 # You can remove optional arguments to get all tick or players
-df = parser.parse_props(wanted_props,
+df = parser.parse_ticks(wanted_props,
                         ticks=wanted_ticks,
                         players=wanted_players)
 

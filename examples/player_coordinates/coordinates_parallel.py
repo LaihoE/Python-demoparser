@@ -12,7 +12,7 @@ def coordinates(file):
 
     parser = DemoParser(file)
     # You can remove optional arguments to get all tick or all players
-    df = parser.parse_props(wanted_props,
+    df = parser.parse_ticks(wanted_props,
                             ticks=wanted_ticks,
                             players=wanted_players)
     return df

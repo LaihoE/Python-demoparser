@@ -186,7 +186,7 @@ impl DemoParser {
     }
 
     #[args(py_kwargs = "**")]
-    pub fn parse_props(
+    pub fn parse_ticks(
         &self,
         py: Python,
         mut wanted_props: Vec<String>,

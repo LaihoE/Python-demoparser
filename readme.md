@@ -13,19 +13,21 @@ from demoparser import DemoParser
 parser = DemoParser("path_to_demo.dem")
 events = parser.parse_events("player_death")
 ```
-## Player data
+List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike:_Global_Offensive_Events)
+## Tick data
 ```python
 from demoparser import DemoParser
 
-wanted_props = ["m_vecOrigin_X", "m_iHealth"]
+wanted_props = ["X", "Y", "Z", "health"]
 
 parser = DemoParser("path_to_demo.dem")
 df = parser.parse_ticks(wanted_props)
 ```
-parse_props also accepts optional arguments for filtering players and ticks.
+List of possible props: [props](https://github.com/LaihoE/Python-demoparser/blob/main/vars.md)
+parse_ticks also accepts optional arguments for filtering players and ticks.
 
 ```python
-df = parser.parse_props(wanted_props, players=[76511958412365], ticks=[489, 5884])
+df = parser.parse_ticks(wanted_props, players=[76511958412365], ticks=[489, 5884])
 ```
 
 #### Example game event
@@ -40,8 +42,8 @@ df = parser.parse_props(wanted_props, players=[76511958412365], ticks=[489, 5884
 'player_id': '76561197991348083'
 }
 ```
-List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike:_Global_Offensive_Events)
-#### Example player data (output is a df)
+
+#### Example tick data (output is a df)
 
 
 ```python
@@ -76,7 +78,7 @@ Below are some rough estimates for parsing speeds **excluding I/O**. Unfortunate
 
 Time taken for the parsing (with ryzen 5900x and no I/O):
 
-If you have a fast SSD then i strongly recommend multiprocessing your parsing. examples show how to multiprocess across demos. This type of multiprocessing is quite "safe". Multiprocessing will most likely max out your drive's reading speed. With multiprocessing ive been able to parse > 5GB/s (of game events) and >3GB/s (tick data). An average MM demo is around 90mb.
+If you have a fast SSD then i strongly recommend multiprocessing your parsing. examples show how to multiprocess across demos. Multiprocessing will most likely max out your drive's reading speed. With multiprocessing ive been able to parse > 5GB/s (of game events) and >3GB/s (tick data). An average MM demo is around 90mb.
 
 
 
@@ -85,7 +87,7 @@ Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python
 
 
 ## Other notes
-- Demo tickrate is not the same as server tickrate. Often demo tickrate is half of server tickrate. For example faceit demos are 64 tick and MM demos are 32 tick.
+- Demo tickrate is not the same as server tickrate. Often demo tickrate is half of server tickrate. For example faceit demos are 64 tick and MM demos are 32 tick. This means that every other tick is "missing". Pro games are often recorded at native tickrate.
 - First and last ticks often have many NaN values. For example if player isn't connected this happens.
 - Game events have lots of information. Look there first.
 - Exact granade trajectories are currently not supported. What you can find is where the granade was thrown from ("weapon_fire" event) and where it detonated (for example "hegrenade_detonate" event). Detonate event also includes coordinates but the weapon fire does not.

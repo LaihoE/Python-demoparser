@@ -19,7 +19,7 @@ def coordinates(file):
 
 
 if __name__ == "__main__":
-    files = glob.glob("path/to/my/demos/*") # remember * at the end
+    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")
     with mp.Pool(processes=8) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(coordinates, files), total=len(files)))
     df = pd.concat(results)

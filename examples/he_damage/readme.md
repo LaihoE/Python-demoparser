@@ -1,1 +1,0 @@
-## He dagame example

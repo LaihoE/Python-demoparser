@@ -13,7 +13,7 @@ def util_dmg(file):
 
     for event in game_events:
         print(event["event_name"])
-    exit()
+
     return df
 
 

@@ -14,6 +14,10 @@ parser = DemoParser("path_to_demo.dem")
 events = parser.parse_events("player_death")
 ```
 List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike:_Global_Offensive_Events)
+Events can also easily be transformed into a df:
+```python
+df = pd.DataFrame(events)
+```
 ## Tick data
 ```python
 from demoparser import DemoParser
@@ -78,7 +82,7 @@ Below are some rough estimates for parsing speeds **excluding I/O**. Unfortunate
 
 Time taken for the parsing (with ryzen 5900x and no I/O):
 
-If you have a fast SSD then i strongly recommend multiprocessing your parsing. [Examples](https://github.com/LaihoE/Python-demoparser/tree/main/examples) show how to multiprocess across demos. Multiprocessing will most likely max out your drive's reading speed. With multiprocessing ive been able to parse > 5GB/s (of game events) and >3GB/s (tick data). An average MM demo is around 90mb.
+If you have a fast SSD then i strongly recommend multiprocessing your parsing. [Examples](https://github.com/LaihoE/Python-demoparser/tree/main/examples) show how to multiprocess across demos. Multiprocessing will most likely max out your drive's reading speed. With multiprocessing ive been able to parse > 5GB/s (of game events) and >3GB/s (tick data). An average MM demo is around 90MB.
 
 
 
@@ -91,3 +95,13 @@ Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python
 - First and last ticks often have many NaN values. For example if player isn't connected this happens.
 - Game events have lots of information. Look there first.
 - Exact granade trajectories are currently not supported. What you can find is where the granade was thrown from ("weapon_fire" event) and where it detonated (for example "hegrenade_detonate" event). Detonate event also includes coordinates but the weapon fire does not.
+
+
+## Why yet another parser?
+Currently you have to take such a big performance hit if you want to use Python, that most people just go elsewhere like Markus-wa's [GO parser](https://github.com/markus-wa/demoinfocs-golang) (great alternative if you want something mature and fast). Unfortunately GO is just not such a popular language and most data analysis is done in Python/R. I also expect that most people interested in parsing demos are not experienced programmers and these people are very unlikely to learn a new language just for demo parsing. Demo parsing is something I think should be doable for very unexperienced programmers. 
+
+I personally think that querying the demo is a much more elegant way to deal with the data, rather than having an "event hook" type of interface. This might cause you to overfetch a little / take some small performance hit, but I feel the simplicity outweighs the small possible performance/flexibility hit.
+
+The parser is written completely in Rust (same speed as C/C++), (memory safe btw). This leaves the door open for the parser to become more or less as fast as we can go.
+
+Also this type of setup makes it easy to create bindings for other languages (mainly R). Maybe in the future?

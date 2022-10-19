@@ -1,6 +1,8 @@
+# Examples
+Each folder has a single process example and a multiprocessed example.
 
 
-### How to multiprocess
+# How to multiprocess
 
 All examples have parallel version. This will mostly just mean these 2 lines of code:
 ```python
@@ -15,7 +17,7 @@ with mp.Pool(processes=8) as pool:
     results = list(tqdm.tqdm(pool.imap_unordered(parse_function, files), total=len(files)))
 ```
 
-### Note about safety
+## Note about safety
 DO NOT MODIFY VARIABLES OUTSIDE YOUR PARALLEL FUNCTION. This should be the only way you can go wrong. This mostly just means do not use global variables or "self".
 
 #### Example of bad:
@@ -45,7 +47,7 @@ with mp.Pool(processes=8) as pool:
         results = pool.map(parse_function, files)
 print(sum(results))
 ```
-
+So instead of doing the addition inside parsing function, we just return the values and sum them in the main process.
 
 
 

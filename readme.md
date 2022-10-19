@@ -39,7 +39,7 @@ df = parser.parse_ticks(wanted_props, players=[76511958412365], ticks=[489, 5884
 'silenced': 'false',
 'weapon': 'weapon_ak47',
 'tick': 18,
-'player_id': '76561197991348083'
+'player_id': 76561197991348083
 }
 ```
 
@@ -78,7 +78,7 @@ Below are some rough estimates for parsing speeds **excluding I/O**. Unfortunate
 
 Time taken for the parsing (with ryzen 5900x and no I/O):
 
-If you have a fast SSD then i strongly recommend multiprocessing your parsing. examples show how to multiprocess across demos. Multiprocessing will most likely max out your drive's reading speed. With multiprocessing ive been able to parse > 5GB/s (of game events) and >3GB/s (tick data). An average MM demo is around 90mb.
+If you have a fast SSD then i strongly recommend multiprocessing your parsing. [Examples](https://github.com/LaihoE/Python-demoparser/tree/main/examples) show how to multiprocess across demos. Multiprocessing will most likely max out your drive's reading speed. With multiprocessing ive been able to parse > 5GB/s (of game events) and >3GB/s (tick data). An average MM demo is around 90mb.
 
 
 

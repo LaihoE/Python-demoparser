@@ -69,7 +69,7 @@ df = parser.parse_ticks(wanted_props, players=[76511958412365], ticks=[489, 5884
 
 ## Performance
 
-**Your performance will mostly depend on how fast your HDD/SSD is.**  
+**Your performance will mostly depend on how fast your HDD/SSD is.** You can roughly calculate this part by demo size / reading speed.
 
 Below are some rough estimates for parsing speeds **excluding I/O**. Unfortunately the demo format does not allow proper skipping of tick data, we have to parse all the data if we want at least 1 field from the tick data. Game events can be parsed seperately and don't depend on tick data.
 
@@ -100,7 +100,7 @@ Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python
 ## Why yet another parser?
 Currently you have to take such a big performance hit if you want to use Python, that most people just go elsewhere like Markus-wa's [GO parser](https://github.com/markus-wa/demoinfocs-golang) (great alternative if you want something mature and fast). Unfortunately GO is just not such a popular language and most data analysis is done in Python/R. I also expect that most people interested in parsing demos are not experienced programmers and these people are very unlikely to learn a new language just for demo parsing. Demo parsing is something I think should be doable for very unexperienced programmers. 
 
-I personally think that querying the demo is a much more elegant way to deal with the data, rather than having an "event hook" type of interface. This might cause you to overfetch a little / take some small performance hit, but I feel the simplicity outweighs the small possible performance/flexibility hit.
+I personally think that querying the demo is a way more elegant way to deal with the data, rather than having an "event hook" type of interface. This might cause you to overfetch a little / take some small performance hit, but I feel the simplicity outweighs the small possible performance/flexibility hit.
 
 The parser is written completely in Rust (same speed as C/C++), (memory safe btw). This leaves the door open for the parser to become more or less as fast as we can go.
 

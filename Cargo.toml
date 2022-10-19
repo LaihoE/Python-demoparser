@@ -26,6 +26,7 @@ mimalloc = { version = "*", default-features = false }
 ahash = "0.8.0"
 smallvec = "1.10.0"
 bitter = "0.6.0"
+memmap2 = "0.5.7"
 
 [dependencies.csgoproto]
 path = "src/parsing/csgoproto"

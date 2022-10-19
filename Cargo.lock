@@ -310,6 +310,7 @@ dependencies = [
  "flate2",
  "fxhash",
  "memmap",
+ "memmap2",
  "mimalloc",
  "ndarray",
  "numpy",

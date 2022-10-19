@@ -99,10 +99,13 @@ impl Demo {
         user_data_size: i32,
         user_data_fixsize: bool,
     ) -> StringTable {
+        //println!("{}", st.name);
         //println!("DATALEN {}", data.len());
         let left_over = (data.len() % 4) as i32;
+
         let mut buf = BitReader::new(data, left_over);
         buf.read_uneven_end_bits();
+        //buf.read_bool();
 
         let mut entry_bits = (max_entries as f32).log2() as i32;
         let mut index = 0;
@@ -142,6 +145,7 @@ impl Demo {
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
                         if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
+                            //self.entids_not_connected.remove(&ui.entity_id);
                             self.players_connected += 1;
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
@@ -158,6 +162,7 @@ impl Demo {
                         let mut ui = Demo::parse_userinfo(user_data);
                         ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
                         if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
+                            //self.entids_not_connected.remove(&ui.entity_id);
                             self.players_connected += 1;
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
@@ -211,6 +216,7 @@ impl Demo {
     pub fn update_string_table_msg(&mut self, data: CSVCMsg_UpdateStringTable) {
         let st = self.stringtables.get_mut(data.table_id() as usize).unwrap();
 
+        //println!("{}", st.name);
         if st.name != "userinfo" {
             return;
         }

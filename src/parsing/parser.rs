@@ -58,6 +58,8 @@ pub struct Demo {
     pub frames_parsed: i32,
     pub entid_is_player: HashMap<u32, u64>,
     pub workhorse: Vec<i32>,
+    pub poisoned_until: i32,
+    pub entids_not_connected: HashSet<u32>,
 }
 
 impl Demo {
@@ -117,6 +119,8 @@ impl Demo {
             frames_parsed: 0,
             entid_is_player: HashMap::default(),
             workhorse: Vec::new(),
+            poisoned_until: 0,
+            entids_not_connected: HashSet::new(),
         })
     }
     pub fn new(
@@ -175,6 +179,8 @@ impl Demo {
             frames_parsed: 0,
             entid_is_player: HashMap::default(),
             workhorse: Vec::new(),
+            poisoned_until: 0,
+            entids_not_connected: HashSet::new(),
         })
     }
 }
@@ -198,10 +204,16 @@ impl Demo {
         for i in 0..20000 {
             self.workhorse.push(i);
         }
+        for i in 1..2 {
+            self.entids_not_connected.insert(i);
+        }
+
+        self.poisoned_until = 10000;
         while self.fp < self.bytes.get_len() as usize {
             self.frames_parsed += 1;
-            let f = self.read_frame_bytes();
-            self.tick = f.tick;
+            let (cmd, tick) = self.read_frame();
+            self.tick = tick;
+
             // EARLY EXIT
             if self.only_players && Demo::all_players_connected(self.players_connected) {
                 break;
@@ -222,8 +234,7 @@ impl Demo {
                     self.playback_frames,
                 );
             }
-
-            self.parse_cmd(f.cmd);
+            self.parse_cmd(cmd);
         }
         ticks_props
     }
@@ -238,7 +249,7 @@ impl Demo {
     }
 
     pub fn all_players_connected(total_connected: i32) -> bool {
-        if total_connected == 10 {
+        if total_connected == 15 {
             return true;
         }
         return false;
@@ -249,53 +260,78 @@ impl Demo {
         let packet_len = self.read_i32();
         let goal_inx = self.fp + packet_len as usize;
         let parse_props = self.parse_props;
+        let t = self.tick;
+        let mut is_con_tick = false;
+        let mut poisoned_tick = self.tick < self.poisoned_until;
+
+        //if t < 100 {
+        //println!("{}", self.entids_not_connected.len());
+        //}
+        if self.entids_not_connected.len() > 0 {
+            poisoned_tick = true;
+        }
+
         while self.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();
+            if msg == 25 {
+                self.cnt += size as i32;
+            }
+            if !poisoned_tick {
+                self.skip_n_bytes(size);
+                continue;
+            }
             let data = self.read_n_bytes(size);
 
             match msg as i32 {
                 // Game event
                 25 => {
-                    if !parse_props {
-                        let game_event = Message::parse_from_bytes(&data);
-                        match game_event {
-                            Ok(ge) => {
-                                let game_event = ge;
-                                let game_events = self.parse_game_events(game_event);
-                                self.game_events.extend(game_events);
+                    let game_event = Message::parse_from_bytes(&data);
+                    match game_event {
+                        Ok(ge) => {
+                            let game_event = ge;
+                            let (game_events, con_tick) = self.parse_game_events(game_event);
+                            is_con_tick = con_tick;
+                            /*
+                            if is_con_tick {
+                                println!("CON TICK {}", t);
                             }
-                            Err(e) => panic!(
-                                "Failed to parse game event at tick {}. Error: {e}",
-                                self.tick
-                            ),
+                            */
+                            if is_con_tick {
+                                self.poisoned_until = self.tick + 1000;
+                            }
+
+                            self.game_events.extend(game_events);
                         }
+                        Err(e) => panic!(
+                            "Failed to parse game event at tick {}. Error: {e}",
+                            self.tick
+                        ),
                     }
                 }
                 // Game event list
                 30 => {
-                    if !parse_props {
-                        let event_list = Message::parse_from_bytes(&data);
-                        match event_list {
-                            Ok(ev) => {
-                                let event_list = ev;
-                                self.parse_game_event_map(event_list)
-                            }
-                            Err(e) => panic!(
-                                "Failed to parse game event LIST at tick {}. Error: {e}",
-                                self.tick
-                            ),
+                    let event_list = Message::parse_from_bytes(&data);
+                    match event_list {
+                        Ok(ev) => {
+                            let event_list = ev;
+                            self.parse_game_event_map(event_list)
                         }
+                        Err(e) => panic!(
+                            "Failed to parse game event LIST at tick {}. Error: {e}",
+                            self.tick
+                        ),
                     }
                 }
                 // Packet entites
                 26 => {
-                    if parse_props {
+                    if parse_props && poisoned_tick {
                         let pack_ents = Message::parse_from_bytes(&data);
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;
-                                Demo::parse_packet_entities(
+
+                                let res = Demo::parse_packet_entities(
                                     &self.serverclass_map,
                                     self.tick,
                                     self.class_bits as usize,
@@ -303,7 +339,16 @@ impl Demo {
                                     &mut self.entities,
                                     &self.wanted_props,
                                     &mut self.workhorse,
+                                    self.fp as i32,
                                 );
+                                match res {
+                                    Some(v) => {
+                                        for e in v {
+                                            self.entids_not_connected.remove(&e);
+                                        }
+                                    }
+                                    None => {}
+                                }
                             }
                             Err(e) => panic!(
                                 "Failed to parse Packet entities at tick {}. Error: {e}",
@@ -342,6 +387,9 @@ impl Demo {
                 }
                 _ => {}
             }
+        }
+        if is_con_tick {
+            self.poisoned_until = self.tick + 1000;
         }
     }
 }

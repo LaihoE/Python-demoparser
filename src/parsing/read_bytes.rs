@@ -66,11 +66,10 @@ impl Demo {
         s
     }
     #[inline(always)]
-    pub fn read_frame_bytes(&mut self) -> Frame {
-        Frame {
-            cmd: self.read_byte(),
-            tick: self.read_i32(),
-            playerslot: self.read_byte(),
-        }
+    pub fn read_frame(&mut self) -> (u8, i32) {
+        let cmd = self.read_byte();
+        let tick = self.read_i32();
+        _ = self.skip_n_bytes(1);
+        (cmd, tick)
     }
 }

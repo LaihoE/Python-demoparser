@@ -52,6 +52,7 @@ impl<'a> MyBitreader<'a> {
         if new_way && self.read_boolie() {
             let index = self.read_nbits(3);
             if index == 0xfff {
+                //println!("a");
                 return -1;
             }
             return last + 1 + index as i32;
@@ -59,12 +60,23 @@ impl<'a> MyBitreader<'a> {
             let mut index = self.read_nbits(7);
             let val = index & (32 | 64);
             match val {
-                32 => index = (index & !96) | (self.read_nbits(2) << 5),
-                64 => index = (index & !96) | (self.read_nbits(4) << 5),
-                96 => index = (index & !96) | (self.read_nbits(7) << 5),
+                32 => {
+                    index = (index & !96) | (self.read_nbits(2) << 5);
+                    //println!("32");
+                }
+                64 => {
+                    index = (index & !96) | (self.read_nbits(4) << 5);
+                    //println!("64");
+                }
+                96 => {
+                    let t = self.read_nbits(7) << 5;
+                    index = (index & !96) | (t);
+                }
                 _ => {}
             }
+
             if index == 0xfff {
+                //println!("b");
                 return -1;
             }
             return last + 1 + index as i32;

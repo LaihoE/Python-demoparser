@@ -57,34 +57,64 @@ impl Demo {
         entities: &mut Vec<(u32, Entity)>,
         wanted_props: &Vec<String>,
         workhorse: &mut Vec<i32>,
-    ) {
+        fp: i32,
+    ) -> Option<Vec<u32>> {
         let n_upd_ents = pack_ents.updated_entries();
         let mut b = MyBitreader::new(pack_ents.entity_data());
         let mut entity_id: i32 = -1;
-
+        let mut player_ents = vec![];
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var() as i32);
+
+            if entity_id > 2 {
+                break;
+            }
+
             if b.read_boolie() {
                 b.read_boolie();
             } else if b.read_boolie() {
                 // IF ENTITY DOES NOT EXIST
 
                 let cls_id = b.read_nbits(cls_bits.try_into().unwrap());
-
+                // println!("{tick} {entity_id} {:?}", cls_map[&(cls_id as u16)].dt);
                 let _ = b.read_nbits(10);
                 let mut e = Entity {
                     class_id: cls_id,
                     entity_id: entity_id as u32,
                     props: HashMap::default(),
                 };
-                update_entity(&mut e, &mut b, cls_map, wanted_props, tick, workhorse);
+                if entity_id < 11 {
+                    match cls_map.get(&(cls_id as u16)) {
+                        Some(x) => {
+                            if x.dt == "DT_CSPlayer" {
+                                player_ents.push(entity_id as u32);
+                            }
+                        }
+                        None => {}
+                    }
+                }
+
+                update_entity(&mut e, &mut b, cls_map, wanted_props, tick, workhorse, fp);
                 entities[entity_id as usize] = (entity_id as u32, e);
             } else {
                 // IF ENTITY DOES EXIST
                 let ent = &mut entities[entity_id as usize];
-                update_entity(&mut ent.1, &mut b, cls_map, wanted_props, tick, workhorse);
+                update_entity(
+                    &mut ent.1,
+                    &mut b,
+                    cls_map,
+                    wanted_props,
+                    tick,
+                    workhorse,
+                    fp,
+                );
             }
         }
+        if player_ents.len() > 0 {
+            return Some(player_ents);
+        } else {
+        }
+        None
     }
 }
 #[inline(always)]
@@ -95,6 +125,7 @@ pub fn parse_ent_props(
     wanted_props: &Vec<String>,
     tick: i32,
     workhorse: &mut Vec<i32>,
+    fp: i32,
 ) {
     let mut val = -1;
     let new_way = b.read_boolie();
@@ -164,7 +195,8 @@ pub fn update_entity(
     wanted_props: &Vec<String>,
     tick: i32,
     workhorse: &mut Vec<i32>,
+    fp: i32,
 ) {
     let sv_cls = &cls_map[&(ent.class_id.try_into().unwrap())];
-    parse_ent_props(ent, sv_cls, b, wanted_props, tick, workhorse);
+    parse_ent_props(ent, sv_cls, b, wanted_props, tick, workhorse, fp);
 }

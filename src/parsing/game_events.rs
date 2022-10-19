@@ -202,24 +202,34 @@ pub fn is_round_changed(event_name: &str) -> bool {
         return false;
     }
 }
+pub fn is_connect_event(event_name: &str) -> bool {
+    return event_name.contains("connect");
+}
 
 impl Demo {
-    pub fn parse_game_events(&mut self, game_event: CSVCMsg_GameEvent) -> Vec<GameEvent> {
+    pub fn parse_game_events(&mut self, game_event: CSVCMsg_GameEvent) -> (Vec<GameEvent>, bool) {
         let mut game_events: Vec<GameEvent> = Vec::new();
-        let event_desc = &self.event_map;
-        match event_desc {
+        let mut connect_tick = false;
+        match &self.event_map {
             Some(ev_desc_map) => {
                 let event_desc = &ev_desc_map[&game_event.eventid()];
-                let name_data_pairs = gen_name_val_pairs(
-                    &game_event,
-                    &event_desc,
-                    &self.tick,
-                    &self.userid_sid_map,
-                    &self.players,
-                    self.round,
-                );
+
                 if self.event_name.len() > 0 {
                     if match_data_to_game_event(event_desc.name(), &self.event_name) {
+                        let name_data_pairs = gen_name_val_pairs(
+                            &game_event,
+                            &event_desc,
+                            &self.tick,
+                            &self.userid_sid_map,
+                            &self.players,
+                            self.round,
+                        );
+
+                        connect_tick = if is_connect_event(event_desc.name()) {
+                            true
+                        } else {
+                            false
+                        };
                         game_events.push({
                             GameEvent {
                                 name: event_desc.name().to_owned(),
@@ -229,6 +239,14 @@ impl Demo {
                     }
                 } else {
                     {
+                        let name_data_pairs = gen_name_val_pairs(
+                            &game_event,
+                            &event_desc,
+                            &self.tick,
+                            &self.userid_sid_map,
+                            &self.players,
+                            self.round,
+                        );
                         game_events.push({
                             GameEvent {
                                 name: event_desc.name().to_owned(),
@@ -242,11 +260,10 @@ impl Demo {
                 }
             }
             None => {
-                panic!("Game event was not found in envent list passed earlier");
+                panic!("Game event was not found in event list passed earlier");
             }
         }
-
-        game_events
+        (game_events, connect_tick)
     }
     pub fn parse_game_event_map(&mut self, event_list: CSVCMsg_GameEventList) {
         let mut hm: HashMap<i32, Descriptor_t, RandomState> = HashMap::default();

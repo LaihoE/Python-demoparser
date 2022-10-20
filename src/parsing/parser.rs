@@ -267,7 +267,7 @@ impl Demo {
         let goal_inx = self.fp + packet_len as usize;
         let parse_props = self.parse_props;
         let mut is_con_tick = false;
-        /*
+
         if !self.all_wanted_connected && self.tick % 1000 == 0 {
             let highest = highest_wanted_entid(
                 &self.entids_not_connected,
@@ -277,13 +277,9 @@ impl Demo {
             if highest != 999999 {
                 self.all_wanted_connected = true;
                 self.highest_wanted_entid = highest;
-                println!(
-                    "{} {}",
-                    self.all_wanted_connected, self.highest_wanted_entid
-                );
             }
         }
-        */
+
         while self.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();

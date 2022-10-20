@@ -23,24 +23,27 @@ def gen_tick_tests(file):
                             "velocity_Y", "velocity_Z",
                             "viewangle_yaw", "viewangle_pitch",
                             "health", "in_buy_zone",  "flash_duration"
-                            ])
+                            ], players=[76561198194694750])
     df = df.drop("name", axis=1)
     df = df.drop("steamid", axis=1)
     s = int(np.nansum(df.to_numpy()))
     return file, s
 
+
 if __name__ == "__main__":
     import random
     import joblib
 
-    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")[:100]
+    files = glob.glob("/home/laiho/Documents/demos/mygames/*")#[:20]
     with mp.Pool(processes=24) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(gen_tick_tests, files), total=len(files)))
     print(results)
     
     d = dict(results)
+    
     c = joblib.load("sums.pkl")
     for t in results:
         print(d[t[0]], c[t[0]])
+    
 
     #joblib.dump(d, "sums.pkl")

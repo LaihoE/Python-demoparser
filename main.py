@@ -10,8 +10,10 @@ def coordinates(file):
     wanted_ticks = [x for x in range(5000, 5050)]
     #print(file)
     parser = DemoParser(file)
-    df = parser.parse_ticks(wanted_props, players=[76561198194694750], ticks=wanted_ticks)
-    print(df)
+    #players = pd.DataFrame(parser.parse_players())
+    #print(players)
+    df = parser.parse_ticks(wanted_props, ticks=wanted_ticks)
+    #print(df)
     """players = pd.DataFrame(parser.parse_players())
     print(players)
     if len(players) >= 5:
@@ -25,8 +27,8 @@ def coordinates(file):
 if __name__ == "__main__":
     import time
 
-    files = glob.glob("/home/laiho/Documents/demos/mygames/*")
-    #files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")
+    #files = glob.glob("/home/laiho/Documents/demos/mygames/*")#[:20]
+    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")
     #print(files)
     before = time.time()
     with mp.Pool(processes=24) as pool:

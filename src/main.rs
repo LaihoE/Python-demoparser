@@ -20,22 +20,20 @@ use std::time::Instant;
 
 fn main() {
     let now = Instant::now();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/test/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     //let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     for demo_path in paths {
         let now = Instant::now();
-
         let props_names = vec!["m_angEyeAngles[0]".to_string()];
         let x = netmessages::file_descriptor();
         let y = x.messages();
         println!("{:?}", demo_path.as_ref().unwrap().path());
         let file = File::open(demo_path.unwrap().path()).unwrap();
-
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         let mut parser = Demo::new_mmap(
             mmap,
-            false,
-            (50..100).collect(),
+            true,
+            (50..10000).collect(),
             vec![],
             vec![],
             "player_death".to_string(),
@@ -50,7 +48,7 @@ fn main() {
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 5);
 
-        println!("{}", parser.cnt);
+        //println!("{:?}", data);
         break;
     }
     let elapsed = now.elapsed();

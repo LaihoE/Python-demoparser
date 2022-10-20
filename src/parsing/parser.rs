@@ -1,3 +1,4 @@
+use super::entities::highest_wanted_entid;
 use super::game_events::GameEvent;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
@@ -60,6 +61,8 @@ pub struct Demo {
     pub workhorse: Vec<i32>,
     pub poisoned_until: i32,
     pub entids_not_connected: HashSet<u32>,
+    pub highest_wanted_entid: i32,
+    pub all_wanted_connected: bool,
 }
 
 impl Demo {
@@ -121,6 +124,8 @@ impl Demo {
             workhorse: Vec::new(),
             poisoned_until: 0,
             entids_not_connected: HashSet::new(),
+            highest_wanted_entid: 9999999,
+            all_wanted_connected: false,
         })
     }
     pub fn new(
@@ -181,6 +186,8 @@ impl Demo {
             workhorse: Vec::new(),
             poisoned_until: 0,
             entids_not_connected: HashSet::new(),
+            highest_wanted_entid: 9999999,
+            all_wanted_connected: false,
         })
     }
 }
@@ -204,24 +211,23 @@ impl Demo {
         for i in 0..20000 {
             self.workhorse.push(i);
         }
-        for i in 1..2 {
+        for i in 1..11 {
             self.entids_not_connected.insert(i);
         }
 
-        self.poisoned_until = 10000;
+        self.poisoned_until = 1000;
         while self.fp < self.bytes.get_len() as usize {
             self.frames_parsed += 1;
             let (cmd, tick) = self.read_frame();
             self.tick = tick;
 
             // EARLY EXIT
-            if self.only_players && Demo::all_players_connected(self.players_connected) {
+            if self.only_players && Demo::all_players_connected(self.players_connected)
+                || self.only_header
+            {
                 break;
             }
-            // EARLY EXIT
-            if self.only_header {
-                break;
-            }
+
             if self.parse_props {
                 Demo::collect_player_data(
                     &self.players,
@@ -260,29 +266,28 @@ impl Demo {
         let packet_len = self.read_i32();
         let goal_inx = self.fp + packet_len as usize;
         let parse_props = self.parse_props;
-        let t = self.tick;
         let mut is_con_tick = false;
-        let mut poisoned_tick = self.tick < self.poisoned_until;
-
-        //if t < 100 {
-        //println!("{}", self.entids_not_connected.len());
-        //}
-        if self.entids_not_connected.len() > 0 {
-            poisoned_tick = true;
+        /*
+        if !self.all_wanted_connected && self.tick % 1000 == 0 {
+            let highest = highest_wanted_entid(
+                &self.entids_not_connected,
+                &self.players,
+                &self.wanted_players,
+            );
+            if highest != 999999 {
+                self.all_wanted_connected = true;
+                self.highest_wanted_entid = highest;
+                println!(
+                    "{} {}",
+                    self.all_wanted_connected, self.highest_wanted_entid
+                );
+            }
         }
-
+        */
         while self.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();
-            if msg == 25 {
-                self.cnt += size as i32;
-            }
-            if !poisoned_tick {
-                self.skip_n_bytes(size);
-                continue;
-            }
             let data = self.read_n_bytes(size);
-
             match msg as i32 {
                 // Game event
                 25 => {
@@ -292,11 +297,7 @@ impl Demo {
                             let game_event = ge;
                             let (game_events, con_tick) = self.parse_game_events(game_event);
                             is_con_tick = con_tick;
-                            /*
-                            if is_con_tick {
-                                println!("CON TICK {}", t);
-                            }
-                            */
+
                             if is_con_tick {
                                 self.poisoned_until = self.tick + 1000;
                             }
@@ -325,7 +326,7 @@ impl Demo {
                 }
                 // Packet entites
                 26 => {
-                    if parse_props && poisoned_tick {
+                    if parse_props {
                         let pack_ents = Message::parse_from_bytes(&data);
                         match pack_ents {
                             Ok(pe) => {
@@ -340,6 +341,7 @@ impl Demo {
                                     &self.wanted_props,
                                     &mut self.workhorse,
                                     self.fp as i32,
+                                    self.highest_wanted_entid,
                                 );
                                 match res {
                                     Some(v) => {
@@ -387,9 +389,6 @@ impl Demo {
                 }
                 _ => {}
             }
-        }
-        if is_con_tick {
-            self.poisoned_until = self.tick + 1000;
         }
     }
 }

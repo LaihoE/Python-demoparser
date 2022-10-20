@@ -15,6 +15,8 @@ use std::collections::HashSet;
 use std::convert::TryInto;
 use std::time::Instant;
 
+use super::stringtables::UserInfo;
+
 #[derive(Debug)]
 pub struct Entity {
     pub class_id: u32,
@@ -58,6 +60,7 @@ impl Demo {
         wanted_props: &Vec<String>,
         workhorse: &mut Vec<i32>,
         fp: i32,
+        highest_wanted_entid: i32,
     ) -> Option<Vec<u32>> {
         let n_upd_ents = pack_ents.updated_entries();
         let mut b = MyBitreader::new(pack_ents.entity_data());
@@ -65,8 +68,7 @@ impl Demo {
         let mut player_ents = vec![];
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var() as i32);
-
-            if entity_id > 2 {
+            if entity_id > highest_wanted_entid {
                 break;
             }
 
@@ -199,4 +201,36 @@ pub fn update_entity(
 ) {
     let sv_cls = &cls_map[&(ent.class_id.try_into().unwrap())];
     parse_ent_props(ent, sv_cls, b, wanted_props, tick, workhorse, fp);
+}
+
+#[inline(always)]
+pub fn highest_wanted_entid(
+    entids_not_connected: &HashSet<u32>,
+    players: &HashMap<u64, UserInfo, RandomState>,
+    wanted_players: &Vec<u64>,
+) -> i32 {
+    /*
+    Returns highest wanted entity_id to be able to
+    early exit parsing packet entites after all our
+    wanted players are parsed
+    */
+    let mut highest_wanted = 0;
+    for player in players {
+        if wanted_players.contains(&player.0) {
+            let wanted_ent_id = player.1.entity_id;
+            if highest_wanted < wanted_ent_id {
+                highest_wanted = wanted_ent_id;
+            }
+            for eid in 1..wanted_ent_id {
+                if entids_not_connected.contains(&eid) {
+                    return 999999;
+                }
+            }
+        }
+    }
+    if highest_wanted > 0 {
+        return highest_wanted as i32;
+    } else {
+        return 999999;
+    }
 }

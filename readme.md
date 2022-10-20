@@ -1,7 +1,7 @@
 # CSGO demo parser for Python
 Work in progress! expect some bugs here and there
 ## Installing
-```python
+```bash
 pip install demoparser
 ```
 
@@ -27,7 +27,7 @@ wanted_props = ["X", "Y", "Z", "health"]
 parser = DemoParser("path_to_demo.dem")
 df = parser.parse_ticks(wanted_props)
 ```
-List of possible props: [props](https://github.com/LaihoE/Python-demoparser/blob/main/vars.md)
+List of possible props:[props](https://github.com/LaihoE/Python-demoparser/blob/main/vars.md)  
 parse_ticks also accepts optional arguments for filtering players and ticks.
 
 ```python

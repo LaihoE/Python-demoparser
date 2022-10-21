@@ -45,7 +45,18 @@ fn main() {
         let h: Header = parser.parse_demo_header();
         let mut event_names: Vec<String> = Vec::new();
         let data = parser.start_parsing(&props_names);
-        //println!("{:?}", data);
+
+        // 41 ent   39 rules
+        for ent in parser.entities {
+            if ent.1.class_id == 41 {
+                for p in ent.1.props {
+                    if p.0.contains("m_iCompetitiveRanking") {
+                        println!("{:?}", p)
+                    }
+                }
+            }
+        }
+        break;
         //break;
     }
     let elapsed = now.elapsed();

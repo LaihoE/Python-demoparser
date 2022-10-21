@@ -225,6 +225,7 @@ impl<R: io::Read> BitReader<R> {
 
         for _ in 0..num_elements {
             let pro = Prop {
+                table: "oopsie".to_string(),
                 name: p.to_string(),
                 arr: None,
                 col: 0,

@@ -86,7 +86,7 @@ impl Demo {
                     _ => {}
                 },
                 None => {
-                    panic!("Prop: {} not found", p);
+                    //panic!("Prop: {} not found", p);
                 }
             }
         }
@@ -329,7 +329,7 @@ impl Demo {
                                 let pack_ents = pe;
 
                                 let res = Demo::parse_packet_entities(
-                                    &self.serverclass_map,
+                                    &mut self.serverclass_map,
                                     self.tick,
                                     self.class_bits as usize,
                                     pack_ents,

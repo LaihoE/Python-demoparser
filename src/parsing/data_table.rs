@@ -30,6 +30,7 @@ impl Demo {
                     if table.is_end() {
                         break;
                     }
+
                     self.dt_map.as_mut().unwrap().insert(
                         table.net_table_name.as_ref().unwrap().to_string(),
                         table.clone(),
@@ -129,11 +130,12 @@ impl Demo {
     pub fn get_props(
         &self,
         table: &CSVCMsg_SendTable,
-        table_id: String,
+        table_name: String,
         excl: &SmallVec<[Sendprop_t; 32]>,
     ) -> Vec<Prop> {
         let mut flat: Vec<Prop> = Vec::new();
         let mut cnt = 0;
+        //println!("{}", table_id);
 
         for prop in &table.props {
             if (prop.flags() & (1 << 8) != 0)
@@ -142,8 +144,9 @@ impl Demo {
             {
                 continue;
             }
-
+            //println!("DTN {}", prop.dt_name());
             if prop.type_() == 6 {
+                //println!("{}", prop.dt_name());
                 let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
                 let child_props = self.get_props(sub_table, prop.dt_name().to_string(), excl);
 
@@ -159,6 +162,7 @@ impl Demo {
                 }
             } else if prop.type_() == 5 {
                 let prop_arr = Prop {
+                    table: table_name.clone(),
                     name: prop.var_name().to_string(),
                     //prop: prop.clone(),
                     arr: Some(table.props[cnt].clone()),
@@ -172,11 +176,12 @@ impl Demo {
                     priority: prop.priority(),
                     p_type: prop.type_(),
                 };
+                //println!("{} {}", prop.dt_name(), prop.var_name());
                 flat.push(prop_arr);
             } else {
                 let prop = Prop {
                     name: prop.var_name().to_string(),
-                    //prop: prop.clone(),
+                    table: table_name.clone(),
                     arr: None,
                     col: 1,
                     data: None,

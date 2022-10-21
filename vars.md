@@ -18,5 +18,5 @@ Some example props that can be gotten from players.
 
 
 
-Parser also allows you to use the "real names". Just make sure you add _X _Y and potentially _X to the vector prop names. Like so:
+Parser also allows you to use the "real names". Just make sure you add _X _Y and potentially _Z to the vector prop names. Like so:
 m_vecOrigin -> m_vecOrigin_X for x coordinate.

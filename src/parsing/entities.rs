@@ -28,6 +28,7 @@ pub struct Entity {
 pub struct Prop {
     pub name: String,
     //pub prop: Sendprop_t,
+    pub table: String,
     pub arr: Option<Sendprop_t>,
     pub col: i32,
     pub data: Option<PropData>,
@@ -52,7 +53,7 @@ fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
 
 impl Demo {
     pub fn parse_packet_entities(
-        cls_map: &HashMap<u16, ServerClass, RandomState>,
+        cls_map: &mut HashMap<u16, ServerClass, RandomState>,
         tick: i32,
         cls_bits: usize,
         pack_ents: CSVCMsg_PacketEntities,
@@ -68,34 +69,45 @@ impl Demo {
         let mut player_ents = vec![];
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var() as i32);
-            if entity_id > highest_wanted_entid {
+            /*
+            if entity_id > 888888 {
                 break;
             }
-
+            */
             if b.read_boolie() {
                 b.read_boolie();
             } else if b.read_boolie() {
                 // IF ENTITY DOES NOT EXIST
 
                 let cls_id = b.read_nbits(cls_bits.try_into().unwrap());
-                // println!("{tick} {entity_id} {:?}", cls_map[&(cls_id as u16)].dt);
+                //println!("{tick} {entity_id} {:?}", cls_map[&(cls_id as u16)].dt);
                 let _ = b.read_nbits(10);
                 let mut e = Entity {
                     class_id: cls_id,
                     entity_id: entity_id as u32,
                     props: HashMap::default(),
                 };
-                if entity_id < 11 {
-                    match cls_map.get(&(cls_id as u16)) {
+
+                if entity_id < 100 {
+                    match cls_map.get_mut(&(cls_id as u16)) {
                         Some(x) => {
                             if x.dt == "DT_CSPlayer" {
                                 player_ents.push(entity_id as u32);
+                            }
+                            println!("{}", x.dt);
+                            if cls_id == 41 {
+                                println!("CLSID  {}", cls_id);
+                                //println!("{:?}", x);
+
+                                for p in &mut x.props {
+                                    p.name = p.table.clone() + &p.name;
+                                    println!("{:?}", p);
+                                }
                             }
                         }
                         None => {}
                     }
                 }
-
                 update_entity(&mut e, &mut b, cls_map, wanted_props, tick, workhorse, fp);
                 entities[entity_id as usize] = (entity_id as u32, e);
             } else {
@@ -146,11 +158,11 @@ pub fn parse_ent_props(
         let inx = workhorse[i];
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);
-
+        /*
         if !is_wanted_prop_name(prop, &wanted_props) {
             continue;
         }
-
+        */
         match pdata {
             PropData::VecXY(v) => {
                 let endings = ["_X", "_Y"];

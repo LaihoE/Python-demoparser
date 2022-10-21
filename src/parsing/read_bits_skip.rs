@@ -132,9 +132,9 @@ impl<'a> MyBitreader<'a> {
 
         let p = prop.arr.as_ref().unwrap();
         let mut elems = vec![];
-
         for _ in 0..num_elements {
             let pro = Prop {
+                table: "oopsie".to_string(),
                 name: p.to_string(),
                 arr: None,
                 col: 0,

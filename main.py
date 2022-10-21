@@ -6,7 +6,7 @@ import tqdm
 import random
 
 def coordinates(file):
-    wanted_props = ["X", "Y", "Z"]
+    wanted_props = ["X"]
     wanted_ticks = [x for x in range(5000, 5050)]
     #print(file)
     parser = DemoParser(file)
@@ -26,8 +26,6 @@ def coordinates(file):
 
 if __name__ == "__main__":
     import time
-
-    #files = glob.glob("/home/laiho/Documents/demos/mygames/*")#[:20]
     files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")
     #print(files)
     before = time.time()

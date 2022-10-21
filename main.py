@@ -5,33 +5,32 @@ import pandas as pd
 import tqdm
 import random
 
+
 def coordinates(file):
     wanted_props = ["X"]
     wanted_ticks = [x for x in range(5000, 5050)]
     #print(file)
     parser = DemoParser(file)
-    #players = pd.DataFrame(parser.parse_players())
-    #print(players)
-    df = parser.parse_ticks(wanted_props, ticks=wanted_ticks)
-    #print(df)
-    """players = pd.DataFrame(parser.parse_players())
-    print(players)
-    if len(players) >= 5:
-        rng = random.randint(0, 5)
-        sid = int(players.iloc[rng]["steamid"])
-        df = parser.parse_ticks(wanted_props, players=[76561198194694750], ticks=wanted_ticks)
-        #print(df)"""
-
+    df = parser.parse_ticks(["m_iDeaths"])
+    return set(df["m_iDeaths"])
 
 
 if __name__ == "__main__":
     import time
-    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")
-    #print(files)
+    files = glob.glob("/mnt/d/Trash-1000/fa/3/*")#[:10]
+    print(files)
     before = time.time()
     with mp.Pool(processes=24) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(coordinates, files), total=len(files)))
-    print(time.time() - before)
+    all_w = []
+    for x in results:
+        for i in x:
+            if str(i) != "nan":
+                all_w.append(int(i))    
 
-    #df = pd.concat(results)
-    #print(df)
+    s = set(all_w)
+    print(max(s))
+    print(min(s))
+
+
+    print(time.time() - before)

@@ -62,11 +62,13 @@ impl Demo {
         workhorse: &mut Vec<i32>,
         fp: i32,
         highest_wanted_entid: i32,
+        manager_id: &mut Option<u32>,
     ) -> Option<Vec<u32>> {
         let n_upd_ents = pack_ents.updated_entries();
         let mut b = MyBitreader::new(pack_ents.entity_data());
         let mut entity_id: i32 = -1;
         let mut player_ents = vec![];
+        let mut mangager = -1;
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var() as i32);
             /*
@@ -94,14 +96,10 @@ impl Demo {
                             if x.dt == "DT_CSPlayer" {
                                 player_ents.push(entity_id as u32);
                             }
-                            println!("{}", x.dt);
                             if cls_id == 41 {
-                                println!("CLSID  {}", cls_id);
-                                //println!("{:?}", x);
-
+                                *manager_id = Some(entity_id as u32);
                                 for p in &mut x.props {
                                     p.name = p.table.clone() + &p.name;
-                                    println!("{:?}", p);
                                 }
                             }
                         }
@@ -158,7 +156,10 @@ pub fn parse_ent_props(
         let inx = workhorse[i];
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);
-        /*
+        if sv_cls.id == 41{
+            //println!("{} {} {:?}", tick,prop.name, pdata);
+        }
+        /* 
         if !is_wanted_prop_name(prop, &wanted_props) {
             continue;
         }

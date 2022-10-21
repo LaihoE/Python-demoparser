@@ -63,6 +63,7 @@ pub struct Demo {
     pub entids_not_connected: HashSet<u32>,
     pub highest_wanted_entid: i32,
     pub all_wanted_connected: bool,
+    pub manager_id: Option<u32>,
 }
 
 impl Demo {
@@ -126,6 +127,7 @@ impl Demo {
             entids_not_connected: HashSet::new(),
             highest_wanted_entid: 9999999,
             all_wanted_connected: false,
+            manager_id: None
         })
     }
     pub fn new(
@@ -188,6 +190,7 @@ impl Demo {
             entids_not_connected: HashSet::new(),
             highest_wanted_entid: 9999999,
             all_wanted_connected: false,
+            manager_id: None
         })
     }
 }
@@ -238,6 +241,7 @@ impl Demo {
                     props_names,
                     &mut ticks_props,
                     self.playback_frames,
+                    &self.manager_id
                 );
             }
             self.parse_cmd(cmd);
@@ -297,7 +301,6 @@ impl Demo {
                             if is_con_tick {
                                 self.poisoned_until = self.tick + 1000;
                             }
-
                             self.game_events.extend(game_events);
                         }
                         Err(e) => panic!(
@@ -338,6 +341,7 @@ impl Demo {
                                     &mut self.workhorse,
                                     self.fp as i32,
                                     self.highest_wanted_entid,
+                                    &mut self.manager_id,
                                 );
                                 match res {
                                     Some(v) => {

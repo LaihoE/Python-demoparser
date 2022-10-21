@@ -28,6 +28,7 @@ fn insert_propcolumn(
     playback_frames: usize,
     col_type: i32,
 ) {
+    
     match ent.props.get(prop_name) {
         None => ticks_props
             .entry(prop_name.to_string())
@@ -41,6 +42,111 @@ fn insert_propcolumn(
             .push_propdata(p.data.clone()),
     }
 }
+
+
+fn insert_manager_prop( 
+    ticks_props: &mut HashMap<String, PropColumn, RandomState>,
+    ent: &Entity,
+    prop_name: &String,
+    playback_frames: usize,
+    col_type: i32,
+    manager: Option<&Entity>
+){
+    match manager {
+        Some(m) => {
+            let key = if ent.entity_id < 10{
+                prop_name.to_owned() + "00" + &ent.entity_id.to_string()
+            }else if ent.entity_id < 100{
+                prop_name.to_owned() + "0" + &ent.entity_id.to_string()
+            }else{
+                panic!("Entity id 100 ????: id:{}", ent.entity_id);
+            };
+            match m.props.get(&key){
+                Some(p) => {
+                    ticks_props
+                    .entry(prop_name.to_string())
+                    .or_insert_with(|| create_default(col_type, playback_frames))
+                    .data
+                    .push_propdata(p.data.clone())
+                }
+                None => ticks_props
+                        .entry(prop_name.to_string())
+                        .or_insert_with(|| create_default(col_type, playback_frames))
+                        .data
+                        .push_none(),
+            }
+        }
+        None => ticks_props
+            .entry(prop_name.to_string())
+            .or_insert_with(|| create_default(col_type, playback_frames))
+            .data
+            .push_none(),
+    }   
+}
+
+
+impl Demo {
+    #[inline(always)]
+    pub fn collect_player_data(
+        players: &HashMap<u64, UserInfo, RandomState>,
+        tick: &i32,
+        wanted_ticks: &HashSet<i32, RandomState>,
+        wanted_players: &Vec<u64>,
+        entities: &mut Vec<(u32, Entity)>,
+        props_names: &Vec<String>,
+        ticks_props: &mut HashMap<String, PropColumn, RandomState>,
+        playback_frames: usize,
+        manager_id: &Option<u32>,
+    ) {
+        // Collect wanted props from players
+        for player in players.values() {
+            if player.xuid == 0 || player.name == "GOTV" {
+                continue;
+            };
+
+            // Check that we want the tick
+            if wanted_ticks.contains(tick) || wanted_ticks.is_empty() {
+                // Check that we want the player
+                if wanted_players.contains(&player.xuid) || wanted_players.is_empty() {
+                    let pl = &mut entities[player.entity_id as usize];
+                    if pl.0 != 1111111 {
+                        let ent = &entities[player.entity_id as usize];
+                        let manager = if manager_id.is_some(){
+                            Some(&entities[manager_id.unwrap() as usize].1)
+                        }else{
+                            None
+                        };
+                        // Insert all wanted non-md props
+                        for prop_name in props_names {
+                            let prop_type = TYPEHM[prop_name];
+                            if prop_type == 10{
+                                insert_manager_prop(ticks_props, &ent.1, prop_name, playback_frames, 0, manager);
+                            }else{
+                                insert_propcolumn(
+                                    ticks_props,
+                                    &ent.1,
+                                    prop_name,
+                                    playback_frames,
+                                    prop_type,
+                                );
+                            }
+                            
+                        }
+                        // Insert tick, steamid, name
+                        insert_metadata(
+                            player.name.clone(),
+                            *tick,
+                            player.xuid,
+                            ticks_props,
+                            playback_frames,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[inline(always)]
 fn insert_metadata(
     name: String,
@@ -68,56 +174,6 @@ fn insert_metadata(
         .push_u64(xuid);
 }
 
-impl Demo {
-    #[inline(always)]
-    pub fn collect_player_data(
-        players: &HashMap<u64, UserInfo, RandomState>,
-        tick: &i32,
-        wanted_ticks: &HashSet<i32, RandomState>,
-        wanted_players: &Vec<u64>,
-        entities: &mut Vec<(u32, Entity)>,
-        props_names: &Vec<String>,
-        ticks_props: &mut HashMap<String, PropColumn, RandomState>,
-        playback_frames: usize,
-    ) {
-        // Collect wanted props from players
-        for player in players.values() {
-            if player.xuid == 0 || player.name == "GOTV" {
-                continue;
-            };
-
-            // Check that we want the tick
-            if wanted_ticks.contains(tick) || wanted_ticks.is_empty() {
-                // Check that we want the player
-                if wanted_players.contains(&player.xuid) || wanted_players.is_empty() {
-                    let pl = &mut entities[player.entity_id as usize];
-                    if pl.0 != 4206969 {
-                        let ent = &entities[player.entity_id as usize];
-                        // Insert all wanted props
-                        for prop_name in props_names {
-                            let prop_type = TYPEHM[prop_name];
-                            insert_propcolumn(
-                                ticks_props,
-                                &ent.1,
-                                prop_name,
-                                playback_frames,
-                                prop_type,
-                            );
-                        }
-                        // Insert tick, steamid, name
-                        insert_metadata(
-                            player.name.clone(),
-                            *tick,
-                            player.xuid,
-                            ticks_props,
-                            playback_frames,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_flNextAttack" => 1,
     "m_bDuckOverride" => 0,
@@ -275,4 +331,14 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "pl.deadflag" => 0,
     "m_bSilencerOn" => 0,
     "m_bReloadVisuallyComplete" => 1,
+    "m_iCompetitiveRanking" => 10,
+    "m_iPing" => 10,
+    "m_iTeam" => 10,
+    "m_iScore" => 10,
+    "m_iDeaths" => 10,
+    "m_iKills" => 10,
+    "m_iAssists" => 10,
+    "m_iMVPs" => 10,
+    "m_iArmor" => 10,
+    "m_iCompetitiveWins" => 10,
 };

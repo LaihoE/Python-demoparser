@@ -119,6 +119,9 @@ impl Demo {
         table: &CSVCMsg_SendTable,
         prop: &Sendprop_t,
     ) -> bool {
+        /*
+        excl is very short so O(n) probably best/fine
+        */
         for item in excl {
             if table.net_table_name() == item.dt_name() && prop.var_name() == item.var_name() {
                 return true;
@@ -135,7 +138,6 @@ impl Demo {
     ) -> Vec<Prop> {
         let mut flat: Vec<Prop> = Vec::new();
         let mut cnt = 0;
-        //println!("{}", table_id);
 
         for prop in &table.props {
             if (prop.flags() & (1 << 8) != 0)
@@ -144,9 +146,7 @@ impl Demo {
             {
                 continue;
             }
-            //println!("DTN {}", prop.dt_name());
             if prop.type_() == 6 {
-                //println!("{}", prop.dt_name());
                 let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
                 let child_props = self.get_props(sub_table, prop.dt_name().to_string(), excl);
 
@@ -175,7 +175,6 @@ impl Demo {
                     priority: prop.priority(),
                     p_type: prop.type_(),
                 };
-                //println!("{} {}", prop.dt_name(), prop.var_name());
                 flat.push(prop_arr);
             } else {
                 let prop = Prop {

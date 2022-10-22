@@ -8,16 +8,19 @@ pub use crate::parsing::variants::*;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::*;
+use flate2::read::GzDecoder;
 use memmap::Mmap;
+use memmap::MmapOptions;
+use mimalloc::MiMalloc;
 use phf::phf_map;
 use protobuf;
 use protobuf::Message;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 use std::u8;
-
-use mimalloc::MiMalloc;
-
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -39,13 +42,11 @@ pub struct Demo {
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable, RandomState>>,
     pub serverclass_map: HashMap<u16, ServerClass, RandomState>,
     pub entities: Vec<(u32, Entity)>,
-    pub bad: Vec<String>,
     pub stringtables: Vec<StringTable>,
     pub players: HashMap<u64, UserInfo, RandomState>,
     pub parse_props: bool,
     pub game_events: Vec<GameEvent>,
     pub event_name: String,
-    pub cnt: i32,
     pub wanted_props: Vec<String>,
     pub wanted_ticks: HashSet<i32, RandomState>,
     pub wanted_players: Vec<u64>,
@@ -55,7 +56,6 @@ pub struct Demo {
     pub only_header: bool,
     pub userid_sid_map: HashMap<u32, u64, RandomState>,
     pub playback_frames: usize,
-    pub bench: HashMap<i32, i32>,
     pub frames_parsed: i32,
     pub entid_is_player: HashMap<u32, u64>,
     pub workhorse: Vec<i32>,
@@ -65,73 +65,57 @@ pub struct Demo {
     pub all_wanted_connected: bool,
     pub manager_id: Option<u32>,
 }
+pub fn decompress_gz(demo_path: String) -> Result<BytesVariant, std::io::Error> {
+    match File::open(demo_path.clone()) {
+        Err(e) => return Err(e),
+        Ok(_) => match std::fs::read(demo_path.clone()) {
+            Err(e) => return Err(e),
+            Ok(bytes) => {
+                let mut gz = GzDecoder::new(&bytes[..]);
+                let mut out: Vec<u8> = vec![];
+                gz.read_to_end(&mut out).unwrap();
+                Ok(BytesVariant::Vec(out))
+            }
+        },
+    }
+}
+pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
+    match File::open(demo_path) {
+        Err(e) => return Err(e),
+        Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
+            Err(e) => return Err(e),
+            Ok(m) => Ok(BytesVariant::Mmap(m)),
+        },
+    }
+}
 
-impl Demo {
-    pub fn new_mmap(
-        bytes: Mmap,
-        parse_props: bool,
-        wanted_ticks: Vec<i32>,
-        wanted_players: Vec<u64>,
-        mut wanted_props: Vec<String>,
-        event_name: String,
-        only_players: bool,
-        only_header: bool,
-    ) -> Result<Self, std::io::Error> {
-        let mut extra_wanted_props = vec![];
-        for p in &wanted_props {
-            match TYPEHM.get(&p) {
-                Some(_) => match &p[(p.len() - 1)..] {
-                    "X" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
-                    "Y" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
-                    "Z" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
-                    _ => {}
+pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
+    let result = std::fs::read(&demo_path);
+    match result {
+        Err(e) => Err(e),
+        Ok(bytes) => {
+            let extension = Path::new(&demo_path).extension().unwrap();
+            match extension.to_str().unwrap() {
+                "gz" => match decompress_gz(demo_path) {
+                    Err(e) => return Err(e),
+                    Ok(bytes) => Ok(bytes),
                 },
-                None => {
-                    //panic!("Prop: {} not found", p);
+                ".info" => {
+                    panic!("you passed an .info file, these are not demos")
                 }
+                // All other formats, .dem is the "correct" but let others work too
+                _ => match create_mmap(demo_path) {
+                    Err(e) => return Err(e),
+                    Ok(map) => Ok(map),
+                },
             }
         }
-        wanted_props.extend(extra_wanted_props);
-        Ok(Self {
-            userid_sid_map: HashMap::default(),
-            bytes: BytesVariant::Mmap(bytes),
-            fp: 0,
-            cmd: 0,
-            tick: 0,
-            cnt: 0,
-            round: 0,
-            event_list: None,
-            event_map: None,
-            class_bits: 0,
-            parse_props: parse_props,
-            event_name: event_name,
-            bad: Vec::new(),
-            dt_map: Some(HashMap::default()),
-            serverclass_map: HashMap::default(),
-            entities: vec![],
-            stringtables: Vec::new(),
-            players: HashMap::default(),
-            wanted_props: wanted_props,
-            game_events: Vec::new(),
-            wanted_players: wanted_players,
-            wanted_ticks: HashSet::from_iter(wanted_ticks),
-            players_connected: 0,
-            only_header: only_header,
-            only_players: only_players,
-            playback_frames: 0,
-            bench: HashMap::default(),
-            frames_parsed: 0,
-            entid_is_player: HashMap::default(),
-            workhorse: Vec::new(),
-            poisoned_until: 0,
-            entids_not_connected: HashSet::new(),
-            highest_wanted_entid: 9999999,
-            all_wanted_connected: false,
-            manager_id: None,
-        })
     }
+}
+
+impl Demo {
     pub fn new(
-        bytes: Vec<u8>,
+        demo_path: String,
         parse_props: bool,
         wanted_ticks: Vec<i32>,
         wanted_players: Vec<u64>,
@@ -155,43 +139,43 @@ impl Demo {
             }
         }
         wanted_props.extend(extra_wanted_props);
-        Ok(Self {
-            userid_sid_map: HashMap::default(),
-            bytes: BytesVariant::Vec(bytes),
-            fp: 0,
-            cmd: 0,
-            tick: 0,
-            cnt: 0,
-            round: 0,
-            event_list: None,
-            event_map: None,
-            class_bits: 0,
-            parse_props: parse_props,
-            event_name: event_name,
-            bad: Vec::new(),
-            dt_map: Some(HashMap::default()),
-            serverclass_map: HashMap::default(),
-            entities: vec![],
-            stringtables: Vec::new(),
-            players: HashMap::default(),
-            wanted_props: wanted_props,
-            game_events: Vec::new(),
-            wanted_players: wanted_players,
-            wanted_ticks: HashSet::from_iter(wanted_ticks),
-            players_connected: 0,
-            only_header: only_header,
-            only_players: only_players,
-            playback_frames: 0,
-            bench: HashMap::default(),
-            frames_parsed: 0,
-            entid_is_player: HashMap::default(),
-            workhorse: Vec::new(),
-            poisoned_until: 0,
-            entids_not_connected: HashSet::new(),
-            highest_wanted_entid: 9999999,
-            all_wanted_connected: false,
-            manager_id: None,
-        })
+        match read_file(demo_path) {
+            Err(e) => return Err(e),
+            Ok(data) => Ok(Self {
+                userid_sid_map: HashMap::default(),
+                bytes: data,
+                fp: 0,
+                cmd: 0,
+                tick: 0,
+                round: 0,
+                event_list: None,
+                event_map: None,
+                class_bits: 0,
+                parse_props: parse_props,
+                event_name: event_name,
+                dt_map: Some(HashMap::default()),
+                serverclass_map: HashMap::default(),
+                entities: vec![],
+                stringtables: Vec::new(),
+                players: HashMap::default(),
+                wanted_props: wanted_props,
+                game_events: Vec::new(),
+                wanted_players: wanted_players,
+                wanted_ticks: HashSet::from_iter(wanted_ticks),
+                players_connected: 0,
+                only_header: only_header,
+                only_players: only_players,
+                playback_frames: 0,
+                frames_parsed: 0,
+                entid_is_player: HashMap::default(),
+                workhorse: Vec::new(),
+                poisoned_until: 0,
+                entids_not_connected: HashSet::new(),
+                highest_wanted_entid: 9999999,
+                all_wanted_connected: false,
+                manager_id: None,
+            }),
+        }
     }
 }
 

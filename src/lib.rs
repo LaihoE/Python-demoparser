@@ -9,18 +9,22 @@ use parsing::parser::Demo;
 use parsing::stringtables::UserInfo;
 use parsing::variants::PropAtom;
 use parsing::variants::PropData;
+use phf::phf_map;
 use polars::prelude::ArrowField;
 use polars::prelude::NamedFrom;
 use polars::series::Series;
 use polars_arrow::export::arrow;
 use polars_arrow::prelude::ArrayRef;
 use pyo3::exceptions::PyFileNotFoundError;
+use pyo3::exceptions::PyKeyError;
+use pyo3::exceptions::PyTypeError;
+use pyo3::exceptions::PyValueError;
 use pyo3::ffi::Py_uintptr_t;
 use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
-use pyo3::Python;
 use pyo3::{PyAny, PyObject, PyResult};
+use pyo3::{PyErr, Python};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -105,41 +109,6 @@ pub fn parse_kwargs(kwargs: Option<&PyDict>) -> (Vec<u64>, Vec<i32>) {
     }
 }
 
-pub fn rm_user_friendly_names(names: Vec<String>) -> Vec<String> {
-    let mut unfriendly_names = vec![];
-    for name in names {
-        match &name[..] {
-            "X" => unfriendly_names.push("m_vecOrigin_X".to_string()),
-            "Y" => unfriendly_names.push("m_vecOrigin_Y".to_string()),
-            "Z" => unfriendly_names.push("m_vecOrigin[2]".to_string()),
-
-            "velocity_X" => unfriendly_names.push("m_vecVelocity[0]".to_string()),
-            "velocity_Y" => unfriendly_names.push("m_vecVelocity[1]".to_string()),
-            "velocity_Z" => unfriendly_names.push("m_vecVelocity[2]".to_string()),
-
-            "viewangle_pitch" => unfriendly_names.push("m_angEyeAngles[0]".to_string()),
-            "viewangle_yaw" => unfriendly_names.push("m_angEyeAngles[1]".to_string()),
-
-            "ducked" => unfriendly_names.push("m_bDucked".to_string()),
-            "in_buy_zone" => unfriendly_names.push("m_bInBuyZone".to_string()),
-            "scoped" => unfriendly_names.push("m_bIsScoped".to_string()),
-            "health" => unfriendly_names.push("m_iHealth".to_string()),
-            "flash_duration" => unfriendly_names.push("m_flFlashDuration".to_string()),
-
-            "aimpunch_X" => unfriendly_names.push("m_aimPunchAngle_X".to_string()),
-            "aimpunch_Y" => unfriendly_names.push("m_aimPunchAngle_Y".to_string()),
-            "aimpunch_Z" => unfriendly_names.push("m_aimPunchAngle_Z".to_string()),
-
-            "aimpunch_vel_X" => unfriendly_names.push("m_aimPunchAngleVel_X".to_string()),
-            "aimpunch_vel_Y" => unfriendly_names.push("m_aimPunchAngleVel_Y".to_string()),
-            "aimpunch_vel_Z" => unfriendly_names.push("m_aimPunchAngleVel_Z".to_string()),
-
-            _ => unfriendly_names.push(name),
-        }
-    }
-    unfriendly_names
-}
-
 #[pyclass]
 struct DemoParser {
     path: String,
@@ -153,10 +122,8 @@ impl DemoParser {
     }
 
     pub fn parse_events(&self, py: Python<'_>, event_name: String) -> PyResult<Py<PyAny>> {
-        let file = File::open(self.path.clone()).unwrap();
-        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
-        let parser = Demo::new_mmap(
-            mmap,
+        let parser = Demo::new(
+            self.path.clone(),
             false,
             Vec::new(),
             Vec::new(),
@@ -166,7 +133,12 @@ impl DemoParser {
             false,
         );
         match parser {
-            Err(e) => Err(PyFileNotFoundError::new_err("ERROR READING FILE")),
+            Err(e) => {
+                return Err(PyFileNotFoundError::new_err(format!(
+                    "Couldnt read demo file. Error: {}",
+                    e
+                )))
+            }
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
 
@@ -197,12 +169,18 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
         let mut real_props = rm_user_friendly_names(wanted_props);
+        let unk_props = check_validity_props(&real_props);
 
-        let file = File::open(self.path.clone()).unwrap();
-        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+        if unk_props.len() > 0 {
+            return Err(PyKeyError::new_err(format!(
+                "Unknown fields: {:?}",
+                unk_props
+            )));
+        }
         let (wanted_players, wanted_ticks) = parse_kwargs(py_kwargs);
-        let parser = Demo::new_mmap(
-            mmap,
+
+        let parser = Demo::new(
+            self.path.clone(),
             true,
             wanted_ticks,
             wanted_players,
@@ -213,7 +191,12 @@ impl DemoParser {
         );
 
         match parser {
-            Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
+            Err(e) => {
+                return Err(PyFileNotFoundError::new_err(format!(
+                    "Couldnt read demo file. Error: {}",
+                    e
+                )))
+            }
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
                 parser.playback_frames = h.playback_frames as usize;
@@ -283,11 +266,9 @@ impl DemoParser {
         }
     }
 
-    pub fn parse_players(&self, py: Python<'_>) -> PyResult<(Py<PyAny>)> {
-        let file = File::open(self.path.clone()).unwrap();
-        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
-        let parser = Demo::new_mmap(
-            mmap,
+    pub fn parse_players(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let parser = Demo::new(
+            self.path.clone(),
             true,
             vec![],
             vec![],
@@ -297,7 +278,12 @@ impl DemoParser {
             false,
         );
         match parser {
-            Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
+            Err(e) => {
+                return Err(PyFileNotFoundError::new_err(format!(
+                    "Couldnt read demo file. Error: {}",
+                    e
+                )))
+            }
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
                 let _ = parser.start_parsing(&vec![]);
@@ -343,11 +329,9 @@ impl DemoParser {
         }
     }
 
-    pub fn parse_header(&self) -> PyResult<(Py<PyAny>)> {
-        let file = File::open(self.path.clone()).unwrap();
-        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
-        let parser = Demo::new_mmap(
-            mmap,
+    pub fn parse_header(&self) -> PyResult<Py<PyAny>> {
+        let parser = Demo::new(
+            self.path.clone(),
             false,
             vec![],
             vec![],
@@ -357,7 +341,12 @@ impl DemoParser {
             false,
         );
         match parser {
-            Err(e) => Err(PyFileNotFoundError::new_err("Demo file not found!")),
+            Err(e) => {
+                return Err(PyFileNotFoundError::new_err(format!(
+                    "Couldnt read demo file. Error: {}",
+                    e
+                )))
+            }
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
                 let dict = h.to_py_hashmap();
@@ -373,7 +362,7 @@ pub fn get_manager_i32_prop(manager: &Entity, player: &UserInfo, prop_name: &str
     } else if player.entity_id < 100 {
         prop_name.to_string() + "0" + &player.entity_id.to_string()
     } else {
-        panic!("Entity id 100 ????: id:{}", player.entity_id);
+        panic!("Entity id > 100 ????: id:{}", player.entity_id);
     };
     match manager.props.get(&key) {
         Some(p) => match p.data {
@@ -391,7 +380,7 @@ pub fn get_manager_str_prop(manager: &Entity, player: &UserInfo, prop_name: &str
     } else if player.entity_id < 100 {
         prop_name.to_string() + "0" + &player.entity_id.to_string()
     } else {
-        panic!("Entity id 100 ????: id:{}", player.entity_id);
+        panic!("Entity id > 100 ????: id:{}", player.entity_id);
     };
     match manager.props.get(&key) {
         Some(p) => match &p.data {
@@ -403,6 +392,18 @@ pub fn get_manager_str_prop(manager: &Entity, player: &UserInfo, prop_name: &str
         None => "".to_string(),
     }
 }
+
+pub fn check_validity_props(names: &Vec<String>) -> Vec<String> {
+    let mut unkown_props = vec![];
+    for name in names {
+        match TYPEHM.contains_key(name) {
+            true => {}
+            false => unkown_props.push(name.to_string()),
+        }
+    }
+    unkown_props
+}
+
 pub fn rank_id_to_name(id: i32) -> String {
     match id {
         1 => "Silver 1".to_string(),
@@ -426,6 +427,343 @@ pub fn rank_id_to_name(id: i32) -> String {
         _ => "Unranked".to_string(),
     }
 }
+pub fn rm_user_friendly_names(names: Vec<String>) -> Vec<String> {
+    let mut unfriendly_names = vec![];
+    for name in names {
+        match &name[..] {
+            "X" => unfriendly_names.push("m_vecOrigin_X".to_string()),
+            "Y" => unfriendly_names.push("m_vecOrigin_Y".to_string()),
+            "Z" => unfriendly_names.push("m_vecOrigin[2]".to_string()),
+
+            "velocity_X" => unfriendly_names.push("m_vecVelocity[0]".to_string()),
+            "velocity_Y" => unfriendly_names.push("m_vecVelocity[1]".to_string()),
+            "velocity_Z" => unfriendly_names.push("m_vecVelocity[2]".to_string()),
+
+            "viewangle_pitch" => unfriendly_names.push("m_angEyeAngles[0]".to_string()),
+            "viewangle_yaw" => unfriendly_names.push("m_angEyeAngles[1]".to_string()),
+
+            "ducked" => unfriendly_names.push("m_bDucked".to_string()),
+            "in_buy_zone" => unfriendly_names.push("m_bInBuyZone".to_string()),
+            "scoped" => unfriendly_names.push("m_bIsScoped".to_string()),
+            "health" => unfriendly_names.push("m_iHealth".to_string()),
+            "flash_duration" => unfriendly_names.push("m_flFlashDuration".to_string()),
+
+            "aimpunch_X" => unfriendly_names.push("m_aimPunchAngle_X".to_string()),
+            "aimpunch_Y" => unfriendly_names.push("m_aimPunchAngle_Y".to_string()),
+            "aimpunch_Z" => unfriendly_names.push("m_aimPunchAngle_Z".to_string()),
+
+            "aimpunch_vel_X" => unfriendly_names.push("m_aimPunchAngleVel_X".to_string()),
+            "aimpunch_vel_Y" => unfriendly_names.push("m_aimPunchAngleVel_Y".to_string()),
+            "aimpunch_vel_Z" => unfriendly_names.push("m_aimPunchAngleVel_Z".to_string()),
+            "balance" => unfriendly_names.push("m_iAccount".to_string()),
+            "ping" => unfriendly_names.push("m_iPing".to_string()),
+            "score" => unfriendly_names.push("m_iScore".to_string()),
+            "deaths" => unfriendly_names.push("m_iDeaths".to_string()),
+            "kills" => unfriendly_names.push("m_iKills".to_string()),
+            "assists" => unfriendly_names.push("m_iAssists".to_string()),
+            "mvps" => unfriendly_names.push("m_iMVPs".to_string()),
+            "armor" => unfriendly_names.push("m_iArmor".to_string()),
+            "silencer_on" => unfriendly_names.push("m_bSilencerOn".to_string()),
+            "place_name" => unfriendly_names.push("m_szLastPlaceName".to_string()),
+            "total_enemies_flashed" => {
+                unfriendly_names.push("m_iMatchStats_EnemiesFlashed_Total".to_string())
+            }
+            "total_util_damage" => {
+                unfriendly_names.push("m_iMatchStats_UtilityDamage_Total".to_string())
+            }
+            "total_cash_earned" => {
+                unfriendly_names.push("m_iMatchStats_CashEarned_Total".to_string())
+            }
+            "total_objective_total" => {
+                unfriendly_names.push("m_iMatchStats_Objective_Total".to_string())
+            }
+            "total_headshots" => {
+                unfriendly_names.push("m_iMatchStats_HeadShotKills_Total".to_string())
+            }
+            "total_assists" => unfriendly_names.push("m_iMatchStats_Assists_Total".to_string()),
+            "total_deaths" => unfriendly_names.push("m_iMatchStats_Deaths_Total".to_string()),
+            "total_live_time" => unfriendly_names.push("m_iMatchStats_LiveTime_Total".to_string()),
+            "total_kill_reward" => {
+                unfriendly_names.push("m_iMatchStats_KillReward_Total".to_string())
+            }
+            "total_equipment_value" => {
+                unfriendly_names.push("m_iMatchStats_EquipmentValue_Total".to_string())
+            }
+            "total_damage" => unfriendly_names.push("m_iMatchStats_Damage_Total".to_string()),
+            "3ks" => unfriendly_names.push("m_iMatchStats_3k_Total".to_string()),
+            "4ks" => unfriendly_names.push("m_iMatchStats_4k_Total".to_string()),
+            "5ks" => unfriendly_names.push("m_iMatchStats_5k_Total".to_string()),
+            "total_kills" => unfriendly_names.push("m_iMatchStats_Kills_Total".to_string()),
+            "is_auto_muted" => unfriendly_names.push("m_bHasCommunicationAbuseMute".to_string()),
+            "friendly_honors" => {
+                unfriendly_names.push("m_nPersonaDataPublicCommendsFriendly".to_string())
+            }
+            "teacher_honors" => {
+                unfriendly_names.push("m_nPersonaDataPublicCommendsTeacher".to_string())
+            }
+            "leader_honors" => {
+                unfriendly_names.push("m_nPersonaDataPublicCommendsLeader".to_string())
+            }
+            "public_level" => unfriendly_names.push("m_nPersonaDataPublicLevel".to_string()),
+            "active_coin_rank" => unfriendly_names.push("m_nActiveCoinRank".to_string()),
+            "cash_spent_this_round" => unfriendly_names.push("m_iCashSpentThisRound".to_string()),
+            "total_cash_spent" => unfriendly_names.push("m_iTotalCashSpent".to_string()),
+            "controlled_by_player" => unfriendly_names.push("m_iControlledByPlayer".to_string()),
+            "controlled_player" => unfriendly_names.push("m_iControlledPlayer".to_string()),
+            "controlling_bot" => unfriendly_names.push("m_bControllingBot".to_string()),
+            "lifetime_start" => unfriendly_names.push("m_iLifetimeStart".to_string()),
+            "lifetime_end" => unfriendly_names.push("m_iLifetimeEnd".to_string()),
+            "connected" => unfriendly_names.push("m_bConnected".to_string()),
+            "holding_look_weapon" => unfriendly_names.push("m_bIsHoldingLookAtWeapon".to_string()),
+            "looking_at_weapon" => unfriendly_names.push("m_bIsLookingAtWeapon".to_string()),
+            "headshots_this_round" => {
+                unfriendly_names.push("m_iNumRoundKillsHeadshots".to_string())
+            }
+            "concurrent_killed" => unfriendly_names.push("m_nLastConcurrentKilled".to_string()),
+            "freeze_end_eq_val" => {
+                unfriendly_names.push("m_unFreezetimeEndEquipmentValue".to_string())
+            }
+            "round_start_eq_val" => {
+                unfriendly_names.push("m_unRoundStartEquipmentValue".to_string())
+            }
+            "equipment_value" => unfriendly_names.push("m_unCurrentEquipmentValue".to_string()),
+            "flash_alpha" => unfriendly_names.push("m_flFlashMaxAlpha".to_string()),
+            "has_helmet" => unfriendly_names.push("m_bHasHelmet".to_string()),
+            "has_heavy_armor" => unfriendly_names.push("m_bHasHeavyArmor".to_string()),
+            "detected_enemy_sensor" => {
+                unfriendly_names.push("m_flDetectedByEnemySensorTime".to_string())
+            }
+            "is_rescuing" => unfriendly_names.push("m_bIsRescuing".to_string()),
+            "molotov_dmg_time" => unfriendly_names.push("m_fMolotovDamageTime".to_string()),
+            "molotov_use_time" => unfriendly_names.push("m_fMolotovUseTime".to_string()),
+            "moved_since_spawn" => unfriendly_names.push("m_bHasMovedSinceSpawn".to_string()),
+            "resume_zoom" => unfriendly_names.push("m_bResumeZoom".to_string()),
+            "is_walking" => unfriendly_names.push("m_bIsWalking".to_string()),
+            "is_defusing" => unfriendly_names.push("m_bIsDefusing".to_string()),
+            "has_defuser" => unfriendly_names.push("m_bHasDefuser".to_string()),
+            "in_bomb_zone" => unfriendly_names.push("m_bInBombZone".to_string()),
+            "granade_counter" => unfriendly_names.push("m_iThrowGrenadeCounter".to_string()),
+            "last_made_noise_time" => unfriendly_names.push("m_flLastMadeNoiseTime".to_string()),
+            "spotted" => unfriendly_names.push("m_bSpotted".to_string()),
+            "elasticity" => unfriendly_names.push("m_flElasticity".to_string()),
+            "team_num" => unfriendly_names.push("m_iTeamNum".to_string()),
+            "velocity_modifier" => unfriendly_names.push("m_flVelocityModifier".to_string()),
+            "next_think_tick" => unfriendly_names.push("m_nNextThinkTick".to_string()),
+            "friction" => unfriendly_names.push("m_flFriction".to_string()),
+            "on_target" => unfriendly_names.push("m_fOnTarget".to_string()),
+            "vec_view_offset0" => unfriendly_names.push("m_vecViewOffset[0]".to_string()),
+            "vec_view_offset1" => unfriendly_names.push("m_vecViewOffset[1]".to_string()),
+            "is_wearing_suit" => unfriendly_names.push("m_bWearingSuit".to_string()),
+            "jump_time_msecs" => unfriendly_names.push("m_nJumpTimeMsecs".to_string()),
+            "duck_time_msecs" => unfriendly_names.push("m_nDuckJumpTimeMsecs".to_string()),
+            "in_duck_jump" => unfriendly_names.push("m_bInDuckJump".to_string()),
+            "last_duck_time" => unfriendly_names.push("m_flLastDuckTime".to_string()),
+            "is_ducking" => unfriendly_names.push("m_bDucking".to_string()),
+
+            _ => unfriendly_names.push(name),
+        }
+    }
+    unfriendly_names
+}
+pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
+    "m_flNextAttack" => 1,
+    "m_bDuckOverride" => 0,
+    "m_flStamina" => 1,
+    "m_flVelocityModifier" => 1,
+    "m_iShotsFired" => 0,
+    "m_nQuestProgressReason" => 0,
+    "m_vecOrigin" => 2,
+    "m_vecOrigin_X" => 1,
+    "m_vecOrigin_Y" => 1,
+    "m_vecOrigin[2]" => 1,
+    "m_aimPunchAngle" => 2,
+    "m_aimPunchAngle_X" => 1,
+    "m_aimPunchAngle_Y" => 1,
+    "m_aimPunchAngleVel" => 2,
+    "m_aimPunchAngleVel_X" => 1,
+    "m_aimPunchAngleVel_Y" => 1,
+    "m_bDucked" => 0,
+    "m_bDucking" => 0,
+    "m_bWearingSuit" => 0,
+    "m_chAreaBits.000" => 0,
+    "m_chAreaBits.001" => 0,
+    "m_chAreaPortalBits.002" => 0,
+    "m_flFOVRate" => 1,
+    "m_flFallVelocity" => 1,
+    "m_flLastDuckTime" => 1,
+    "m_viewPunchAngle" => 2,
+    "m_viewPunchAngle_X" => 1,
+    "m_viewPunchAngle_Y" => 1,
+    "m_flDeathTime" => 1,
+    "m_flNextDecalTime" => 1,
+    "m_hLastWeapon" => 0,
+    "m_hTonemapController" => 0,
+    "m_nNextThinkTick" => 0,
+    "m_nTickBase" => 0,
+    "m_vecBaseVelocity" => 2,
+    "m_vecBaseVelocity_X" => 1,
+    "m_vecBaseVelocity_Y" => 1,
+    "m_vecVelocity[0]" => 1,
+    "m_vecVelocity[1]" => 1,
+    "m_vecVelocity[2]" => 1,
+    "m_vecViewOffset[2]" => 1,
+    "m_ArmorValue" => 0,
+    "m_usSolidFlags" => 0,
+    "m_vecMaxs" => 2,
+    "m_vecMaxs_X" => 1,
+    "m_vecMaxs_Y" => 1,
+    "m_vecMins" => 2,
+    "m_vecMins_X" => 1,
+    "m_vecMins_Y" => 1,
+    "m_LastHitGroup" => 0,
+    "m_afPhysicsFlags" => 0,
+    "m_angEyeAngles[0]" => 1,
+    "m_angEyeAngles[1]" => 1,
+    "m_bAnimatedEveryTick" => 0,
+    "m_bClientSideRagdoll" => 0,
+    "m_bHasDefuser" => 0,
+    "m_bHasHelmet" => 0,
+    "m_bHasMovedSinceSpawn" => 0,
+    "m_bInBombZone" => 0,
+    "m_bInBuyZone" => 0,
+    "m_bIsDefusing" => 0,
+    "m_bIsHoldingLookAtWeapon" => 0,
+    "m_bIsLookingAtWeapon" => 0,
+    "m_bIsScoped" => 0,
+    "m_bIsWalking" => 0,
+    "m_bResumeZoom" => 0,
+    "m_bSpotted" => 0,
+    "m_bSpottedByMask.000" => 0,
+    "m_bStrafing" => 0,
+    "m_bWaitForNoAttack" => 0,
+    "m_fEffects" => 0,
+    "m_fFlags" => 0,
+    "m_fMolotovDamageTime" => 1,
+    "m_fMolotovUseTime" => 1,
+    "m_flDuckAmount" => 1,
+    "m_flDuckSpeed" => 1,
+    "m_flFOVTime" => 1,
+    "m_flFlashDuration" => 1,
+    "m_flFlashMaxAlpha" => 1,
+    "m_flGroundAccelLinearFracLastTime" => 1,
+    "m_flLastMadeNoiseTime" => 1,
+    "m_flLowerBodyYawTarget" => 1,
+    "m_flProgressBarStartTime" => 1,
+    "m_flSimulationTime" => 0,
+    "m_flThirdpersonRecoil" => 1,
+    "m_flTimeOfLastInjury" => 1,
+    "m_hActiveWeapon" => -1,
+    "m_hColorCorrectionCtrl" => 0,
+    "m_hGroundEntity" => 0,
+    "m_hObserverTarget" => 0,
+    "m_hPlayerPing" => 0,
+    "m_hPostProcessCtrl" => 0,
+    "m_hRagdoll" => 0,
+    "m_hViewModel" => 5,
+    "m_hZoomOwner" => 0,
+    "m_iAccount" => 0,
+    "m_iAddonBits" => 0,
+    "m_iAmmo.014" => 0,
+    "m_iAmmo.015" => 0,
+    "m_iAmmo.016" => 0,
+    "m_iAmmo.017" => 0,
+    "m_iAmmo.018" => 0,
+    "m_iClass" => 0,
+    "m_iDeathPostEffect" => 0,
+    "m_iFOV" => 0,
+    "m_iFOVStart" => 0,
+    "m_iHealth" => 0,
+    "m_iMoveState" => 0,
+    "m_iNumRoundKills" => 0,
+    "m_iNumRoundKillsHeadshots" => 0,
+    "m_iObserverMode" => 0,
+    "m_iPendingTeamNum" => 0,
+    "m_iPlayerState" => 0,
+    "m_iPrimaryAddon" => 0,
+    "m_iProgressBarDuration" => 0,
+    "m_iSecondaryAddon" => 0,
+    "m_iStartAccount" => 0,
+    "m_iTeamNum" => 0,
+    "m_lifeState" => 0,
+    "m_nForceBone" => 0,
+    "m_nHeavyAssaultSuitCooldownRemaining" => 0,
+    "m_nLastConcurrentKilled" => 0,
+    "m_nLastKillerIndex" => 0,
+    "m_nModelIndex" => 0,
+    "m_nRelativeDirectionOfLastInjury" => 0,
+    "m_nWaterLevel" => 0,
+    "m_rank.005" => 0,
+    "m_szLastPlaceName" => 4,
+    "m_totalHitsOnServer" => 0,
+    "m_ubEFNoInterpParity" => 0,
+    "m_unCurrentEquipmentValue" => 0,
+    "m_unFreezetimeEndEquipmentValue" => 0,
+    "m_unMusicID" => 0,
+    "m_unRoundStartEquipmentValue" => 0,
+    "m_unTotalRoundDamageDealt" => 0,
+    "m_vecForce" => 2,
+    "m_vecForce_X" => 1,
+    "m_vecForce_Y" => 1,
+    "m_vecLadderNormal" => 2,
+    "m_vecLadderNormal_X" => 1,
+    "m_vecLadderNormal_Y" => 1,
+    "m_vecPlayerPatchEconIndices.002" => 0,
+    "movetype" => 0,
+    "pl.deadflag" => 0,
+    "m_bSilencerOn" => 0,
+    "m_bReloadVisuallyComplete" => 1,
+    "m_iCompetitiveRanking" => 10,
+    "m_iPing" => 10,
+    "m_iTeam" => 10,
+    "m_iScore" => 10,
+    "m_iDeaths" => 10,
+    "m_iKills" => 10,
+    "m_iAssists" => 10,
+    "m_iMVPs" => 10,
+    "m_iArmor" => 10,
+    "m_iCompetitiveWins" => 10,
+    "m_iMatchStats_UtilityDamage_Total" => 10,
+    "m_iMatchStats_Damage_Total" => 10,
+    "m_iLifetimeStart" => 10,
+    "m_iLifetimeEnd" => 10,
+    "m_bConnected" => 10,
+    "m_bControllingBot" => 10,
+    "m_iControlledPlayer"=> 10,
+    "m_iControlledByPlayer"=> 10,
+    "m_iTotalCashSpent"=> 10,
+    "m_iCashSpentThisRound"=> 10,
+    "m_nPersonaDataPublicCommendsLeader"=> 10,
+    "m_nPersonaDataPublicCommendsTeacher"=> 10,
+    "m_nPersonaDataPublicCommendsFriendly"=> 10,
+    "m_bHasCommunicationAbuseMute"=> 10,
+    "m_iMatchStats_Kills_Total"=> 10,
+    "m_iMatchStats_5k_Total"=> 10,
+    "m_iMatchStats_4k_Total"=> 10,
+    "m_iMatchStats_3k_Total"=> 10,
+    "m_iMatchStats_EquipmentValue_Total"=> 10,
+    "m_iMatchStats_KillReward_Total"=> 10,
+    "m_iMatchStats_LiveTime_Total"=> 10,
+    "m_iMatchStats_Deaths_Total"=> 10,
+    "m_iMatchStats_Assists_Total"=> 10,
+    "m_iMatchStats_HeadShotKills_Total"=> 10,
+    "m_iMatchStats_Objective_Total"=> 10,
+    "m_iMatchStats_CashEarned_Total"=> 10,
+    "m_iMatchStats_EnemiesFlashed_Total"=> 10,
+    "m_bInDuckJump"=> 0,
+    "m_nDuckJumpTimeMsecs"=> 0,
+    "m_nJumpTimeMsecs"=> 0,
+    "m_vecViewOffset[1]"=> 1,
+    "m_vecViewOffset[0]"=> 1,
+    "m_fOnTarget"=> 0,
+    "m_flFriction" => 1,
+    "m_flElasticity"=> 1,
+    "m_iThrowGrenadeCounter" => 0,
+    "m_bIsRescuing"=> 0,
+    "m_flDetectedByEnemySensorTime"=> 1,
+    "m_bHasHeavyArmor"=> 0,
+    "m_nActiveCoinRank"=> 0,
+    "m_nPersonaDataPublicLevel"=> 0,
+};
 
 #[pymodule]
 fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {

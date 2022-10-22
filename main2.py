@@ -9,11 +9,12 @@ from collections import Counter
 
 
 def coordinates(file):
+    time.sleep(1)
     parser = DemoParser(file)
-    df = parser.parse_ticks(["m_iAmmo"])
-    #df = df[df["m_iCashSpentThisRound"] < 1000]
-    print(df)
-    return df
+    #parser.parse_events("")
+    df = parser.parse_ticks(["health", "#adfsg", "adfg"])
+    #print(df)
+
 
 
 if __name__ == "__main__":

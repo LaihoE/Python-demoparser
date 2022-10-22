@@ -1,5 +1,7 @@
+use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
 use crate::parsing::stringtables::UserInfo;
+use crate::parsing::variants;
 use crate::parsing::variants::PropColumn;
 use crate::parsing::variants::PropData::I32;
 use crate::parsing::variants::VarVec;
@@ -8,6 +10,7 @@ use ahash::RandomState;
 use phf::phf_map;
 use std::collections::HashMap;
 use std::collections::HashSet;
+
 #[inline(always)]
 pub fn create_default(col_type: i32, playback_frames: usize) -> PropColumn {
     let v = match col_type {
@@ -55,18 +58,47 @@ fn insert_weapon_prop(
         Some(w) => match w.props.get(prop_name) {
             Some(w) => ticks_props
                 .entry(prop_name.to_string())
-                .or_insert_with(|| create_default(col_type, playback_frames))
+                .or_insert_with(|| create_default(0, playback_frames))
                 .data
                 .push_propdata(w.data.clone()),
             None => ticks_props
                 .entry(prop_name.to_string())
-                .or_insert_with(|| create_default(col_type, playback_frames))
+                .or_insert_with(|| create_default(0, playback_frames))
                 .data
                 .push_none(),
         },
         None => ticks_props
             .entry(prop_name.to_string())
-            .or_insert_with(|| create_default(col_type, playback_frames))
+            .or_insert_with(|| create_default(0, playback_frames))
+            .data
+            .push_none(),
+    }
+}
+fn insert_weapon_name(
+    ent: &Entity,
+    cls_map: &HashMap<u16, ServerClass, RandomState>,
+    weap_ent: Option<&Entity>,
+    ticks_props: &mut HashMap<String, PropColumn, RandomState>,
+    playback_frames: usize,
+    prop_name: &String,
+) {
+    match weap_ent {
+        Some(we) => match cls_map.get(&(we.class_id as u16)) {
+            Some(sc) => ticks_props
+                .entry(prop_name.to_string())
+                .or_insert_with(|| create_default(4, playback_frames))
+                .data
+                .push_propdata(variants::PropData::String(sc.dt.to_string())),
+
+            None => ticks_props
+                .entry(prop_name.to_string())
+                .or_insert_with(|| create_default(4, playback_frames))
+                .data
+                .push_none(),
+        },
+        None => ticks_props
+            .entry(prop_name.to_string())
+            .or_insert_with(|| create_default(4, playback_frames))
             .data
             .push_none(),
     }
@@ -134,6 +166,7 @@ impl Demo {
         ticks_props: &mut HashMap<String, PropColumn, RandomState>,
         playback_frames: usize,
         manager_id: &Option<u32>,
+        cls_map: &HashMap<u16, ServerClass, RandomState>,
     ) {
         // Collect wanted props from players
         for player in players.values() {
@@ -161,6 +194,7 @@ impl Demo {
                             },
                         };
 
+                        //println!("{:?}", weapon_ent);
                         for prop_name in props_names {
                             match TYPEHM[prop_name] {
                                 10 => {
@@ -180,6 +214,14 @@ impl Demo {
                                     playback_frames,
                                     0,
                                     weapon_ent,
+                                ),
+                                99 => insert_weapon_name(
+                                    &ent.1,
+                                    cls_map,
+                                    weapon_ent,
+                                    ticks_props,
+                                    playback_frames,
+                                    prop_name,
                                 ),
                                 _ => {
                                     insert_propcolumn(
@@ -442,5 +484,6 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_bHasHeavyArmor"=> 0,
     "m_nActiveCoinRank"=> 0,
     "m_nPersonaDataPublicLevel"=> 0,
-    "m_iClip1" => 1,
+    "m_iClip1" => 20,
+    "weapon_name" => 99,
 };

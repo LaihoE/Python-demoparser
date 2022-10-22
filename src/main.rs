@@ -51,15 +51,18 @@ fn main() {
         //println!("{:?}", parser.manager_id);
 
         // 41 ent   39 rules
-
+        /*
         for ent in parser.entities {
-            if ent.1.class_id == 41 {
+            if ent.1.class_id == 244 {
                 for p in ent.1.props {
                     println!("X {:?}", p.1);
                 }
             }
         }
+        */
 
+        let c = &parser.serverclass_map[&(246)];
+        println!("{}", c.dt);
         break;
     }
     let elapsed = now.elapsed();

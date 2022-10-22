@@ -198,7 +198,8 @@ pub fn parse_ent_props(
                     tick: tick,
                 };
                 // Make sure player metadata isnt erased when players leave.
-                if prop.name.contains("m_iCompetitiveRanking0")
+
+                if sv_cls.id == 41 && prop.name.contains("m_iCompetitiveRanking0")
                     || prop.name.contains("m_iTeam0")
                     || prop.name.contains("m_iCompetitiveWins0")
                     || prop.name.contains("m_iCompetitiveWins0")

@@ -5,6 +5,7 @@ Some example props that can be gotten from players.
 |           X           | m_vecOrigin                          | X coordinate                                                                                                   |
 |           Y           | m_vecOrigin                          | Y coordinate                                                                                                   |
 |           Z           | m_vecOrigin[2]                       | Z coordinate  (WARNING is the position of players feet? not head height)                                       |
+|      weapon_name      | -                                    | Name of active weapon                                                                                          |
 |      velocity_X       | m_vecVelocity[0]                     | X Velocity                                                                                                     |
 |      velocity_Y       | m_vecVelocity[1]                     | Y Velocity                                                                                                     |
 |      velocity_Z       | m_vecVelocity[2]                     | Z Velocity                                                                                                     |

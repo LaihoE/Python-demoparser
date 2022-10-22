@@ -211,6 +211,7 @@ impl Demo {
                     &mut ticks_props,
                     self.playback_frames,
                     &self.manager_id,
+                    &self.serverclass_map,
                 );
             }
             self.parse_cmd(cmd);
@@ -227,12 +228,6 @@ impl Demo {
         }
     }
 
-    pub fn all_players_connected(total_connected: i32) -> bool {
-        if total_connected == 15 {
-            return true;
-        }
-        return false;
-    }
     #[inline(always)]
     pub fn parse_packet(&mut self) {
         self.fp += 160;
@@ -518,5 +513,7 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "pl.deadflag" => 0,
     "m_bSilencerOn" => 0,
     "m_bReloadVisuallyComplete" => 1,
-    "m_iClip1" => 1,
+    "m_iClip1" => 0,
+    "weapon_name" => 99,
+
 };

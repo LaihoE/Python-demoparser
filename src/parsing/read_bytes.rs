@@ -1,7 +1,5 @@
 use crate::Demo;
 
-use super::parser::Frame;
-
 impl Demo {
     #[inline]
     pub fn read_varint(&mut self) -> u32 {

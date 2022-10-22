@@ -24,11 +24,46 @@ use std::u8;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-#[allow(dead_code)]
-pub struct Frame {
-    pub cmd: u8,
-    pub tick: i32,
-    pub playerslot: u8,
+pub fn decompress_gz(demo_path: String) -> Result<BytesVariant, std::io::Error> {
+    match File::open(demo_path.clone()) {
+        Err(e) => return Err(e),
+        Ok(_) => match std::fs::read(demo_path.clone()) {
+            Err(e) => return Err(e),
+            Ok(bytes) => {
+                let mut gz = GzDecoder::new(&bytes[..]);
+                let mut out: Vec<u8> = vec![];
+                gz.read_to_end(&mut out).unwrap();
+                Ok(BytesVariant::Vec(out))
+            }
+        },
+    }
+}
+pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
+    match File::open(demo_path) {
+        Err(e) => return Err(e),
+        Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
+            Err(e) => return Err(e),
+            Ok(m) => Ok(BytesVariant::Mmap(m)),
+        },
+    }
+}
+
+pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
+    let extension = Path::new(&demo_path).extension().unwrap();
+    match extension.to_str().unwrap() {
+        "gz" => match decompress_gz(demo_path) {
+            Err(e) => return Err(e),
+            Ok(bytes) => Ok(bytes),
+        },
+        ".info" => {
+            panic!("you passed an .info file, these are not demos")
+        }
+        // All other formats, .dem is the "correct" but let others work too
+        _ => match create_mmap(demo_path) {
+            Err(e) => return Err(e),
+            Ok(map) => Ok(map),
+        },
+    }
 }
 
 pub struct Demo {
@@ -65,54 +100,6 @@ pub struct Demo {
     pub all_wanted_connected: bool,
     pub manager_id: Option<u32>,
 }
-pub fn decompress_gz(demo_path: String) -> Result<BytesVariant, std::io::Error> {
-    match File::open(demo_path.clone()) {
-        Err(e) => return Err(e),
-        Ok(_) => match std::fs::read(demo_path.clone()) {
-            Err(e) => return Err(e),
-            Ok(bytes) => {
-                let mut gz = GzDecoder::new(&bytes[..]);
-                let mut out: Vec<u8> = vec![];
-                gz.read_to_end(&mut out).unwrap();
-                Ok(BytesVariant::Vec(out))
-            }
-        },
-    }
-}
-pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
-    match File::open(demo_path) {
-        Err(e) => return Err(e),
-        Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
-            Err(e) => return Err(e),
-            Ok(m) => Ok(BytesVariant::Mmap(m)),
-        },
-    }
-}
-
-pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
-    let result = std::fs::read(&demo_path);
-    match result {
-        Err(e) => Err(e),
-        Ok(bytes) => {
-            let extension = Path::new(&demo_path).extension().unwrap();
-            match extension.to_str().unwrap() {
-                "gz" => match decompress_gz(demo_path) {
-                    Err(e) => return Err(e),
-                    Ok(bytes) => Ok(bytes),
-                },
-                ".info" => {
-                    panic!("you passed an .info file, these are not demos")
-                }
-                // All other formats, .dem is the "correct" but let others work too
-                _ => match create_mmap(demo_path) {
-                    Err(e) => return Err(e),
-                    Ok(map) => Ok(map),
-                },
-            }
-        }
-    }
-}
-
 impl Demo {
     pub fn new(
         demo_path: String,
@@ -531,4 +518,5 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "pl.deadflag" => 0,
     "m_bSilencerOn" => 0,
     "m_bReloadVisuallyComplete" => 1,
+    "m_iClip1" => 1,
 };

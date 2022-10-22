@@ -1,13 +1,13 @@
 use crate::parsing::entities::Entity;
 use crate::parsing::stringtables::UserInfo;
 use crate::parsing::variants::PropColumn;
+use crate::parsing::variants::PropData::I32;
 use crate::parsing::variants::VarVec;
 use crate::Demo;
 use ahash::RandomState;
 use phf::phf_map;
 use std::collections::HashMap;
 use std::collections::HashSet;
-
 #[inline(always)]
 pub fn create_default(col_type: i32, playback_frames: usize) -> PropColumn {
     let v = match col_type {
@@ -41,6 +41,34 @@ fn insert_propcolumn(
             .or_insert_with(|| create_default(col_type, playback_frames))
             .data
             .push_propdata(p.data.clone()),
+    }
+}
+fn insert_weapon_prop(
+    ticks_props: &mut HashMap<String, PropColumn, RandomState>,
+    ent: &Entity,
+    prop_name: &String,
+    playback_frames: usize,
+    col_type: i32,
+    weapon: Option<&Entity>,
+) {
+    match weapon {
+        Some(w) => match w.props.get(prop_name) {
+            Some(w) => ticks_props
+                .entry(prop_name.to_string())
+                .or_insert_with(|| create_default(col_type, playback_frames))
+                .data
+                .push_propdata(w.data.clone()),
+            None => ticks_props
+                .entry(prop_name.to_string())
+                .or_insert_with(|| create_default(col_type, playback_frames))
+                .data
+                .push_none(),
+        },
+        None => ticks_props
+            .entry(prop_name.to_string())
+            .or_insert_with(|| create_default(col_type, playback_frames))
+            .data
+            .push_none(),
     }
 }
 
@@ -81,7 +109,19 @@ fn insert_manager_prop(
             .push_none(),
     }
 }
-
+fn weap_id_from_ent(ent: &Entity) -> Option<u32> {
+    match ent.props.get("m_hActiveWeapon") {
+        None => None,
+        Some(w) => match w.data {
+            I32(i) => {
+                return Some((i & 0x7FF) as u32);
+            }
+            _ => {
+                return None;
+            }
+        },
+    }
+}
 impl Demo {
     #[inline(always)]
     pub fn collect_player_data(
@@ -113,26 +153,43 @@ impl Demo {
                         } else {
                             None
                         };
-                        // Insert all wanted non-md props
+                        let weapon_ent = match weap_id_from_ent(&ent.1) {
+                            None => None,
+                            Some(ent_id) => match entities[ent_id as usize].0 {
+                                1111111 => None,
+                                _ => Some(&entities[ent_id as usize].1),
+                            },
+                        };
+
                         for prop_name in props_names {
-                            let prop_type = TYPEHM[prop_name];
-                            if prop_type == 10 {
-                                insert_manager_prop(
+                            match TYPEHM[prop_name] {
+                                10 => {
+                                    insert_manager_prop(
+                                        ticks_props,
+                                        &ent.1,
+                                        prop_name,
+                                        playback_frames,
+                                        0,
+                                        manager,
+                                    );
+                                }
+                                20 => insert_weapon_prop(
                                     ticks_props,
                                     &ent.1,
                                     prop_name,
                                     playback_frames,
                                     0,
-                                    manager,
-                                );
-                            } else {
-                                insert_propcolumn(
-                                    ticks_props,
-                                    &ent.1,
-                                    prop_name,
-                                    playback_frames,
-                                    prop_type,
-                                );
+                                    weapon_ent,
+                                ),
+                                _ => {
+                                    insert_propcolumn(
+                                        ticks_props,
+                                        &ent.1,
+                                        prop_name,
+                                        playback_frames,
+                                        TYPEHM[prop_name],
+                                    );
+                                }
                             }
                         }
                         // Insert tick, steamid, name
@@ -385,4 +442,5 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_bHasHeavyArmor"=> 0,
     "m_nActiveCoinRank"=> 0,
     "m_nPersonaDataPublicLevel"=> 0,
+    "m_iClip1" => 1,
 };

@@ -44,7 +44,10 @@ pub struct Prop {
 #[inline(always)]
 fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
     for prop in wanted_props {
-        if prop == &this_prop.name {
+        if prop == &this_prop.name
+            || this_prop.name == "m_hActiveWeapon"
+            || this_prop.name == "m_iClip1"
+        {
             return true;
         }
     }

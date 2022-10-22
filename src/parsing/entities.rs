@@ -94,6 +94,9 @@ impl Demo {
                     match cls_map.get_mut(&(cls_id as u16)) {
                         Some(x) => {
                             if x.dt == "DT_CSPlayer" {
+                                for p in &x.props {
+                                    println!("{:?}", p);
+                                }
                                 player_ents.push(entity_id as u32);
                             }
                             if cls_id == 41 {

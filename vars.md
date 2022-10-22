@@ -40,25 +40,65 @@ Some example props that can be gotten from players.
 |          4ks          | m_iMatchStats_4k_Total               | Total number of rounds with 4 kills during the game so far                                                     |
 |          5ks          | m_iMatchStats_5k_Total               | Total number of rounds with 5 kills during the game so far                                                     |
 |      total_kills      | m_iMatchStats_Kills_Total            | Total kills during entire game so far                                                                          |
-|     crosshaircode     | m_szCrosshairCodes                   | Crosshair code, can be used to get players crosshair                                                           |
 |     is_auto_muted     | m_bHasCommunicationAbuseMute         | Is player reported enough to be automatically muted                                                            |
 |    friendly_honors    | m_nPersonaDataPublicCommendsFriendly | number of "friendly" honors                                                                                    |
 |    teacher_honors     | m_nPersonaDataPublicCommendsTeacher  | number of "teacher" honors                                                                                     |
 |     leader_honors     | m_nPersonaDataPublicCommendsLeader   | number of "leader" honors                                                                                      |
 |     public_level      | m_nPersonaDataPublicLevel            | ?                                                                                                              |
-|       music_kit       | m_nMusicID                           | id for the music kit player uses (music played when player gets an MVP)                                        |
 |   active_coin_rank    | m_nActiveCoinRank                    | ?                                                                                                              |
 | cash_spent_this_round | m_iCashSpentThisRound                | Cash spent this round                                                                                          |
 |   total_cash_spent    | m_iTotalCashSpent                    | total cash spent during entire game? (not so far)                                                              |
-|         clan          | m_szClan                             | Clan name (group displayed before players name)                                                                |
 | controlled_by_player  | m_iControlledByPlayer                | Something related to bot controlling? I guess not used normally anymore                                        |
 |   controlled_player   | m_iControlledPlayer                  | Something related to bot controlling? I guess not used normally anymore                                        |
 |    controlling_bot    | m_bControllingBot                    | Something related to bot controlling? I guess not used normally anymore                                        |
 |    lifetime_start     | m_iLifetimeStart                     | When did the player spawn last time (measured as seconds since demo started)                                   |
 |     lifetime_end      | m_iLifetimeEnd                       | When did the player die last time (measured as seconds since demo started) -1 if the player is currently alive |  |
-|         color         | m_iCompTeammateColor                 | Players color, for example "purple"                                                                            |
 |       connected       | m_bConnected                         | Is the player currently connected                                                                              |
+|  holding_look_weapon  | m_bIsHoldingLookAtWeapon             | player is holding the key that starts animation for looking at weapon                                          |
+|   looking_at_weapon   | m_bIsLookingAtWeapon                 | Player is currently looking at his weapon                                                                      |
+| headshots_this_round  | m_iNumRoundKillsHeadshots            | Number of headshots this round                                                                                 |
+|   concurrent_killed   | m_nLastConcurrentKilled              | ?                                                                                                              |
+|   freeze_end_eq_val   | m_unFreezetimeEndEquipmentValue      | Equipment value at end of freeze time                                                                          |
+|  round_start_eq_val   | m_unRoundStartEquipmentValue         | Equipment value at start of round                                                                              |
+|    equipment_value    | m_unCurrentEquipmentValue            | ?                                                                                                              |
+|      flash_alpha      | m_flFlashMaxAlpha                    | max aplha value of flash                                                                                       |
+|      has_helmet       | m_bHasHelmet                         | Player has helmet                                                                                              |
+|    has_heavy_armor    | m_bHasHeavyArmor                     | Player has heavy armor                                                                                         |
+| detected_enemy_sensor | m_flDetectedByEnemySensorTime        | ?                                                                                                              |
+|      is_rescuing      | m_bIsRescuing                        | Is currently rescuing hostage                                                                                  |
+|   molotov_dmg_time    | m_fMolotovDamageTime                 | ?                                                                                                              |
+|   molotov_use_time    | m_fMolotovUseTime                    | ?                                                                                                              |
+|   moved_since_spawn   | m_bHasMovedSinceSpawn                | Has the player moved since spawn                                                                               |
+|      resume_zoom      | m_bResumeZoom                        | ?                                                                                                              |
+|      is_walking       | m_bIsWalking                         | Is the player currently walking                                                                                |
+|      is_defusing      | m_bIsDefusing                        | Is the player currently defusing                                                                               |
+|      has_defuser      | m_bHasDefuser                        | Does the player currently have a defuse kit                                                                    |
+|      in_buy_zone      | m_bInBuyZone                         | Is the player in a buy zone                                                                                    |
+|     in_bomb_zone      | m_bInBombZone                        | Is the player currently in a bomb zone                                                                         |
+|    granade_counter    | m_iThrowGrenadeCounter               | ? maybe number of grandes thrown this round?                                                                   |
+| last_made_noise_time  | m_flLastMadeNoiseTime                | Seconds since start of demo when the player made his last noise                                                |
+|        spotted        | m_bSpotted                           | comming soon                                                                                                   |
+|       move_type       | movetype                             | ?                                                                                                              |
+|     move_collide      | movecollide                          | ?                                                                                                              |
+|      elasticity       | m_flElasticity                       | ?                                                                                                              |
+|       team_num        | m_iTeamNum                           | Team number                                                                                                    |
+|   velocity_modifier   | m_flVelocityModifier                 | ?                                                                                                              |
+|    next_think_tick    | m_nNextThinkTick                     | I think this is what tick the client thinks the server is at                                                   |
+|       friction        | m_flFriction                         | ?                                                                                                              |
+|       on_target       | m_fOnTarget                          | ?                                                                                                              |
+|   vec_view_offset0    | m_vecViewOffset[0]                   | ?                                                                                                              |
+|   vec_view_offset1    | m_vecViewOffset[1]                   | ?                                                                                                              |
+|    is_wearing_suit    | m_bWearingSuit                       | ?                                                                                                              |
+|    jump_time_msecs    | m_nJumpTimeMsecs                     | ?                                                                                                              |
+|    duck_time_msecs    | m_nDuckJumpTimeMsecs                 | ?                                                                                                              |
+|     in_duck_jump      | m_bInDuckJump                        | ?                                                                                                              |
+|    last_duck_time     | m_flLastDuckTime                     | Seconds since demo started when the player last ducked                                                         |
+|      is_ducking       | m_bDucking                           | is between not ducked and ducked?                                                                              |
 
+m_iAmmo
+m_hMyWearables
+m_hMyWeapons
+m_flFallVelocity
 
 Parser also allows you to use the "real names". Just make sure you add _X _Y and potentially _Z to the vector prop names. Like so:
 m_vecOrigin -> m_vecOrigin_X for x coordinate.

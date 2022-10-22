@@ -51,7 +51,7 @@ fn main() {
         // 41 ent   39 rules
 
         for ent in parser.entities {
-            if ent.1.class_id == 39 {
+            if ent.1.class_id == 41 {
                 for p in ent.1.props {
                     println!("X {:?}", p.1);
                 }

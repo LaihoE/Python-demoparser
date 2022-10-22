@@ -13,7 +13,10 @@ from demoparser import DemoParser
 parser = DemoParser("path_to_demo.dem")
 events = parser.parse_events("player_death")
 ```
-List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike:_Global_Offensive_Events)
+List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike:_Global_Offensive_Events)  
+WARNING all demos do not contain every possible event.
+
+
 Events can also easily be transformed into a df:
 ```python
 df = pd.DataFrame(events)

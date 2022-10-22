@@ -164,7 +164,6 @@ impl Demo {
                 let prop_arr = Prop {
                     table: table_name.clone(),
                     name: prop.var_name().to_string(),
-                    //prop: prop.clone(),
                     arr: Some(table.props[cnt].clone()),
                     col: 1,
                     data: None,

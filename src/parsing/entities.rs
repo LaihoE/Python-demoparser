@@ -72,7 +72,8 @@ impl Demo {
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var() as i32);
             /*
-            if entity_id > 888888 {
+            Disabled for now
+            if entity_id > highest_wanted_entid {
                 break;
             }
             */
@@ -82,7 +83,6 @@ impl Demo {
                 // IF ENTITY DOES NOT EXIST
 
                 let cls_id = b.read_nbits(cls_bits.try_into().unwrap());
-                //println!("{tick} {entity_id} {:?}", cls_map[&(cls_id as u16)].dt);
                 let _ = b.read_nbits(10);
                 let mut e = Entity {
                     class_id: cls_id,
@@ -90,7 +90,7 @@ impl Demo {
                     props: HashMap::default(),
                 };
 
-                if entity_id < 100 {
+                if entity_id < 10000 {
                     match cls_map.get_mut(&(cls_id as u16)) {
                         Some(x) => {
                             if x.dt == "DT_CSPlayer" {
@@ -156,14 +156,11 @@ pub fn parse_ent_props(
         let inx = workhorse[i];
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);
-        if sv_cls.id == 41{
-            //println!("{} {} {:?}", tick,prop.name, pdata);
-        }
-        /* 
-        if !is_wanted_prop_name(prop, &wanted_props) {
+
+        if sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
             continue;
         }
-        */
+
         match pdata {
             PropData::VecXY(v) => {
                 let endings = ["_X", "_Y"];
@@ -197,7 +194,29 @@ pub fn parse_ent_props(
                     data: pdata,
                     tick: tick,
                 };
-                ent.props.insert(atom.prop_name.clone(), atom);
+                // Make sure player metadata isnt erased when players leave.
+                if prop.name.contains("m_iCompetitiveRanking0")
+                    || prop.name.contains("m_iTeam0")
+                    || prop.name.contains("m_iCompetitiveWins0")
+                    || prop.name.contains("m_iCompetitiveWins0")
+                    || prop.name.contains("m_szCrosshairCodes0")
+                {
+                    match &atom.data {
+                        PropData::I32(val) => {
+                            if val != &0 {
+                                ent.props.insert(atom.prop_name.clone(), atom);
+                            }
+                        }
+                        PropData::String(val) => {
+                            if val.len() > 10 {
+                                ent.props.insert(atom.prop_name.clone(), atom);
+                            }
+                        }
+                        _ => {}
+                    }
+                } else {
+                    ent.props.insert(atom.prop_name.clone(), atom);
+                }
             }
         }
     }

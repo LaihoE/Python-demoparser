@@ -22,7 +22,6 @@ impl<'a> MyBitreader<'a> {
         };
         b
     }
-
     #[inline(always)]
     pub fn read_nbits(&mut self, n: u32) -> u32 {
         (self.reader.read_bits(n).unwrap() as u32) & MASKS[n as usize]

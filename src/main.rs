@@ -20,9 +20,12 @@ use std::time::Instant;
 
 fn main() {
     let now = Instant::now();
-    let paths = fs::read_dir("/mnt/d/Trash-1000/fa/3/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     for demo_path in paths {
-        let props_names = vec!["m_angEyeAngles[0]".to_string(), "m_iCompetitiveRanking".to_string()];
+        let props_names = vec![
+            "m_angEyeAngles[0]".to_string(),
+            "m_iCompetitiveRanking".to_string(),
+        ];
         let x = netmessages::file_descriptor();
         let y = x.messages();
         println!("{:?}", demo_path.as_ref().unwrap().path());
@@ -31,11 +34,11 @@ fn main() {
         let mut parser = Demo::new_mmap(
             mmap,
             true,
-            (50..500).collect(),
             vec![],
             vec![],
-            "player_death".to_string(),
-            false,
+            vec![],
+            "".to_string(),
+            true,
             false,
         )
         .unwrap();
@@ -43,18 +46,18 @@ fn main() {
         let h: Header = parser.parse_demo_header();
         let mut event_names: Vec<String> = Vec::new();
         let data = parser.start_parsing(&props_names);
-        println!("{:?}", parser.manager_id);
-        
+        //println!("{:?}", parser.manager_id);
+
         // 41 ent   39 rules
-         
+
         for ent in parser.entities {
-            if ent.1.class_id == 41 {
-                for p in ent.1.props {      
-                        println!("{:?}", p.1);       
+            if ent.1.class_id == 39 {
+                for p in ent.1.props {
+                    println!("X {:?}", p.1);
                 }
             }
         }
-        
+
         break;
     }
     let elapsed = now.elapsed();

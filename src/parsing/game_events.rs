@@ -8,18 +8,6 @@ use csgoproto::netmessages::CSVCMsg_GameEventList;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
-#[derive(Debug, Default)]
-pub struct HurtEvent {
-    pub userid: i32,
-    pub attacker: i32,
-    pub health: i32,
-    pub armor: i32,
-    pub weapon: String,
-    pub dmg_health: i32,
-    pub dmg_armor: i32,
-    pub hitgroup: i32,
-}
-
 fn parse_key(key: &Key_t) -> KeyData {
     match key.type_() {
         1 => return KeyData::StrData(key.val_string().to_owned()),

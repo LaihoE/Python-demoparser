@@ -3,8 +3,12 @@ use arrow::ffi;
 use flate2::read::GzDecoder;
 use fxhash::FxHashMap;
 use memmap::MmapOptions;
+use parsing::entities::Entity;
 use parsing::header::Header;
 use parsing::parser::Demo;
+use parsing::stringtables::UserInfo;
+use parsing::variants::PropAtom;
+use parsing::variants::PropData;
 use polars::prelude::ArrowField;
 use polars::prelude::NamedFrom;
 use polars::series::Series;
@@ -284,7 +288,7 @@ impl DemoParser {
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         let parser = Demo::new_mmap(
             mmap,
-            false,
+            true,
             vec![],
             vec![],
             vec![],
@@ -299,9 +303,38 @@ impl DemoParser {
                 let _ = parser.start_parsing(&vec![]);
                 let players = parser.players;
                 let mut py_players = vec![];
+                let ent_manager = &parser.entities[parser.manager_id.unwrap() as usize].1;
                 for (_, player) in players {
+                    let team = get_manager_i32_prop(&ent_manager, &player, "m_iTeam");
+                    let mut hm = player.to_hashmap(py);
+                    let team = match team {
+                        2 => "CT",
+                        3 => "T",
+                        _ => "Missing",
+                    };
+
+                    let rank_id =
+                        get_manager_i32_prop(&ent_manager, &player, "m_iCompetitiveRanking");
+                    let rank_name = rank_id_to_name(rank_id);
+
+                    let crosshair_code =
+                        get_manager_str_prop(&ent_manager, &player, "m_szCrosshairCodes");
+
+                    let comp_wins =
+                        get_manager_i32_prop(&ent_manager, &player, "m_iCompetitiveWins");
+
+                    hm.insert("staring_side".to_string(), team.to_string().to_object(py));
+                    hm.insert(
+                        "crosshair_code".to_string(),
+                        crosshair_code.to_string().to_object(py),
+                    );
+                    hm.insert("rank_name".to_string(), rank_name.to_string().to_object(py));
+                    hm.insert("rank_id".to_string(), rank_id.to_object(py));
+                    hm.insert("comp_wins".to_string(), comp_wins.to_object(py));
+
+                    let dict = pyo3::Python::with_gil(|py| hm.to_object(py));
                     if player.xuid > 76500000000000000 && player.xuid < 76600000000000000 {
-                        py_players.push(player.to_py_hashmap(py));
+                        py_players.push(dict);
                     }
                 }
                 let dict = pyo3::Python::with_gil(|py| py_players.to_object(py));
@@ -331,6 +364,66 @@ impl DemoParser {
                 Ok(dict)
             }
         }
+    }
+}
+
+pub fn get_manager_i32_prop(manager: &Entity, player: &UserInfo, prop_name: &str) -> i32 {
+    let key = if player.entity_id < 10 {
+        prop_name.to_string() + "00" + &player.entity_id.to_string()
+    } else if player.entity_id < 100 {
+        prop_name.to_string() + "0" + &player.entity_id.to_string()
+    } else {
+        panic!("Entity id 100 ????: id:{}", player.entity_id);
+    };
+    match manager.props.get(&key) {
+        Some(p) => match p.data {
+            PropData::I32(x) => {
+                return x;
+            }
+            _ => -1,
+        },
+        None => -1,
+    }
+}
+pub fn get_manager_str_prop(manager: &Entity, player: &UserInfo, prop_name: &str) -> String {
+    let key = if player.entity_id < 10 {
+        prop_name.to_string() + "00" + &player.entity_id.to_string()
+    } else if player.entity_id < 100 {
+        prop_name.to_string() + "0" + &player.entity_id.to_string()
+    } else {
+        panic!("Entity id 100 ????: id:{}", player.entity_id);
+    };
+    match manager.props.get(&key) {
+        Some(p) => match &p.data {
+            PropData::String(x) => {
+                return x.to_string();
+            }
+            _ => "".to_string(),
+        },
+        None => "".to_string(),
+    }
+}
+pub fn rank_id_to_name(id: i32) -> String {
+    match id {
+        1 => "Silver 1".to_string(),
+        2 => "Silver 2".to_string(),
+        3 => "Silver 3".to_string(),
+        4 => "Silver 4".to_string(),
+        5 => "Silver elite".to_string(),
+        6 => "Silver elite master".to_string(),
+        7 => "Nova 1".to_string(),
+        8 => "Nova 2".to_string(),
+        9 => "Nova 3".to_string(),
+        10 => "Nova 4".to_string(),
+        11 => "MG1".to_string(),
+        12 => "MG2".to_string(),
+        13 => "MGE".to_string(),
+        14 => "DMG".to_string(),
+        15 => "LE".to_string(),
+        16 => "LEM".to_string(),
+        17 => "Supreme".to_string(),
+        18 => "Global elite".to_string(),
+        _ => "Unranked".to_string(),
     }
 }
 

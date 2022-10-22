@@ -127,7 +127,7 @@ impl Demo {
             entids_not_connected: HashSet::new(),
             highest_wanted_entid: 9999999,
             all_wanted_connected: false,
-            manager_id: None
+            manager_id: None,
         })
     }
     pub fn new(
@@ -190,7 +190,7 @@ impl Demo {
             entids_not_connected: HashSet::new(),
             highest_wanted_entid: 9999999,
             all_wanted_connected: false,
-            manager_id: None
+            manager_id: None,
         })
     }
 }
@@ -225,9 +225,7 @@ impl Demo {
             self.tick = tick;
 
             // EARLY EXIT
-            if self.only_players && Demo::all_players_connected(self.players_connected)
-                || self.only_header
-            {
+            if self.only_header {
                 break;
             }
 
@@ -241,7 +239,7 @@ impl Demo {
                     props_names,
                     &mut ticks_props,
                     self.playback_frames,
-                    &self.manager_id
+                    &self.manager_id,
                 );
             }
             self.parse_cmd(cmd);
@@ -330,7 +328,6 @@ impl Demo {
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;
-
                                 let res = Demo::parse_packet_entities(
                                     &mut self.serverclass_map,
                                     self.tick,

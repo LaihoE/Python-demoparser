@@ -2,6 +2,7 @@ use crate::parsing::read_bits_old::BitReader;
 use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 use csgoproto::netmessages::CSVCMsg_UpdateStringTable;
+use pyo3::ffi::PyObject;
 use pyo3::PyAny;
 use pyo3::ToPyObject;
 use pyo3::{Py, Python};
@@ -40,36 +41,26 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub fn to_hashmap(&self) -> HashMap<String, String> {
-        let mut hm: HashMap<String, String> = HashMap::new();
+    pub fn to_hashmap(&self, py: Python<'_>) -> HashMap<String, pyo3::Py<PyAny>> {
+        let mut hm: HashMap<String, pyo3::Py<PyAny>> = HashMap::new();
         //hm.insert("version".to_string(), self.version.to_string());
-        hm.insert("steamid".to_string(), self.xuid.to_string());
+        hm.insert("steamid".to_string(), self.xuid.to_object(py));
         //hm.insert("name".to_string(), self.name.to_string());
-        hm.insert("user_id".to_string(), self.user_id.to_string());
+        hm.insert("user_id".to_string(), self.user_id.to_object(py));
         //hm.insert("guid".to_string(), self.guid.to_string());
         //hm.insert("friends_id".to_string(), self.friends_id.to_string());
-        hm.insert("name".to_string(), self.name.to_string());
+        hm.insert("name".to_string(), self.name.to_string().to_object(py));
         //hm.insert("fake_player".to_string(), self.fake_player.to_string());
         //hm.insert("hltv".to_string(), self.hltv.to_string());
         //hm.insert("custom_files".to_string(), self.custom_files.to_string());
         //hm.insert("files_downloaded".to_string(), self.files_downloaded.to_string());
-        hm.insert("entity_id".to_string(), self.entity_id.to_string());
+        hm.insert("entity_id".to_string(), self.entity_id.to_object(py));
         //hm.insert("tbd".to_string(), self.tbd.to_string());
         hm
-    }
-
-    pub fn to_py_hashmap(&self, py: Python<'_>) -> Py<PyAny> {
-        let hm = self.to_hashmap();
-        let dict = pyo3::Python::with_gil(|py| hm.to_object(py));
-        dict
     }
 }
 
 impl Demo {
-    pub fn parse_string_table(&mut self) {
-        let length = self.read_i32();
-        let data = self.read_n_bytes(length.try_into().unwrap());
-    }
     pub fn parse_userinfo(userdata: [u8; 340]) -> UserInfo {
         let ui = UserInfo {
             version: u64::from_be_bytes(userdata[0..8].try_into().unwrap()),

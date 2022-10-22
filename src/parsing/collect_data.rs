@@ -9,17 +9,19 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 #[inline(always)]
-fn create_default(col_type: i32, playback_frames: usize) -> PropColumn {
+pub fn create_default(col_type: i32, playback_frames: usize) -> PropColumn {
     let v = match col_type {
         0 => VarVec::I32(Vec::with_capacity(playback_frames)),
         1 => VarVec::F32(Vec::with_capacity(playback_frames)),
         2 => VarVec::F32(Vec::with_capacity(playback_frames)),
         4 => VarVec::String(Vec::with_capacity(playback_frames)),
         5 => VarVec::U64(Vec::with_capacity(playback_frames)),
+        10 => VarVec::I32(Vec::with_capacity(playback_frames)),
         _ => panic!("INCORRECT COL TYPE"),
     };
     PropColumn { data: v }
 }
+
 #[inline(always)]
 fn insert_propcolumn(
     ticks_props: &mut HashMap<String, PropColumn, RandomState>,
@@ -28,7 +30,6 @@ fn insert_propcolumn(
     playback_frames: usize,
     col_type: i32,
 ) {
-    
     match ent.props.get(prop_name) {
         None => ticks_props
             .entry(prop_name.to_string())
@@ -43,37 +44,34 @@ fn insert_propcolumn(
     }
 }
 
-
-fn insert_manager_prop( 
+fn insert_manager_prop(
     ticks_props: &mut HashMap<String, PropColumn, RandomState>,
     ent: &Entity,
     prop_name: &String,
     playback_frames: usize,
     col_type: i32,
-    manager: Option<&Entity>
-){
+    manager: Option<&Entity>,
+) {
     match manager {
         Some(m) => {
-            let key = if ent.entity_id < 10{
+            let key = if ent.entity_id < 10 {
                 prop_name.to_owned() + "00" + &ent.entity_id.to_string()
-            }else if ent.entity_id < 100{
+            } else if ent.entity_id < 100 {
                 prop_name.to_owned() + "0" + &ent.entity_id.to_string()
-            }else{
+            } else {
                 panic!("Entity id 100 ????: id:{}", ent.entity_id);
             };
-            match m.props.get(&key){
-                Some(p) => {
-                    ticks_props
+            match m.props.get(&key) {
+                Some(p) => ticks_props
                     .entry(prop_name.to_string())
                     .or_insert_with(|| create_default(col_type, playback_frames))
                     .data
-                    .push_propdata(p.data.clone())
-                }
+                    .push_propdata(p.data.clone()),
                 None => ticks_props
-                        .entry(prop_name.to_string())
-                        .or_insert_with(|| create_default(col_type, playback_frames))
-                        .data
-                        .push_none(),
+                    .entry(prop_name.to_string())
+                    .or_insert_with(|| create_default(col_type, playback_frames))
+                    .data
+                    .push_none(),
             }
         }
         None => ticks_props
@@ -81,9 +79,8 @@ fn insert_manager_prop(
             .or_insert_with(|| create_default(col_type, playback_frames))
             .data
             .push_none(),
-    }   
+    }
 }
-
 
 impl Demo {
     #[inline(always)]
@@ -111,17 +108,24 @@ impl Demo {
                     let pl = &mut entities[player.entity_id as usize];
                     if pl.0 != 1111111 {
                         let ent = &entities[player.entity_id as usize];
-                        let manager = if manager_id.is_some(){
+                        let manager = if manager_id.is_some() {
                             Some(&entities[manager_id.unwrap() as usize].1)
-                        }else{
+                        } else {
                             None
                         };
                         // Insert all wanted non-md props
                         for prop_name in props_names {
                             let prop_type = TYPEHM[prop_name];
-                            if prop_type == 10{
-                                insert_manager_prop(ticks_props, &ent.1, prop_name, playback_frames, 0, manager);
-                            }else{
+                            if prop_type == 10 {
+                                insert_manager_prop(
+                                    ticks_props,
+                                    &ent.1,
+                                    prop_name,
+                                    playback_frames,
+                                    0,
+                                    manager,
+                                );
+                            } else {
                                 insert_propcolumn(
                                     ticks_props,
                                     &ent.1,
@@ -130,7 +134,6 @@ impl Demo {
                                     prop_type,
                                 );
                             }
-                            
                         }
                         // Insert tick, steamid, name
                         insert_metadata(
@@ -341,4 +344,8 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_iMVPs" => 10,
     "m_iArmor" => 10,
     "m_iCompetitiveWins" => 10,
+    "m_iMatchStats_UtilityDamage_Total" => 10,
+    "m_iMatchStats_Damage_Total" => 10,
+    "m_iLifetimeStart" => 10,
+    "m_iLifetimeEnd" => 10,
 };

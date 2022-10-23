@@ -133,6 +133,7 @@ impl DemoParser {
             false,
             false,
             true,
+            9999999
         );
         match parser {
             Err(e) => {
@@ -182,6 +183,12 @@ impl DemoParser {
         let (wanted_players, wanted_ticks) = parse_kwargs(py_kwargs);
         let wanted_ticks_len = wanted_ticks.len();
 
+        let biggest_wanted_tick = if wanted_ticks_len > 0{
+            wanted_ticks.iter().max().unwrap().clone()
+        }else{
+            99999999
+        };
+
         let parser = Demo::new(
             self.path.clone(),
             true,
@@ -192,6 +199,7 @@ impl DemoParser {
             false,
             false,
             true,
+            biggest_wanted_tick
         );
 
         match parser {
@@ -209,11 +217,11 @@ impl DemoParser {
                 } else {
                     wanted_ticks_len
                 };
-                println!("{}", wanted_ticks_len);
+
                 let now = Instant::now();
                 let data = parser.start_parsing(&real_props);
                 let elapsed = now.elapsed();
-                println!("z: {:.2?}", elapsed);
+
                 real_props.push("tick".to_string());
                 real_props.push("steamid".to_string());
                 real_props.push("name".to_string());
@@ -256,14 +264,12 @@ impl DemoParser {
                             }
                         }
                         let elapsed = now.elapsed();
-                        println!("pre: {:.2?}", elapsed);
                         let polars = py.import("polars")?;
                         let all_series_py = all_series.to_object(py);
                         let df = polars.call_method1("DataFrame", (all_series_py,))?;
                         df.setattr("columns", real_props.to_object(py)).unwrap();
                         let pandas_df = df.call_method0("to_pandas").unwrap();
                         let elapsed = now.elapsed();
-                        println!("last: {:.2?}", elapsed);
                         Ok(pandas_df.to_object(py))
                     }
                     None => {
@@ -292,6 +298,7 @@ impl DemoParser {
             true,
             false,
             true,
+            9999999
         );
         match parser {
             Err(e) => {
@@ -356,6 +363,7 @@ impl DemoParser {
             true,
             false,
             true,
+            9999999
         );
         match parser {
             Err(e) => {

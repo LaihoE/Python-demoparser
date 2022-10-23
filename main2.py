@@ -14,14 +14,16 @@ def coordinates(file):
     before = time.time()
     parser = DemoParser(file)
     #evs = pd.DataFrame(parser.parse_events("player_hurt"))
-    df = parser.parse_ticks(["m_angEyeAngles[0]"], ticks=[x for x in range(10000, 10003)])
-    print(df)
-    print(time.time() - before)
+    df = parser.parse_ticks(["m_iClip1", "weapon_name"], ticks=[x for x in range(10000)])
+    df = df[df["steamid"] == 76561198362125234]
+    """for i in range(len(df)):
+        print(df.iloc[i].to_list())
+    print(time.time() - before)"""
 
 
 if __name__ == "__main__":
     import time
-    files = glob.glob("/home/laiho/Documents/demos/faceits/average/*")
+    files = glob.glob("/mnt/d/b/mygames/*")#[:1]
     print(files)
     before = time.time()
     with mp.Pool(processes=1) as pool:

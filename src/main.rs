@@ -19,7 +19,7 @@ use std::fs::File;
 use std::time::Instant;
 
 fn main() {
-    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/average/").unwrap();
+    let paths = fs::read_dir("/mnt/d/b/mygames/").unwrap();
     for demo_path in paths {
         let now = Instant::now();
         let props_names = vec!["m_angEyeAngles[0]".to_string()];
@@ -40,6 +40,7 @@ fn main() {
             false,
             false,
             true,
+            50
         )
         .unwrap();
 

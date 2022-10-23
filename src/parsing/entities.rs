@@ -287,3 +287,24 @@ pub fn highest_wanted_entid(
         return 999999;
     }
 }
+
+
+pub fn parse_baselines(data: &[u8], cls_id: i32, sv_cls: &ServerClass){
+    let mut b = MyBitreader::new(data);
+    let mut val = -1;
+    let new_way = b.read_boolie();
+    let mut indicies = vec![];
+    loop {
+        val = b.read_inx(val, new_way);
+
+        if val == -1 {
+            break;
+        }
+        indicies.push(val);
+    }
+    for inx in indicies{
+        let prop = &sv_cls.props[inx as usize];
+        let pdata = b.decode(prop);
+        println!("{:?}", pdata);
+    }
+}

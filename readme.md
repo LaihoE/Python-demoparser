@@ -98,6 +98,7 @@ Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python
 - First and last ticks often have many NaN values. For example if player isn't connected this happens.
 - Game events have lots of information. Look there first.
 - Exact granade trajectories are currently not supported. What you can find is where the granade was thrown from ("weapon_fire" event) and where it detonated (for example "hegrenade_detonate" event). Detonate event also includes coordinates but the weapon fire does not.
+- Parser early exits when biggest wanted tick is reached
 
 
 ## Why yet another parser?

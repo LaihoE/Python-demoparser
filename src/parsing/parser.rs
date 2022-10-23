@@ -102,6 +102,8 @@ pub struct Demo {
     pub manager_id: Option<u32>,
     pub rules_id: Option<u32>,
     pub no_gameevents: bool,
+    pub early_exit_tick: i32,
+    pub baselines: HashMap<u16, StringTable>,
 }
 impl Demo {
     pub fn new(
@@ -114,6 +116,7 @@ impl Demo {
         only_players: bool,
         only_header: bool,
         no_gameevents: bool,
+        early_exit_tick: i32,
     ) -> Result<Self, std::io::Error> {
         let mut extra_wanted_props = vec![];
         for p in &wanted_props {
@@ -167,6 +170,8 @@ impl Demo {
                 manager_id: None,
                 rules_id: None,
                 no_gameevents: no_gameevents,
+                early_exit_tick: early_exit_tick,
+                baselines: HashMap::new(),
             }),
         }
     }
@@ -178,7 +183,7 @@ impl Demo {
         props_names: &Vec<String>,
     ) -> HashMap<String, PropColumn, RandomState> {
         let mut ticks_props: HashMap<String, PropColumn, RandomState> = HashMap::default();
-        for i in 0..10000 {
+        for _ in 0..10000 {
             self.entities.push((
                 1111111,
                 Entity {
@@ -199,6 +204,9 @@ impl Demo {
         while self.fp < self.bytes.get_len() as usize {
             self.frames_parsed += 1;
             let (cmd, tick) = self.read_frame();
+            if tick > self.early_exit_tick{
+                break;
+            }
             self.tick = tick;
 
             // EARLY EXIT

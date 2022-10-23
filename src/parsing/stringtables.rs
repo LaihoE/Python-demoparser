@@ -1,3 +1,4 @@
+use crate::parsing::entities::update_entity;
 use crate::parsing::read_bits_old::BitReader;
 use crate::Demo;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
@@ -10,7 +11,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::TryInto;
 
-#[derive(Clone)]
+use super::read_bits::MyBitreader;
+
+// THIS ENTIRE FILE IS A MESS
+// THIS ENTIRE FILE IS A MESS
+// THIS ENTIRE FILE IS A MESS
+// THIS ENTIRE FILE IS A MESS
+// THIS ENTIRE FILE IS A MESS
+
+
+#[derive(Clone, Debug)]
 pub struct StringTable {
     userinfo: bool,
     name: String,
@@ -19,7 +29,7 @@ pub struct StringTable {
     udfs: bool,
     data: Vec<StField>,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StField {
     entry: String,
 }
@@ -90,53 +100,54 @@ impl Demo {
         user_data_size: i32,
         user_data_fixsize: bool,
     ) -> StringTable {
-        //println!("{}", st.name);
-        //println!("DATALEN {}", data.len());
         let left_over = (data.len() % 4) as i32;
-
-        let mut buf = BitReader::new(data, left_over);
-        buf.read_uneven_end_bits();
-        //buf.read_bool();
-
+        let mut buf = MyBitreader::new(data);
         let mut entry_bits = (max_entries as f32).log2() as i32;
-        let mut index = 0;
+        let mut entry_index = 0;
         let mut last_inx: i32 = -1;
         let mut idx = 0;
         let mut btc = 0;
         let mut history: Vec<String> = Vec::new();
+
         let mut entry = String::new();
         let mut user_data: [u8; 340] = [0; 340];
-        buf.read_bool();
+
+        buf.read_boolie();
 
         for _i in 0..num_entries {
-            index = last_inx + 1;
-            if buf.read_bool() == false {
-                index = buf
+            entry_index = last_inx + 1;
+            if !buf.read_boolie(){
+                entry_index = buf
                     .read_nbits(entry_bits.try_into().unwrap())
                     .try_into()
                     .unwrap();
             }
-            last_inx = index;
-            if buf.read_bool() {
-                if buf.read_bool() {
-                    idx = buf.read_nbits(5);
-                    btc = buf.read_nbits(5);
-                    let substring = "";
-                    let suffix = buf.read_string_lossy(0);
-                    entry = substring.to_string() + &suffix.to_owned();
+            last_inx = entry_index;
+            if buf.read_boolie() {
+                if buf.read_boolie() {
+                    let idx = buf.read_nbits(5) as i32;
+                    let bytes_to_copy = buf.read_nbits(5);
+                    let s = &history[idx as usize];
+                    let s_slice = &s[..bytes_to_copy as usize];
+                    entry = s_slice.to_owned() + &buf.read_string(4096);
+                    println!("{}", entry);
                 } else {
-                    entry = buf.read_string_lossy(0);
+                    entry = buf.read_string(4096);
                 }
-                st.data[index as usize].entry = entry.to_string()
             }
-            if buf.read_bool() {
+            if history.len() >= 32 {
+                history.remove(0);
+            }
+            history.push(entry.clone());
+
+            if buf.read_boolie() {
+                println!("HERER");
                 if user_data_fixsize {
                     user_data = buf.read_bits_st(user_data_size);
-                    //println!("USERDATA 1");
+                    println!("A {:?}", user_data);
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
                         if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
-                            //self.entids_not_connected.remove(&ui.entity_id);
                             self.players_connected += 1;
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
@@ -148,12 +159,11 @@ impl Demo {
                 } else {
                     let size = buf.read_nbits(14);
                     user_data = buf.read_bits_st(size.try_into().unwrap());
-
+                    println!("B {:?}", user_data);
                     if st.userinfo {
                         let mut ui = Demo::parse_userinfo(user_data);
-                        ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
+                        ui.entity_id = (st.data[entry_index as usize].entry).parse::<u32>().unwrap() + 1;
                         if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
-                            //self.entids_not_connected.remove(&ui.entity_id);
                             self.players_connected += 1;
                         }
                         ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
@@ -163,11 +173,13 @@ impl Demo {
                         self.players.insert(ui.xuid, ui);
                     }
                 }
-                if history.len() == 32 {
-                    history.remove(0);
-                }
+                
             }
-            history.push(entry.to_string());
+        }
+        if st.name == "instancebaseline"{
+            println!("{}", entry);
+            //let cls_id = entry.parse::<u32>().unwrap();
+            //self.baselines.insert(cls_id as u16, st.clone());
         }
         st
     }

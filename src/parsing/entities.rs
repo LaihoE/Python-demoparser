@@ -71,7 +71,7 @@ impl Demo {
         let mut b = MyBitreader::new(pack_ents.entity_data());
         let mut entity_id: i32 = -1;
         let mut player_ents = vec![];
-        let mut mangager = -1;
+
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var() as i32);
             /*
@@ -160,7 +160,7 @@ pub fn parse_ent_props(
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);
 
-        if sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
+        if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
             continue;
         }
 
@@ -199,7 +199,9 @@ pub fn parse_ent_props(
                 };
                 // Make sure player metadata isnt erased when players leave.
 
-                if sv_cls.id == 41 && prop.name.contains("m_iCompetitiveRanking0")
+                if sv_cls.id == 41
+                    || sv_cls.id == 39
+                    || prop.name.contains("m_iCompetitiveRanking0")
                     || prop.name.contains("m_iTeam0")
                     || prop.name.contains("m_iCompetitiveWins0")
                     || prop.name.contains("m_iCompetitiveWins0")

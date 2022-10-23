@@ -9,23 +9,27 @@ from collections import Counter
 
 
 def coordinates(file):
+    print(file)
     time.sleep(1)
     parser = DemoParser(file)
-    evs = parser.parse_events("player_death")
-    
-    """df = parser.parse_ticks(["m_iClip1", "weapon_name"])
-   
+    evs = pd.DataFrame(parser.parse_events("player_hurt"))
+    players = pd.DataFrame(parser.parse_players())
+    print(evs["round"].max())
+
+    """
+    df = parser.parse_ticks(["m_iClip1", "weapon_name"])
     df = df[df["steamid"] == 76561198194694750]
     for i in range(len(df)):
         print(df.iloc[i].to_list())
     print(set(df["weapon_name"]))
-    print(df.isna().sum(), len(df))"""
+    print(df.isna().sum(), len(df))
+    """
 
 
 
 if __name__ == "__main__":
     import time
-    files = glob.glob("/home/laiho/Documents/demos/mygames/*")
+    files = glob.glob("/mnt/d/b/mygames/*")
     print(files)
     before = time.time()
     with mp.Pool(processes=1) as pool:

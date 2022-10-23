@@ -173,7 +173,7 @@ pub fn gen_name_val_pairs(
     });
     kv_pairs.push(NameDataPair {
         name: "round".to_string(),
-        data: KeyData::StrData(round.to_string()),
+        data: KeyData::LongData(round),
     });
 
     kv_pairs
@@ -181,17 +181,6 @@ pub fn gen_name_val_pairs(
 
 pub fn match_data_to_game_event(event_name: &str, wanted: &String) -> bool {
     return event_name.contains(wanted);
-}
-
-pub fn is_round_changed(event_name: &str) -> bool {
-    if event_name == "round_start" {
-        return true;
-    } else {
-        return false;
-    }
-}
-pub fn is_connect_event(event_name: &str) -> bool {
-    return event_name.contains("connect");
 }
 
 impl Demo {
@@ -213,11 +202,6 @@ impl Demo {
                             self.round,
                         );
 
-                        connect_tick = if is_connect_event(event_desc.name()) {
-                            true
-                        } else {
-                            false
-                        };
                         game_events.push({
                             GameEvent {
                                 name: event_desc.name().to_owned(),
@@ -242,9 +226,6 @@ impl Demo {
                             }
                         })
                     }
-                }
-                if is_round_changed(event_desc.name()) {
-                    self.round += 1;
                 }
             }
             None => {

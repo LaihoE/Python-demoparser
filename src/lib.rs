@@ -124,7 +124,7 @@ impl DemoParser {
     pub fn parse_events(&self, py: Python<'_>, event_name: String) -> PyResult<Py<PyAny>> {
         let parser = Demo::new(
             self.path.clone(),
-            false,
+            true,
             Vec::new(),
             Vec::new(),
             Vec::new(),
@@ -142,7 +142,7 @@ impl DemoParser {
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
 
-                let _ = parser.start_parsing(&vec!["".to_owned()]);
+                let _ = parser.start_parsing(&vec!["m_iMVPs".to_owned()]);
                 let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
 
                 // Create Hashmap with <string, pyobject> to be able to convert to python dict
@@ -294,8 +294,8 @@ impl DemoParser {
                     let team = get_manager_i32_prop(&ent_manager, &player, "m_iTeam");
                     let mut hm = player.to_hashmap(py);
                     let team = match team {
-                        2 => "CT",
-                        3 => "T",
+                        2 => "T",
+                        3 => "CT",
                         _ => "Missing",
                     };
 

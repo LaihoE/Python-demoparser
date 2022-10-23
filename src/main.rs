@@ -20,7 +20,7 @@ use std::time::Instant;
 
 fn main() {
     let now = Instant::now();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
+    let paths = fs::read_dir("/mnt/d/b/mygames/").unwrap();
     for demo_path in paths {
         let props_names = vec![
             "m_angEyeAngles[0]".to_string(),
@@ -64,6 +64,8 @@ fn main() {
         // m_totalRoundsPlayed
         let c = &parser.serverclass_map[&(246)];
         println!("{}", c.dt);
+        println!("{:?}", demo_path);
+        println!("{:?}", parser.round);
         break;
     }
     let elapsed = now.elapsed();

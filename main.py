@@ -28,7 +28,6 @@ def coordinates(file):
     df["m_iAssists"].astype("int")
     df["m_iDeaths"].astype("int")
 
-
     joined["total_rounds"] = max_round
     joined["file"] = os.path.basename(file)
     #print(joined)

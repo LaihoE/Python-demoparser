@@ -1,3 +1,4 @@
+use super::entities;
 use super::entities::highest_wanted_entid;
 use super::game_events::GameEvent;
 use crate::parsing::data_table::ServerClass;
@@ -99,6 +100,7 @@ pub struct Demo {
     pub highest_wanted_entid: i32,
     pub all_wanted_connected: bool,
     pub manager_id: Option<u32>,
+    pub rules_id: Option<u32>,
 }
 impl Demo {
     pub fn new(
@@ -161,6 +163,7 @@ impl Demo {
                 highest_wanted_entid: 9999999,
                 all_wanted_connected: false,
                 manager_id: None,
+                rules_id: None,
             }),
         }
     }
@@ -227,9 +230,12 @@ impl Demo {
             _ => {}
         }
     }
+    
+
 
     #[inline(always)]
     pub fn parse_packet(&mut self) {
+        check_round_change(&self.entities, &self.rules_id, &mut self.round);
         self.fp += 160;
         let packet_len = self.read_i32();
         let goal_inx = self.fp + packet_len as usize;
@@ -305,6 +311,8 @@ impl Demo {
                                     self.fp as i32,
                                     self.highest_wanted_entid,
                                     &mut self.manager_id,
+                                    &mut self.rules_id,
+                                    &mut self.round,
                                 );
                                 match res {
                                     Some(v) => {
@@ -355,7 +363,24 @@ impl Demo {
         }
     }
 }
-
+pub fn check_round_change(entities: &Vec<(u32, Entity)>, rules_id: &Option<u32>, round: &mut i32){
+    if rules_id.is_some(){
+        match entities.get(rules_id.unwrap() as usize) {
+            Some(e) => {
+                match e.1.props.get("m_totalRoundsPlayed"){
+                    Some(r) => {
+                        if let PropData::I32(p) = r.data{
+                            *round = p;
+                        }
+                    }
+                    None => {}
+                }
+            }
+            None => {}
+            
+        }
+    }
+}
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_flNextAttack" => 1,
     "m_bDuckOverride" => 0,

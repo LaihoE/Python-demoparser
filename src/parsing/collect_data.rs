@@ -193,8 +193,6 @@ impl Demo {
                                 _ => Some(&entities[ent_id as usize].1),
                             },
                         };
-
-                        //println!("{:?}", weapon_ent);
                         for prop_name in props_names {
                             match TYPEHM[prop_name] {
                                 10 => {

@@ -66,6 +66,8 @@ impl Demo {
         fp: i32,
         highest_wanted_entid: i32,
         manager_id: &mut Option<u32>,
+        rules_id: &mut Option<u32>,
+        round: &mut i32,
     ) -> Option<Vec<u32>> {
         let n_upd_ents = pack_ents.updated_entries();
         let mut b = MyBitreader::new(pack_ents.entity_data());
@@ -99,6 +101,9 @@ impl Demo {
                             if x.dt == "DT_CSPlayer" {
                                 player_ents.push(entity_id as u32);
                             }
+                            if cls_id == 39 {
+                                *rules_id = Some(entity_id as u32);
+                            }
                             if cls_id == 41 {
                                 *manager_id = Some(entity_id as u32);
                                 for p in &mut x.props {
@@ -109,7 +114,7 @@ impl Demo {
                         None => {}
                     }
                 }
-                update_entity(&mut e, &mut b, cls_map, wanted_props, tick, workhorse, fp);
+                update_entity(&mut e, &mut b, cls_map, wanted_props, tick, workhorse, fp, round);
                 entities[entity_id as usize] = (entity_id as u32, e);
             } else {
                 // IF ENTITY DOES EXIST
@@ -122,6 +127,7 @@ impl Demo {
                     tick,
                     workhorse,
                     fp,
+                    round
                 );
             }
         }
@@ -141,6 +147,7 @@ pub fn parse_ent_props(
     tick: i32,
     workhorse: &mut Vec<i32>,
     fp: i32,
+    round: &mut i32,
 ) {
     let mut val = -1;
     let new_way = b.read_boolie();
@@ -198,9 +205,13 @@ pub fn parse_ent_props(
                     tick: tick,
                 };
                 // Make sure player metadata isnt erased when players leave.
+                if atom.prop_name == "m_totalRoundsPlayed"{
+                    if let PropData::I32(r) = atom.data{
+                        *round = r;
+                    }
+                }
 
                 if sv_cls.id == 41
-                    || sv_cls.id == 39
                     || prop.name.contains("m_iCompetitiveRanking0")
                     || prop.name.contains("m_iTeam0")
                     || prop.name.contains("m_iCompetitiveWins0")
@@ -236,9 +247,10 @@ pub fn update_entity(
     tick: i32,
     workhorse: &mut Vec<i32>,
     fp: i32,
+    round: &mut i32
 ) {
     let sv_cls = &cls_map[&(ent.class_id.try_into().unwrap())];
-    parse_ent_props(ent, sv_cls, b, wanted_props, tick, workhorse, fp);
+    parse_ent_props(ent, sv_cls, b, wanted_props, tick, workhorse, fp, round);
 }
 
 #[inline(always)]

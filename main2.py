@@ -6,30 +6,22 @@ import tqdm
 import random
 import os
 from collections import Counter
+import time
 
 
 def coordinates(file):
     print(file)
-    time.sleep(1)
+    before = time.time()
     parser = DemoParser(file)
-    evs = pd.DataFrame(parser.parse_events("player_hurt"))
-    players = pd.DataFrame(parser.parse_players())
-    print(evs["round"].max())
-
-    """
-    df = parser.parse_ticks(["m_iClip1", "weapon_name"])
-    df = df[df["steamid"] == 76561198194694750]
-    for i in range(len(df)):
-        print(df.iloc[i].to_list())
-    print(set(df["weapon_name"]))
-    print(df.isna().sum(), len(df))
-    """
-
+    #evs = pd.DataFrame(parser.parse_events("player_hurt"))
+    df = parser.parse_ticks(["m_angEyeAngles[0]"], ticks=[x for x in range(10000, 10003)])
+    print(df)
+    print(time.time() - before)
 
 
 if __name__ == "__main__":
     import time
-    files = glob.glob("/mnt/d/b/mygames/*")
+    files = glob.glob("/home/laiho/Documents/demos/faceits/average/*")
     print(files)
     before = time.time()
     with mp.Pool(processes=1) as pool:

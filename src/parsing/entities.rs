@@ -1,19 +1,14 @@
 use crate::parsing::data_table::ServerClass;
-use crate::parsing::read_bits_skip::MyBitreader;
+use crate::parsing::read_bits::MyBitreader;
 use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
 use crate::Demo;
 use ahash::RandomState;
-use bitter::{BitReader, LittleEndianReader};
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
-use csgoproto::netmessages::CSVCMsg_SendTable;
-use polars::export::num::Float;
-use smallvec::{smallvec, SmallVec};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::time::Instant;
 
 use super::stringtables::UserInfo;
 
@@ -27,7 +22,6 @@ pub struct Entity {
 #[derive(Debug, Clone)]
 pub struct Prop {
     pub name: String,
-    //pub prop: Sendprop_t,
     pub table: String,
     pub arr: Option<Sendprop_t>,
     pub col: i32,
@@ -64,7 +58,7 @@ impl Demo {
         wanted_props: &Vec<String>,
         workhorse: &mut Vec<i32>,
         fp: i32,
-        highest_wanted_entid: i32,
+        _highest_wanted_entid: i32,
         manager_id: &mut Option<u32>,
         rules_id: &mut Option<u32>,
         round: &mut i32,
@@ -114,7 +108,16 @@ impl Demo {
                         None => {}
                     }
                 }
-                update_entity(&mut e, &mut b, cls_map, wanted_props, tick, workhorse, fp, round);
+                update_entity(
+                    &mut e,
+                    &mut b,
+                    cls_map,
+                    wanted_props,
+                    tick,
+                    workhorse,
+                    fp,
+                    round,
+                );
                 entities[entity_id as usize] = (entity_id as u32, e);
             } else {
                 // IF ENTITY DOES EXIST
@@ -127,7 +130,7 @@ impl Demo {
                     tick,
                     workhorse,
                     fp,
-                    round
+                    round,
                 );
             }
         }
@@ -146,7 +149,7 @@ pub fn parse_ent_props(
     wanted_props: &Vec<String>,
     tick: i32,
     workhorse: &mut Vec<i32>,
-    fp: i32,
+    _fp: i32,
     round: &mut i32,
 ) {
     let mut val = -1;
@@ -176,26 +179,26 @@ pub fn parse_ent_props(
                 let endings = ["_X", "_Y"];
                 for inx in 0..2 {
                     let data = PropData::F32(v[inx]);
-                    let name = prop.name.to_string() + endings[inx];
+                    let name = prop.name.to_owned() + endings[inx];
                     let atom = PropAtom {
                         prop_name: name,
                         data: data,
                         tick: tick,
                     };
-                    ent.props.insert(atom.prop_name.clone(), atom);
+                    ent.props.insert(prop.name.to_owned(), atom);
                 }
             }
             PropData::VecXYZ(v) => {
                 let endings = ["_X", "_Y", "_Z"];
                 for inx in 0..3 {
                     let data = PropData::F32(v[inx]);
-                    let name = prop.name.to_string() + endings[inx];
+                    let name = prop.name.to_owned() + endings[inx];
                     let atom = PropAtom {
                         prop_name: name,
                         data: data,
                         tick: tick,
                     };
-                    ent.props.insert(atom.prop_name.clone(), atom);
+                    ent.props.insert(prop.name.to_owned(), atom);
                 }
             }
             _ => {
@@ -204,13 +207,13 @@ pub fn parse_ent_props(
                     data: pdata,
                     tick: tick,
                 };
-                // Make sure player metadata isnt erased when players leave.
-                if atom.prop_name == "m_totalRoundsPlayed"{
-                    if let PropData::I32(r) = atom.data{
+
+                if atom.prop_name == "m_totalRoundsPlayed" {
+                    if let PropData::I32(r) = atom.data {
                         *round = r;
                     }
                 }
-
+                // Make sure player metadata isnt erased when players leave.
                 if sv_cls.id == 41
                     || prop.name.contains("m_iCompetitiveRanking0")
                     || prop.name.contains("m_iTeam0")
@@ -221,12 +224,12 @@ pub fn parse_ent_props(
                     match &atom.data {
                         PropData::I32(val) => {
                             if val != &0 {
-                                ent.props.insert(atom.prop_name.clone(), atom);
+                                ent.props.insert(prop.name.to_owned(), atom);
                             }
                         }
                         PropData::String(val) => {
                             if val.len() > 10 {
-                                ent.props.insert(atom.prop_name.clone(), atom);
+                                ent.props.insert(prop.name.to_owned(), atom);
                             }
                         }
                         _ => {}
@@ -247,7 +250,7 @@ pub fn update_entity(
     tick: i32,
     workhorse: &mut Vec<i32>,
     fp: i32,
-    round: &mut i32
+    round: &mut i32,
 ) {
     let sv_cls = &cls_map[&(ent.class_id.try_into().unwrap())];
     parse_ent_props(ent, sv_cls, b, wanted_props, tick, workhorse, fp, round);

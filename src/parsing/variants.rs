@@ -137,8 +137,8 @@ where
 impl BytesVariant {
     pub fn get_len(&self) -> usize {
         match self {
-            Self::Mmap(m) => m.len(),
-            Self::Vec(v) => v.len(),
+            Self::Mmap(m) => return m.len(),
+            Self::Vec(v) => return v.len(),
         }
     }
 }

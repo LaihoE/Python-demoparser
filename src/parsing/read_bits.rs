@@ -1,14 +1,10 @@
-use std::collections::HashMap;
-
 use crate::parsing::entities::Prop;
 use crate::parsing::variants::PropData;
-//use bitreader::BitReader;
 use bitter::BitReader;
 use bitter::LittleEndianReader;
 use core::panic;
+use std::collections::HashMap;
 use std::convert::TryInto;
-use std::io;
-use std::mem;
 use std::u32;
 
 pub struct MyBitreader<'a> {
@@ -51,7 +47,6 @@ impl<'a> MyBitreader<'a> {
         if new_way && self.read_boolie() {
             let index = self.read_nbits(3);
             if index == 0xfff {
-                //println!("a");
                 return -1;
             }
             return last + 1 + index as i32;
@@ -61,11 +56,9 @@ impl<'a> MyBitreader<'a> {
             match val {
                 32 => {
                     index = (index & !96) | (self.read_nbits(2) << 5);
-                    //println!("32");
                 }
                 64 => {
                     index = (index & !96) | (self.read_nbits(4) << 5);
-                    //println!("64");
                 }
                 96 => {
                     let t = self.read_nbits(7) << 5;
@@ -75,7 +68,6 @@ impl<'a> MyBitreader<'a> {
             }
 
             if index == 0xfff {
-                //println!("b");
                 return -1;
             }
             return last + 1 + index as i32;
@@ -271,17 +263,6 @@ impl<'a> MyBitreader<'a> {
         }
     }
 
-    #[inline(always)]
-    pub fn read_bits_st(&mut self, n: i32) -> [u8; 340] {
-        let mut res = 0;
-        let mut bitsleft = n;
-        let eight = 8.try_into().unwrap();
-        let mut bytarr: [u8; 340] = [0; 340];
-        for i in 0..340 {
-            bytarr[i] = self.read_nbits(eight).try_into().unwrap();
-        }
-        bytarr
-    }
     #[inline(always)]
     pub fn decode_special_float(&mut self, prop: &Prop) -> f32 {
         let mut val = 0.0;

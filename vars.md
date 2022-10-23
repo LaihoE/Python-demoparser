@@ -96,10 +96,6 @@ Some example props that can be gotten from players.
 |    last_duck_time     | m_flLastDuckTime                     | Seconds since demo started when the player last ducked                                                         |
 |      is_ducking       | m_bDucking                           | is between not ducked and ducked?                                                                              |
 
-m_iAmmo
-m_hMyWearables
-m_hMyWeapons
-m_flFallVelocity
 
 Parser also allows you to use the "real names". Just make sure you add _X _Y and potentially _Z to the vector prop names. Like so:
 m_vecOrigin -> m_vecOrigin_X for x coordinate.

@@ -101,6 +101,7 @@ pub struct Demo {
     pub all_wanted_connected: bool,
     pub manager_id: Option<u32>,
     pub rules_id: Option<u32>,
+    pub no_gameevents: bool,
 }
 impl Demo {
     pub fn new(
@@ -112,6 +113,7 @@ impl Demo {
         event_name: String,
         only_players: bool,
         only_header: bool,
+        no_gameevents: bool,
     ) -> Result<Self, std::io::Error> {
         let mut extra_wanted_props = vec![];
         for p in &wanted_props {
@@ -164,6 +166,7 @@ impl Demo {
                 all_wanted_connected: false,
                 manager_id: None,
                 rules_id: None,
+                no_gameevents: no_gameevents,
             }),
         }
     }
@@ -230,8 +233,6 @@ impl Demo {
             _ => {}
         }
     }
-    
-
 
     #[inline(always)]
     pub fn parse_packet(&mut self) {
@@ -241,7 +242,9 @@ impl Demo {
         let goal_inx = self.fp + packet_len as usize;
         let parse_props = self.parse_props;
         let mut is_con_tick = false;
-
+        let no_gameevents = self.no_gameevents;
+        /*
+        For future skipping
         if !self.all_wanted_connected && self.tick % 1000 == 0 {
             let highest = highest_wanted_entid(
                 &self.entids_not_connected,
@@ -253,7 +256,7 @@ impl Demo {
                 self.highest_wanted_entid = highest;
             }
         }
-
+        */
         while self.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();
@@ -261,36 +264,40 @@ impl Demo {
             match msg as i32 {
                 // Game event
                 25 => {
-                    let game_event = Message::parse_from_bytes(&data);
-                    match game_event {
-                        Ok(ge) => {
-                            let game_event = ge;
-                            let (game_events, con_tick) = self.parse_game_events(game_event);
-                            is_con_tick = con_tick;
+                    if !no_gameevents {
+                        let game_event = Message::parse_from_bytes(&data);
+                        match game_event {
+                            Ok(ge) => {
+                                let game_event = ge;
+                                let (game_events, con_tick) = self.parse_game_events(game_event);
+                                is_con_tick = con_tick;
 
-                            if is_con_tick {
-                                self.poisoned_until = self.tick + 1000;
+                                if is_con_tick {
+                                    self.poisoned_until = self.tick + 1000;
+                                }
+                                self.game_events.extend(game_events);
                             }
-                            self.game_events.extend(game_events);
+                            Err(e) => panic!(
+                                "Failed to parse game event at tick {}. Error: {e}",
+                                self.tick
+                            ),
                         }
-                        Err(e) => panic!(
-                            "Failed to parse game event at tick {}. Error: {e}",
-                            self.tick
-                        ),
                     }
                 }
                 // Game event list
                 30 => {
-                    let event_list = Message::parse_from_bytes(&data);
-                    match event_list {
-                        Ok(ev) => {
-                            let event_list = ev;
-                            self.parse_game_event_map(event_list)
+                    if !no_gameevents {
+                        let event_list = Message::parse_from_bytes(&data);
+                        match event_list {
+                            Ok(ev) => {
+                                let event_list = ev;
+                                self.parse_game_event_map(event_list)
+                            }
+                            Err(e) => panic!(
+                                "Failed to parse game event LIST at tick {}. Error: {e}",
+                                self.tick
+                            ),
                         }
-                        Err(e) => panic!(
-                            "Failed to parse game event LIST at tick {}. Error: {e}",
-                            self.tick
-                        ),
                     }
                 }
                 // Packet entites
@@ -363,21 +370,18 @@ impl Demo {
         }
     }
 }
-pub fn check_round_change(entities: &Vec<(u32, Entity)>, rules_id: &Option<u32>, round: &mut i32){
-    if rules_id.is_some(){
+pub fn check_round_change(entities: &Vec<(u32, Entity)>, rules_id: &Option<u32>, round: &mut i32) {
+    if rules_id.is_some() {
         match entities.get(rules_id.unwrap() as usize) {
-            Some(e) => {
-                match e.1.props.get("m_totalRoundsPlayed"){
-                    Some(r) => {
-                        if let PropData::I32(p) = r.data{
-                            *round = p;
-                        }
+            Some(e) => match e.1.props.get("m_totalRoundsPlayed") {
+                Some(r) => {
+                    if let PropData::I32(p) = r.data {
+                        *round = p;
                     }
-                    None => {}
                 }
-            }
+                None => {}
+            },
             None => {}
-            
         }
     }
 }

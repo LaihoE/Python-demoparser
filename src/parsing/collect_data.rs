@@ -48,10 +48,10 @@ fn insert_propcolumn(
 }
 fn insert_weapon_prop(
     ticks_props: &mut HashMap<String, PropColumn, RandomState>,
-    ent: &Entity,
+    _ent: &Entity,
     prop_name: &String,
     playback_frames: usize,
-    col_type: i32,
+    _col_type: i32,
     weapon: Option<&Entity>,
 ) {
     match weapon {
@@ -75,7 +75,7 @@ fn insert_weapon_prop(
     }
 }
 fn insert_weapon_name(
-    ent: &Entity,
+    _ent: &Entity,
     cls_map: &HashMap<u16, ServerClass, RandomState>,
     weap_ent: Option<&Entity>,
     ticks_props: &mut HashMap<String, PropColumn, RandomState>,

@@ -12,9 +12,6 @@ df = pd.DataFrame(parser.parse_events("player_death"))
 # end of "parser" after this its just pandas operations.
 
 # Remove warmup rounds. Seems like something odd going on with round "1" so drop
-df = df[df["round"] != 0]
-df = df[df["round"] != 1]
-
 # Here we can include any other filters like weapons etc.
 # df = df[df["weapon"] == "ak47"]
 

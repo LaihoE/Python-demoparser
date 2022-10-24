@@ -1,3 +1,4 @@
+use crate::parsing::entities::parse_baselines;
 use crate::parsing::entities::Prop;
 use crate::Demo;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
@@ -7,7 +8,6 @@ use protobuf::Message;
 use smallvec::{smallvec, SmallVec};
 use std::collections::HashSet;
 use std::vec;
-
 #[derive(Debug)]
 pub struct ServerClass {
     pub id: u16,
@@ -47,7 +47,6 @@ impl Demo {
 
         let class_count = self.read_short();
         self.class_bits = (class_count as f32 + 1.).log2().ceil() as u32;
-
         for _ in 0..class_count {
             let id = self.read_short();
             let _ = self.read_string();
@@ -55,8 +54,19 @@ impl Demo {
 
             if self.parse_props {
                 let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt], dt.clone());
-                self.serverclass_map
-                    .insert(id, ServerClass { id, dt, props });
+                let server_class = ServerClass { id, dt, props };
+                // Set baselines parsed earlier in stringtables.
+                // Happens when stringtable, with instancebaseline, comes
+                // before this event. Seems oddly complicated
+                match self.baseline_no_cls.get(&(id as u32)) {
+                    Some(user_data) => {
+                        parse_baselines(&user_data, &server_class, &mut self.baselines);
+                        // Remove after being parsed
+                        self.baseline_no_cls.remove(&(id as u32));
+                    }
+                    None => {}
+                }
+                self.serverclass_map.insert(id, server_class);
             }
         }
     }

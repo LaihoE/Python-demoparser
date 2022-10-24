@@ -146,16 +146,16 @@ impl<'a> MyBitreader<'a> {
     #[inline(always)]
     pub fn read_string(&mut self, length: i32) -> String {
         let mut s: Vec<u8> = Vec::new();
-        for _ in 0..length{
+        for _ in 0..length {
             let c = self.read_sint_bits(8) as u8;
             if c == 0 {
                 break;
             }
             s.push(c);
         }
-        let out = String::from_utf8_lossy(&s);
-        out.try_into().unwrap()
-        //String::from_utf8(s).unwrap()
+        //let out = String::from_utf8_lossy(&s);
+        //out.try_into().unwrap()
+        String::from_utf8(s).unwrap()
     }
     #[inline(always)]
     pub fn read_string_lossy(&mut self, length: i32) -> String {
@@ -196,7 +196,16 @@ impl<'a> MyBitreader<'a> {
         }
     }
     #[inline(always)]
-    pub fn read_bits_st(&mut self, n: i32) -> [u8; 340] {
+    pub fn read_bits_st(&mut self, n: u32) -> Vec<u8> {
+        let eight = 8.try_into().unwrap();
+        let mut bytarr: Vec<u8> = vec![];
+        for i in 0..n {
+            bytarr.push(self.read_nbits(eight).try_into().unwrap());
+        }
+        bytarr
+    }
+    #[inline(always)]
+    pub fn read_bits_old(&mut self, n: i32) -> [u8; 340] {
         let mut res = 0;
         let mut bitsleft = n;
         let eight = 8.try_into().unwrap();

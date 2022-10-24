@@ -103,7 +103,9 @@ pub struct Demo {
     pub rules_id: Option<u32>,
     pub no_gameevents: bool,
     pub early_exit_tick: i32,
-    pub baselines: HashMap<u16, StringTable>,
+    pub baselines: HashMap<u32, HashMap<String, PropData>>,
+    // Bruh just why is it so complicated :(
+    pub baseline_no_cls: HashMap<u32, Vec<u8>>,
 }
 impl Demo {
     pub fn new(
@@ -172,6 +174,7 @@ impl Demo {
                 no_gameevents: no_gameevents,
                 early_exit_tick: early_exit_tick,
                 baselines: HashMap::new(),
+                baseline_no_cls: HashMap::new(),
             }),
         }
     }
@@ -204,7 +207,7 @@ impl Demo {
         while self.fp < self.bytes.get_len() as usize {
             self.frames_parsed += 1;
             let (cmd, tick) = self.read_frame();
-            if tick > self.early_exit_tick{
+            if tick > self.early_exit_tick {
                 break;
             }
             self.tick = tick;
@@ -269,6 +272,7 @@ impl Demo {
             let msg = self.read_varint();
             let size = self.read_varint();
             let data = self.read_n_bytes(size);
+            //println!("MSGF {}", msg);
             match msg as i32 {
                 // Game event
                 25 => {
@@ -328,6 +332,7 @@ impl Demo {
                                     &mut self.manager_id,
                                     &mut self.rules_id,
                                     &mut self.round,
+                                    &self.baselines,
                                 );
                                 match res {
                                     Some(v) => {

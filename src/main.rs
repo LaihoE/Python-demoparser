@@ -19,11 +19,14 @@ use std::fs::File;
 use std::time::Instant;
 
 fn main() {
-    let paths = fs::read_dir("/mnt/d/b/mygames/").unwrap();
+    let now = Instant::now();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/average/").unwrap();
     for demo_path in paths {
+        //let paths = fs::read_dir("/mnt/d/b/mygames/").unwrap();
+
         let now = Instant::now();
         let props_names = vec!["m_angEyeAngles[0]".to_string()];
-
+        let dp = "/home/laiho/Documents/demos/faceits/average".to_string();
         let mut parser = Demo::new(
             demo_path
                 .as_ref()
@@ -33,14 +36,14 @@ fn main() {
                 .unwrap()
                 .to_string(),
             true,
-            vec![10000, 10001, 10002, 10003],
+            vec![],
             vec![],
             vec![],
             "".to_string(),
             false,
             false,
             true,
-            50
+            999999,
         )
         .unwrap();
 
@@ -48,21 +51,9 @@ fn main() {
         let mut event_names: Vec<String> = Vec::new();
         let data = parser.start_parsing(&props_names);
 
-        // 41 ent   39 rules
-        /*
-        for ent in parser.entities {
-            if ent.1.class_id == 39 {
-                println!("{:?}", ent);
-                for p in ent.1.props {
-                    println!("X {:?}", p.1);
-                }
-            }
-        }
-        */
-        let elapsed = now.elapsed();
-        println!("Elapsed: {:.2?}", elapsed);
+        //println!("Elapsed: {:.2?}", elapsed);
         //break;
     }
-
-    //println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 70);
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 67);
 }

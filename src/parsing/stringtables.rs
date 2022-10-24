@@ -1,6 +1,10 @@
 use crate::parsing::entities::update_entity;
-use crate::parsing::read_bits_old::BitReader;
+//use crate::parsing::read_bits_old::BitReader;
+use super::read_bits::MyBitreader;
+use crate::parsing::entities::parse_baselines;
 use crate::Demo;
+use bitter::BitReader;
+use core::num;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 use csgoproto::netmessages::CSVCMsg_UpdateStringTable;
 use pyo3::ffi::PyObject;
@@ -11,14 +15,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::TryInto;
 
-use super::read_bits::MyBitreader;
-
 // THIS ENTIRE FILE IS A MESS
 // THIS ENTIRE FILE IS A MESS
 // THIS ENTIRE FILE IS A MESS
 // THIS ENTIRE FILE IS A MESS
 // THIS ENTIRE FILE IS A MESS
-
 
 #[derive(Clone, Debug)]
 pub struct StringTable {
@@ -71,7 +72,7 @@ impl UserInfo {
 }
 
 impl Demo {
-    pub fn parse_userinfo(userdata: [u8; 340]) -> UserInfo {
+    pub fn parse_userinfo(userdata: Vec<u8>) -> UserInfo {
         let ui = UserInfo {
             version: u64::from_be_bytes(userdata[0..8].try_into().unwrap()),
             xuid: u64::from_be_bytes(userdata[8..16].try_into().unwrap()),
@@ -100,23 +101,19 @@ impl Demo {
         user_data_size: i32,
         user_data_fixsize: bool,
     ) -> StringTable {
-        let left_over = (data.len() % 4) as i32;
         let mut buf = MyBitreader::new(data);
         let mut entry_bits = (max_entries as f32).log2() as i32;
         let mut entry_index = 0;
         let mut last_inx: i32 = -1;
-        let mut idx = 0;
-        let mut btc = 0;
         let mut history: Vec<String> = Vec::new();
-
         let mut entry = String::new();
-        let mut user_data: [u8; 340] = [0; 340];
 
         buf.read_boolie();
 
-        for _i in 0..num_entries {
+        for i in 0..num_entries {
+            let mut user_data = vec![];
             entry_index = last_inx + 1;
-            if !buf.read_boolie(){
+            if !buf.read_boolie() {
                 entry_index = buf
                     .read_nbits(entry_bits.try_into().unwrap())
                     .try_into()
@@ -130,57 +127,60 @@ impl Demo {
                     let s = &history[idx as usize];
                     let s_slice = &s[..bytes_to_copy as usize];
                     entry = s_slice.to_owned() + &buf.read_string(4096);
-                    println!("{}", entry);
                 } else {
                     entry = buf.read_string(4096);
                 }
+                st.data[entry_index as usize].entry = entry.to_string()
             }
             if history.len() >= 32 {
                 history.remove(0);
             }
             history.push(entry.clone());
-
             if buf.read_boolie() {
-                println!("HERER");
-                if user_data_fixsize {
-                    user_data = buf.read_bits_st(user_data_size);
-                    println!("A {:?}", user_data);
-                    if st.userinfo {
-                        let mut ui = Demo::parse_userinfo(user_data);
-                        if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
-                            self.players_connected += 1;
-                        }
-                        ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
-                        ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        self.userid_sid_map.insert(ui.user_id, ui.xuid);
-                        self.entid_is_player.insert(ui.entity_id, ui.xuid);
-                        self.players.insert(ui.xuid, ui);
-                    }
+                user_data = if user_data_fixsize {
+                    let mut u = vec![];
+                    u.push(
+                        buf.read_nbits(user_data_size.try_into().unwrap())
+                            .try_into()
+                            .unwrap(),
+                    );
+                    u
                 } else {
                     let size = buf.read_nbits(14);
-                    user_data = buf.read_bits_st(size.try_into().unwrap());
-                    println!("B {:?}", user_data);
-                    if st.userinfo {
-                        let mut ui = Demo::parse_userinfo(user_data);
-                        ui.entity_id = (st.data[entry_index as usize].entry).parse::<u32>().unwrap() + 1;
-                        if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
-                            self.players_connected += 1;
+                    buf.read_bits_st(size)
+                };
+                if st.name == "instancebaseline" {
+                    let k = match entry.parse::<u32>() {
+                        Ok(x) => x,
+                        Err(_) => 999999,
+                    };
+                    match self.serverclass_map.get(&(k as u16)) {
+                        Some(sv_cls) => {
+                            parse_baselines(&user_data, sv_cls, &mut self.baselines);
                         }
-                        ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
-                        ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        self.userid_sid_map.insert(ui.user_id, ui.xuid);
-                        self.entid_is_player.insert(ui.entity_id, ui.xuid);
-                        self.players.insert(ui.xuid, ui);
+                        None => {
+                            // Serverclass_map is not initiated yet, we need to parse this
+                            // later. Just why??? :() just seems unnecessarily complicated
+                            self.baseline_no_cls.insert(k, user_data.clone());
+                        }
                     }
+                    history.push(entry.to_string());
                 }
-                
+                if st.userinfo {
+                    let mut ui = Demo::parse_userinfo(user_data);
+                    ui.entity_id = entry.parse::<u32>().unwrap() + 1;
+                    if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
+                        self.players_connected += 1;
+                    }
+                    ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
+                    ui.name = ui.name.trim_end_matches("\x00").to_string();
+                    self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                    self.entid_is_player.insert(ui.entity_id, ui.xuid);
+                    self.players.insert(ui.xuid, ui);
+                }
             }
         }
-        if st.name == "instancebaseline"{
-            println!("{}", entry);
-            //let cls_id = entry.parse::<u32>().unwrap();
-            //self.baselines.insert(cls_id as u16, st.clone());
-        }
+
         st
     }
 
@@ -190,6 +190,7 @@ impl Demo {
         if data.name() == "userinfo" {
             uinfo = true;
         }
+
         let mut st = StringTable {
             name: data.name().to_string(),
             userinfo: uinfo,
@@ -198,36 +199,30 @@ impl Demo {
             uds: data.user_data_size(),
             data: Vec::new(),
         };
-        for _ in 1..50000 {
-            st.data.push(StField {
-                entry: "".to_string(),
-            })
+        if st.name == "userinfo" || st.name == "instancebaseline" {
+            for _ in 1..50000 {
+                st.data.push(StField {
+                    entry: "".to_string(),
+                })
+            }
+            let ui = st.userinfo;
+            st = self.update_string_table(
+                data.string_data(),
+                st,
+                ui,
+                data.num_entries(),
+                data.max_entries(),
+                data.user_data_size_bits(),
+                data.user_data_fixed_size(),
+            );
         }
-        let ui = st.userinfo;
-        let st = &self.update_string_table(
-            data.string_data(),
-            st,
-            ui,
-            data.num_entries(),
-            data.max_entries(),
-            data.user_data_size_bits(),
-            data.user_data_fixed_size(),
-        );
+
         self.stringtables.push(st.clone());
     }
 
     pub fn update_string_table_msg(&mut self, data: CSVCMsg_UpdateStringTable) {
         let st = self.stringtables.get_mut(data.table_id() as usize).unwrap();
-
-        //println!("{}", st.name);
-        if st.name != "userinfo" {
-            return;
-        }
-
-        let left_over = (data.string_data().len() % 4) as i32;
-        let mut buf = BitReader::new(data.string_data(), left_over);
-        buf.read_uneven_end_bits();
-
+        let mut buf = MyBitreader::new(data.string_data());
         let entry_bits = (st.max_entries as f32).log2() as i32;
         let mut index = 0;
         let mut last_inx: i32 = -1;
@@ -235,76 +230,85 @@ impl Demo {
         let mut btc = 0;
         let mut history: Vec<String> = Vec::new();
         let mut entry = String::new();
-        let mut user_data: [u8; 340] = [0; 340];
-        buf.read_bool();
+        let mut user_data: Vec<u8> = vec![];
+        buf.read_boolie();
 
-        for i in 0..st.max_entries {
+        if !(st.name == "userinfo" || st.name == "instancebaseline") {
+            return;
+        }
+
+        for _i in 0..data.num_changed_entries() {
             index = last_inx + 1;
-            if buf.read_bool() == false {
+            if buf.read_boolie() == false {
                 index = buf
                     .read_nbits(entry_bits.try_into().unwrap())
                     .try_into()
                     .unwrap();
             }
             last_inx = index;
-            if buf.read_bool() {
-                if buf.read_bool() {
-                    idx = buf.read_nbits(5);
-                    btc = buf.read_nbits(5);
-                    let substring = "";
-                    let suffix = buf.read_string_lossy(0);
-                    entry = substring.to_string() + &suffix.to_owned();
+            if buf.read_boolie() {
+                if buf.read_boolie() {
+                    let idx = buf.read_nbits(5) as i32;
+                    let bytes_to_copy = buf.read_nbits(5);
+                    let s = &history[idx as usize];
+                    let s_slice = &s[..bytes_to_copy as usize];
+                    entry = s_slice.to_owned() + &buf.read_string(4096);
                 } else {
-                    entry = buf.read_string_lossy(0);
+                    entry = buf.read_string(4096);
                 }
                 st.data[index as usize].entry = entry.to_string()
             }
-            if buf.read_bool() {
-                if st.udfs {
-                    user_data = buf.read_bits_st(st.uds);
-                    if st.userinfo {
-                        let mut ui = Demo::parse_userinfo(user_data);
-                        ui.entity_id = (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
-                        if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
-                            self.players_connected += 1;
-                        }
-                        ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
-                        ui.name = ui.name.trim_end_matches("\x00").to_string();
-                        self.userid_sid_map.insert(ui.user_id, ui.xuid);
-                        self.entid_is_player.insert(ui.entity_id, ui.xuid);
-                        self.players.insert(ui.xuid, ui);
-                    }
+            if history.len() >= 32 {
+                history.remove(0);
+            }
+            history.push(entry.clone());
+            if buf.read_boolie() {
+                let user_data = if st.udfs {
+                    let mut u = vec![];
+                    u.push(
+                        buf.read_nbits(st.uds.try_into().unwrap())
+                            .try_into()
+                            .unwrap(),
+                    );
+                    u
                 } else {
                     let size = buf.read_nbits(14);
-                    user_data = buf.read_bits_st(size.try_into().unwrap());
-
-                    if st.userinfo {
-                        let mut ui = Demo::parse_userinfo(user_data);
-                        if st.data[index as usize].entry != "" {
-                            let temp_id = (st.data[index as usize].entry).parse::<u32>();
-                            match temp_id {
-                                Err(e) => ui.entity_id = 99999,
-                                Ok(ok) => {
-                                    ui.entity_id =
-                                        (st.data[index as usize].entry).parse::<u32>().unwrap() + 1;
-                                    if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
-                                        self.players_connected += 1;
-                                    }
-                                    ui.friends_name =
-                                        ui.friends_name.trim_end_matches("\x00").to_string();
-                                    ui.name = ui.name.trim_end_matches("\x00").to_string();
-                                    self.userid_sid_map.insert(ui.user_id, ui.xuid);
-                                    self.entid_is_player.insert(ui.entity_id, ui.xuid);
-                                    self.players.insert(ui.xuid, ui);
-                                }
-                            }
+                    buf.read_bits_st(size)
+                };
+                if st.name == "instancebaseline" {
+                    let k = match entry.parse::<u32>() {
+                        Ok(x) => x,
+                        Err(_) => 999999,
+                    };
+                    match self.serverclass_map.get(&(k as u16)) {
+                        Some(sv_cls) => {
+                            parse_baselines(&user_data, sv_cls, &mut self.baselines);
+                        }
+                        None => {
+                            // Serverclass_map is not initiated yet, we need to parse this
+                            // later. Just why??? :() just seems unnecessarily complicated
+                            self.baseline_no_cls.insert(k, user_data.clone());
                         }
                     }
                 }
-                if history.len() == 32 {
-                    history.remove(0);
+                if st.userinfo {
+                    let mut ui = Demo::parse_userinfo(user_data);
+                    //println!("{:?}", ui);
+                    /*
+                    ui.entity_id = entry.parse::<u32>().unwrap() + 1;
+                    //println!("ENTRY {:?}", ui);
+                    if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
+                        self.players_connected += 1;
+                    }
+                    ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
+                    ui.name = ui.name.trim_end_matches("\x00").to_string();
+                    self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                    self.entid_is_player.insert(ui.entity_id, ui.xuid);
+                    self.players.insert(ui.xuid, ui);
+                    */
                 }
             }
+
             history.push(entry.to_string());
         }
     }

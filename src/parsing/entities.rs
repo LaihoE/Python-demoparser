@@ -62,6 +62,7 @@ impl Demo {
         manager_id: &mut Option<u32>,
         rules_id: &mut Option<u32>,
         round: &mut i32,
+        baselines: &HashMap<u32, HashMap<String, PropData>>,
     ) -> Option<Vec<u32>> {
         let n_upd_ents = pack_ents.updated_entries();
         let mut b = MyBitreader::new(pack_ents.entity_data());
@@ -88,6 +89,22 @@ impl Demo {
                     entity_id: entity_id as u32,
                     props: HashMap::default(),
                 };
+
+                match baselines.get(&cls_id) {
+                    Some(baseline) => {
+                        for (k, v) in baseline {
+                            if wanted_props.contains(k) {
+                                let atom = PropAtom {
+                                    prop_name: k.to_string(),
+                                    data: v.clone(),
+                                    tick: tick,
+                                };
+                                e.props.insert(k.to_string(), atom);
+                            }
+                        }
+                    }
+                    None => {}
+                }
 
                 if entity_id < 10000 {
                     match cls_map.get_mut(&(cls_id as u16)) {
@@ -288,12 +305,16 @@ pub fn highest_wanted_entid(
     }
 }
 
-
-pub fn parse_baselines(data: &[u8], cls_id: i32, sv_cls: &ServerClass){
+pub fn parse_baselines(
+    data: &[u8],
+    sv_cls: &ServerClass,
+    baselines: &mut HashMap<u32, HashMap<String, PropData>>,
+) {
     let mut b = MyBitreader::new(data);
     let mut val = -1;
     let new_way = b.read_boolie();
     let mut indicies = vec![];
+    let mut baseline: HashMap<String, PropData> = HashMap::default();
     loop {
         val = b.read_inx(val, new_way);
 
@@ -302,9 +323,10 @@ pub fn parse_baselines(data: &[u8], cls_id: i32, sv_cls: &ServerClass){
         }
         indicies.push(val);
     }
-    for inx in indicies{
+    for inx in indicies {
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);
-        println!("{:?}", pdata);
+        baseline.insert(prop.name.to_owned(), pdata);
     }
+    baselines.insert(sv_cls.id.try_into().unwrap(), baseline);
 }

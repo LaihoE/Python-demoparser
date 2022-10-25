@@ -168,7 +168,7 @@ impl Demo {
                 }
                 if st.userinfo {
                     let mut ui = Demo::parse_userinfo(user_data);
-                    ui.entity_id = entry.parse::<u32>().unwrap() + 1;
+                    ui.entity_id = entry_index as u32 + 1;
                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                         self.players_connected += 1;
                     }
@@ -230,7 +230,6 @@ impl Demo {
         let mut btc = 0;
         let mut history: Vec<String> = Vec::new();
         let mut entry = String::new();
-        let mut user_data: Vec<u8> = vec![];
         buf.read_boolie();
 
         if !(st.name == "userinfo" || st.name == "instancebaseline") {
@@ -251,7 +250,7 @@ impl Demo {
                     let idx = buf.read_nbits(5) as i32;
                     let bytes_to_copy = buf.read_nbits(5);
                     let s = &history[idx as usize];
-                    let s_slice = &s[..bytes_to_copy as usize];
+                    let s_slice = &s[..bytes_to_copy as usize + 1];
                     entry = s_slice.to_owned() + &buf.read_string(4096);
                 } else {
                     entry = buf.read_string(4096);
@@ -292,11 +291,8 @@ impl Demo {
                     }
                 }
                 if st.userinfo {
-                    let mut ui = Demo::parse_userinfo(user_data);
-                    //println!("{:?}", ui);
-                    /*
-                    ui.entity_id = entry.parse::<u32>().unwrap() + 1;
-                    //println!("ENTRY {:?}", ui);
+                    let mut ui = Demo::parse_userinfo(user_data.clone());
+                    ui.entity_id = index as u32 + 1;
                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                         self.players_connected += 1;
                     }
@@ -305,10 +301,8 @@ impl Demo {
                     self.userid_sid_map.insert(ui.user_id, ui.xuid);
                     self.entid_is_player.insert(ui.entity_id, ui.xuid);
                     self.players.insert(ui.xuid, ui);
-                    */
                 }
             }
-
             history.push(entry.to_string());
         }
     }

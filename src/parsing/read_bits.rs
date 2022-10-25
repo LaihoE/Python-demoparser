@@ -118,6 +118,7 @@ impl<'a> MyBitreader<'a> {
     }
 
     pub fn decode_array(&mut self, prop: &Prop) -> Vec<i32> {
+        // SUS
         let b = (prop.num_elements as f32).log2().floor() + 1.0;
         let num_elements = self.read_nbits(b as u32);
 
@@ -153,8 +154,6 @@ impl<'a> MyBitreader<'a> {
             }
             s.push(c);
         }
-        //let out = String::from_utf8_lossy(&s);
-        //out.try_into().unwrap()
         String::from_utf8(s).unwrap()
     }
     #[inline(always)]

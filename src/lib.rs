@@ -87,7 +87,7 @@ pub fn read_file(demo_path: String) -> Result<Vec<u8>, std::io::Error> {
     }
 }
 
-pub fn parse_kwargs(kwargs: Option<&PyDict>) -> (Vec<u64>, Vec<i32>) {
+pub fn parse_kwargs_ticks(kwargs: Option<&PyDict>) -> (Vec<u64>, Vec<i32>) {
     match kwargs {
         Some(k) => {
             let mut players: Vec<u64> = vec![];
@@ -109,6 +109,17 @@ pub fn parse_kwargs(kwargs: Option<&PyDict>) -> (Vec<u64>, Vec<i32>) {
         None => (vec![], vec![]),
     }
 }
+pub fn parse_kwargs_event(kwargs: Option<&PyDict>) -> bool {
+    match kwargs {
+        Some(k) => match k.get_item("rounds") {
+            Some(r) => {
+                return r.extract().unwrap();
+            }
+            None => return false,
+        },
+        None => return false,
+    }
+}
 
 #[pyclass]
 struct DemoParser {
@@ -121,19 +132,26 @@ impl DemoParser {
     pub fn py_new(demo_path: String) -> PyResult<Self> {
         Ok(DemoParser { path: demo_path })
     }
+    #[args(py_kwargs = "**")]
+    pub fn parse_events(
+        &self,
+        py: Python<'_>,
+        event_name: String,
+        py_kwargs: Option<&PyDict>,
+    ) -> PyResult<Py<PyAny>> {
+        let rounds = parse_kwargs_event(py_kwargs);
 
-    pub fn parse_events(&self, py: Python<'_>, event_name: String) -> PyResult<Py<PyAny>> {
         let parser = Demo::new(
             self.path.clone(),
-            true,
+            rounds,
             Vec::new(),
             Vec::new(),
             Vec::new(),
             event_name,
             false,
             false,
-            true,
-            9999999
+            false,
+            9999999,
         );
         match parser {
             Err(e) => {
@@ -157,7 +175,6 @@ impl DemoParser {
                     }
                     game_evs.push(hm);
                 }
-
                 let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
                 Ok(dict)
             }
@@ -180,12 +197,11 @@ impl DemoParser {
                 unk_props
             )));
         }
-        let (wanted_players, wanted_ticks) = parse_kwargs(py_kwargs);
+        let (wanted_players, wanted_ticks) = parse_kwargs_ticks(py_kwargs);
         let wanted_ticks_len = wanted_ticks.len();
-
-        let biggest_wanted_tick = if wanted_ticks_len > 0{
+        let biggest_wanted_tick = if wanted_ticks_len > 0 {
             wanted_ticks.iter().max().unwrap().clone()
-        }else{
+        } else {
             99999999
         };
 
@@ -199,7 +215,7 @@ impl DemoParser {
             false,
             false,
             true,
-            biggest_wanted_tick
+            biggest_wanted_tick,
         );
 
         match parser {
@@ -293,12 +309,12 @@ impl DemoParser {
             true,
             vec![],
             vec![],
-            vec![],
+            vec!["m_iTeamNum".to_string()],
             "".to_string(),
             true,
             false,
             true,
-            9999999
+            9999999,
         );
         match parser {
             Err(e) => {
@@ -314,7 +330,8 @@ impl DemoParser {
                 let mut py_players = vec![];
                 let ent_manager = &parser.entities[parser.manager_id.unwrap() as usize].1;
                 for (_, player) in players {
-                    let team = get_manager_i32_prop(&ent_manager, &player, "m_iTeam");
+                    let team = get_player_team(&parser.entities[player.entity_id as usize].1);
+                    println!("{}", team);
                     let mut hm = player.to_hashmap(py);
                     let team = match team {
                         2 => "T",
@@ -332,7 +349,7 @@ impl DemoParser {
                     let comp_wins =
                         get_manager_i32_prop(&ent_manager, &player, "m_iCompetitiveWins");
 
-                    hm.insert("staring_side".to_string(), team.to_string().to_object(py));
+                    hm.insert("starting_side".to_string(), team.to_string().to_object(py));
                     hm.insert(
                         "crosshair_code".to_string(),
                         crosshair_code.to_string().to_object(py),
@@ -363,7 +380,7 @@ impl DemoParser {
             true,
             false,
             true,
-            9999999
+            9999999,
         );
         match parser {
             Err(e) => {
@@ -378,6 +395,18 @@ impl DemoParser {
                 Ok(dict)
             }
         }
+    }
+}
+
+pub fn get_player_team(ent: &Entity) -> i32 {
+    match ent.props.get("m_iTeamNum") {
+        Some(p) => match p.data {
+            PropData::I32(x) => {
+                return x;
+            }
+            _ => -1,
+        },
+        None => -1,
     }
 }
 

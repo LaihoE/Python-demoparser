@@ -36,20 +36,36 @@ fn main() {
                 .unwrap()
                 .to_string(),
             true,
-            vec![],
+            (50..100).collect(),
             vec![],
             vec![],
             "".to_string(),
             false,
             false,
             true,
-            999999,
+            1000000,
         )
         .unwrap();
 
         let h: Header = parser.parse_demo_header();
         let mut event_names: Vec<String> = Vec::new();
         let data = parser.start_parsing(&props_names);
+        let elapsed = now.elapsed();
+        println!("Elapsed: {:.2?}", elapsed);
+
+        for i in 0..500 {
+            println!("{} {}", parser.serverclass_map[&i].dt, i)
+        }
+
+        for (k, v) in parser.entities {
+            //println!("{}", parser.serverclass_map[&(v.class_id as u16)].dt);
+
+            if v.class_id == 173 {
+                for (x, y) in v.props {
+                    println!("{} {:?}", x, y.data);
+                }
+            }
+        }
 
         //println!("Elapsed: {:.2?}", elapsed);
         //break;

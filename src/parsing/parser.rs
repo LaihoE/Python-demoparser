@@ -254,25 +254,11 @@ impl Demo {
         let parse_props = self.parse_props;
         let mut is_con_tick = false;
         let no_gameevents = self.no_gameevents;
-        /*
-        For future skipping
-        if !self.all_wanted_connected && self.tick % 1000 == 0 {
-            let highest = highest_wanted_entid(
-                &self.entids_not_connected,
-                &self.players,
-                &self.wanted_players,
-            );
-            if highest != 999999 {
-                self.all_wanted_connected = true;
-                self.highest_wanted_entid = highest;
-            }
-        }
-        */
+
         while self.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();
             let data = self.read_n_bytes(size);
-            //println!("MSGF {}", msg);
             match msg as i32 {
                 // Game event
                 25 => {

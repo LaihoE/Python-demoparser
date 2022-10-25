@@ -7,8 +7,8 @@ import tqdm
 
 def coordinates(file):
     wanted_props = ["X", "Y", "Z"]
-    wanted_ticks = [x for x in range(5000, 5050)]
-    print(file)
+    # This will early exit parsing after just 10k ticks
+    wanted_ticks = [x for x in range(5000, 10000)]
     parser = DemoParser(file)
     
     # You can remove optional arguments to get all tick or all players
@@ -18,7 +18,7 @@ def coordinates(file):
 if __name__ == "__main__":
     files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")
     print(files)
-    with mp.Pool(processes=24) as pool:
+    with mp.Pool(processes=12) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(coordinates, files), total=len(files)))
     df = pd.concat(results)
     print(df)

@@ -33,22 +33,27 @@ fn insert_propcolumn(
     playback_frames: usize,
     col_type: i32,
 ) {
+
     match ent.props.get(prop_name) {
-        None => ticks_props
+        None => {
+            ticks_props
             .entry(prop_name.to_string())
             .or_insert_with(|| create_default(col_type, playback_frames))
             .data
-            .push_none(),
-        Some(p) => ticks_props
+            .push_none()
+        }
+        Some(p) => {
+            ticks_props
             .entry(prop_name.to_string())
             .or_insert_with(|| create_default(col_type, playback_frames))
             .data
-            .push_propdata(p.data.clone()),
+            .push_propdata(p.data.clone())
+        },
     }
 }
 fn insert_weapon_prop(
     ticks_props: &mut HashMap<String, PropColumn, RandomState>,
-    _ent: &Entity,
+    ent: &Entity,
     prop_name: &String,
     playback_frames: usize,
     _col_type: i32,
@@ -74,6 +79,7 @@ fn insert_weapon_prop(
             .push_none(),
     }
 }
+
 fn insert_weapon_name(
     _ent: &Entity,
     cls_map: &HashMap<u16, ServerClass, RandomState>,

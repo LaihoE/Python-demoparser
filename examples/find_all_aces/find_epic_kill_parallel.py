@@ -11,11 +11,9 @@ def parse(file):
 
     parser = DemoParser(file)
     df = pd.DataFrame(parser.parse_events("player_death", rounds=False))
-    # print(df)
     # end of "parser" after this its just pandas operations.
 
     # Remove warmup rounds.
-    #print(df)
     df = df[df["round"] != 0]
 
     # Here we can include any other filters like weapons etc.

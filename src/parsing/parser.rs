@@ -104,7 +104,6 @@ pub struct Demo {
     pub no_gameevents: bool,
     pub early_exit_tick: i32,
     pub baselines: HashMap<u32, HashMap<String, PropData>>,
-    // Bruh just why is it so complicated :(
     pub baseline_no_cls: HashMap<u32, Vec<u8>>,
 }
 impl Demo {

@@ -168,7 +168,7 @@ impl Demo {
                 }
                 if st.userinfo {
                     let mut ui = Demo::parse_userinfo(user_data);
-                    ui.entity_id = entry_index as u32 + 1;
+                    ui.entity_id = entry_index as u32 +1;
                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                         self.players_connected += 1;
                     }
@@ -292,7 +292,7 @@ impl Demo {
                 }
                 if st.userinfo {
                     let mut ui = Demo::parse_userinfo(user_data.clone());
-                    ui.entity_id = index as u32 + 1;
+                    ui.entity_id = index as u32 +1;
                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                         self.players_connected += 1;
                     }

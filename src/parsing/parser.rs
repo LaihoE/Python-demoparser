@@ -88,6 +88,7 @@ pub struct Demo {
     pub only_players: bool,
     pub only_header: bool,
     pub userid_sid_map: HashMap<u32, u64, RandomState>,
+    pub uid_eid_map: HashMap<u32, u64, RandomState>,
     pub playback_frames: usize,
     pub frames_parsed: i32,
     pub entid_is_player: HashMap<u32, u64>,
@@ -103,6 +104,7 @@ pub struct Demo {
     pub baselines: HashMap<u32, HashMap<String, PropData>>,
     pub baseline_no_cls: HashMap<u32, Vec<u8>>,
     pub friendly_p_names: Vec<String>,
+    
 }
 impl Demo {
     pub fn new(
@@ -174,6 +176,7 @@ impl Demo {
                 baselines: HashMap::new(),
                 baseline_no_cls: HashMap::new(),
                 friendly_p_names: og_names,
+                uid_eid_map: HashMap::default(),
             }),
         }
     }

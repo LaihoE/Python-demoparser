@@ -8,19 +8,11 @@ import tqdm
 def parse(file):
     print(file)
     parser = DemoParser(file)
-    #df = pd.DataFrame(parser.parse_players())
-    df = parser.parse_ticks(["health", "m_vecOrigin_X", "Y", "weapon_name", "ammo"])
-    # df = pd.DataFrame(parser.parse_events(
-    # "player_footstep", props=["X", "Y", "Z", "weapon_name"]))
-    #print(set(df["weapon_name"]))
-    df = df[df["steamid"] == 76561198310910278]
-    df = df[df["tick"] < 98000]
-    #print(parser.parse_players())
-    print(df)
-    for i in range(len(df)):
-        print(df.iloc[i].to_list())
-    return df
-
+    df = pd.DataFrame(parser.parse_events(
+    "player_death", props=["X", "Y", "Z", "weapon_name"]))
+    #print(df.iloc[:40, :])
+    print(df.loc[:40, ["tick", "attacker_X", "attacker_Y", "player_X", "player_Y", "attacker_name", "player_name"]])
+    #print(pd.DataFrame(parser.parse_players()))
 
 if __name__ == "__main__":
     from collections import Counter

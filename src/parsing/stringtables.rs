@@ -174,6 +174,7 @@ impl Demo {
                     }
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
+                    self.uid_eid_map.insert(ui.user_id, ui.entity_id.try_into().unwrap());
                     self.userid_sid_map.insert(ui.user_id, ui.xuid);
                     self.entid_is_player.insert(ui.entity_id, ui.xuid);
                     self.players.insert(ui.xuid, ui);
@@ -299,6 +300,7 @@ impl Demo {
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
                     self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                    self.uid_eid_map.insert(ui.user_id, ui.entity_id.try_into().unwrap());
                     self.entid_is_player.insert(ui.entity_id, ui.xuid);
                     self.players.insert(ui.xuid, ui);
                 }

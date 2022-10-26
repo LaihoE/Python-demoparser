@@ -44,12 +44,16 @@ pub fn parse_props(
     wanted_props: &Vec<String>,
     og_names: &Vec<String>,
     prefix: String,
+    uid_eid_map: &HashMap<u32, u64, RandomState>,
 ) -> Vec<NameDataPair> {
-    let ent_id = key.val_short();
+    //println!("{:?}", uid_eid_map);
+    let user_id = key.val_short();
+    let ent_id = match uid_eid_map.get(&(user_id as u32)){
+        Some(eid) => eid,
+        None => &999999,
+    };
     let mut all_pairs = vec![];
-    //println!("{:?}", wanted_props);
-    //println!("{:?}", og_names);
-    match entities.get(ent_id as usize) {
+    match entities.get(*ent_id as usize) {
         None => all_pairs,
         Some(ent) => {
             for wanted_prop_inx in 0..og_names.len() {
@@ -194,6 +198,7 @@ pub fn gen_name_val_pairs(
     entities: &Vec<(u32, Entity)>,
     wanted_props: &Vec<String>,
     og_names: &Vec<String>,
+    uid_eid_map: &HashMap<u32, u64, RandomState>
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
     let mut kv_pairs: Vec<NameDataPair> = Vec::new();
@@ -215,7 +220,7 @@ pub fn gen_name_val_pairs(
                     data: Some(steam_name),
                 });
                 let props =
-                    parse_props(ge, entities, wanted_props, og_names, "player_".to_string());
+                    parse_props(ge, entities, wanted_props, og_names, "player_".to_string(), uid_eid_map);
                 for p in props {
                     kv_pairs.push(p);
                 }
@@ -237,6 +242,7 @@ pub fn gen_name_val_pairs(
                     wanted_props,
                     og_names,
                     "attacker_".to_string(),
+                    uid_eid_map
                 );
                 for p in props {
                     kv_pairs.push(p);
@@ -291,6 +297,7 @@ impl Demo {
                             &self.entities,
                             &self.wanted_props,
                             &self.friendly_p_names,
+                            &self.uid_eid_map
                         );
 
                         game_events.push({
@@ -312,6 +319,7 @@ impl Demo {
                             &self.entities,
                             &self.wanted_props,
                             &self.friendly_p_names,
+                            &self.uid_eid_map
                         );
                         game_events.push({
                             GameEvent {

@@ -56,6 +56,7 @@ impl VarVec {
             PropData::String(p) => match self {
                 VarVec::String(f) => f.push(Some(p)),
                 _ => {
+                    println!("{:?}", self);
                     panic!("Tried to push a {:?} into a string column", p);
                 }
             },

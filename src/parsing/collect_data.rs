@@ -11,6 +11,8 @@ use phf::phf_map;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use super::variants::PropData;
+
 #[inline(always)]
 pub fn create_default(col_type: i32, playback_frames: usize) -> PropColumn {
     let v = match col_type {
@@ -46,6 +48,7 @@ fn insert_propcolumn(
             .push_propdata(p.data.clone()),
     }
 }
+#[inline(always)]
 fn insert_weapon_prop(
     ticks_props: &mut HashMap<String, PropColumn, RandomState>,
     _ent: &Entity,
@@ -56,11 +59,21 @@ fn insert_weapon_prop(
 ) {
     match weapon {
         Some(w) => match w.props.get(prop_name) {
-            Some(w) => ticks_props
+            Some(w) => {
+                {
+                let data = if let PropData::I32(x) = w.data{
+                    PropData::I32(x-1)
+                }else{
+                    // Should not happen
+                    w.data.clone()
+                };
+                ticks_props
                 .entry(prop_name.to_string())
                 .or_insert_with(|| create_default(0, playback_frames))
                 .data
-                .push_propdata(w.data.clone()),
+                .push_propdata(data)
+            }
+            },
             None => ticks_props
                 .entry(prop_name.to_string())
                 .or_insert_with(|| create_default(0, playback_frames))
@@ -74,41 +87,90 @@ fn insert_weapon_prop(
             .push_none(),
     }
 }
-
+#[inline(always)]
 fn insert_weapon_name(
-    _ent: &Entity,
     cls_map: &HashMap<u16, ServerClass, RandomState>,
-    weap_ent: Option<&Entity>,
     ticks_props: &mut HashMap<String, PropColumn, RandomState>,
-    playback_frames: usize,
+    ent: &Entity,
     prop_name: &String,
+    playback_frames: usize,
+    _col_type: i32,
+    weapon: Option<&Entity>,
 ) {
-    println!(
-        "{:?}",
-        weap_ent.unwrap().props.get("m_iItemDefinitionIndex")
-    );
-    match weap_ent {
-        Some(we) => match cls_map.get(&(we.class_id as u16)) {
-            Some(sc) => ticks_props
-                .entry(prop_name.to_string())
-                .or_insert_with(|| create_default(4, playback_frames))
-                .data
-                .push_propdata(variants::PropData::String(sc.dt.to_string())),
+    match weapon {
+        Some(w) => match w.props.get("m_iItemDefinitionIndex") {
+            Some(w) => {
+                if let PropData::I32(x) = w.data{
+                    let name = WEAPINDICIES[&x.to_string()];
+                        ticks_props
+                        .entry(prop_name.to_string())
+                        .or_insert_with(|| create_default(4, playback_frames))
+                        .data
+                        .push_propdata(PropData::String(name.to_string()))
+                }
+            }
+            None => {
+                match weapon {
+                    Some(we) => match cls_map.get(&(we.class_id as u16)) {
+                        Some(sc) => {
+                            let full_name = sc.dt.to_string();
+                            let weap_name = match  full_name.split("Weapon").last(){
+                                Some(w) => {
+                                    if w == "M4A1"{
+                                        "M4A4"
+                                    }else{
+                                        match  full_name.split("_").last(){
+                                            Some(x) => {
+                                                x
+                                            }
+                                            None => {
+                                                &full_name
+                                            }
+                                        }
+                                    }
+                                }
+                                None => {
+                                    match  full_name.split("_").last(){
+                                        Some(x) => {
+                                            x
+                                        }
+                                        None => {
+                                            &full_name
+                                        }
+                                    }
+                                }
+                            };
 
-            None => ticks_props
-                .entry(prop_name.to_string())
-                .or_insert_with(|| create_default(4, playback_frames))
-                .data
-                .push_none(),
+                            ticks_props
+                            .entry(prop_name.to_string())
+                            .or_insert_with(|| create_default(4, playback_frames))
+                            .data
+                            .push_propdata(variants::PropData::String(weap_name.to_string()))
+                        }
+                        None => ticks_props
+                            .entry(prop_name.to_string())
+                            .or_insert_with(|| create_default(4, playback_frames))
+                            .data
+                            .push_none(),
+                    },
+                    None => ticks_props
+                        .entry(prop_name.to_string())
+                        .or_insert_with(|| create_default(4, playback_frames))
+                        .data
+                        .push_none(),
+                }
+            },
         },
-        None => ticks_props
+        None => {
+            ticks_props
             .entry(prop_name.to_string())
             .or_insert_with(|| create_default(4, playback_frames))
             .data
-            .push_none(),
+            .push_none()
+        }
     }
 }
-
+#[inline(always)]
 fn insert_manager_prop(
     ticks_props: &mut HashMap<String, PropColumn, RandomState>,
     ent: &Entity,
@@ -146,6 +208,7 @@ fn insert_manager_prop(
             .push_none(),
     }
 }
+#[inline(always)]
 fn weap_id_from_ent(ent: &Entity) -> Option<u32> {
     match ent.props.get("m_hActiveWeapon") {
         None => None,
@@ -218,12 +281,13 @@ impl Demo {
                                     weapon_ent,
                                 ),
                                 99 => insert_weapon_name(
-                                    &ent.1,
                                     cls_map,
-                                    weapon_ent,
                                     ticks_props,
-                                    playback_frames,
+                                    &ent.1,
                                     prop_name,
+                                    playback_frames,
+                                    0,
+                                    weapon_ent,
                                 ),
                                 _ => {
                                     insert_propcolumn(
@@ -277,6 +341,101 @@ fn insert_metadata(
         .data
         .push_u64(xuid);
 }
+
+// Found in scripts/items/items_game.txt
+pub static WEAPINDICIES: phf::Map<&'static str, &'static str> = phf_map! {
+    "default" => "default",
+    "1" => "deagle",
+    "2" => "elite",
+    "3" => "fiveseven",
+    "4" => "glock",
+    "7" => "ak47",
+    "8" => "aug",
+    "9" => "awp",
+    "10" => "famas",
+    "11" => "g3sg1",
+    "13" => "galilar",
+    "14" => "m249",
+    "16" => "m4a1",
+    "17" => "mac10",
+    "19" => "p90",
+    "20" => "zone_repulsor",
+    "23" => "mp5sd",
+    "24" => "ump45",
+    "25" => "xm1014",
+    "26" => "bizon",
+    "27" => "mag7",
+    "28" => "negev",
+    "29" => "sawedoff",
+    "30" => "tec9",
+    "31" => "taser",
+    "32" => "hkp2000",
+    "33" => "mp7",
+    "34" => "mp9",
+    "35" => "nova",
+    "36" => "p250",
+    "37" => "shield",
+    "38" => "scar20",
+    "39" => "sg556",
+    "40" => "ssg08",
+    "41" => "knifegg",
+    "42" => "knife",
+    "43" => "flashbang",
+    "44" => "hegrenade",
+    "45" => "smokegrenade",
+    "46" => "molotov",
+    "47" => "decoy",
+    "48" => "incgrenade",
+    "49" => "c4",
+    "50" => "item_kevlar",
+    "51" => "item_assaultsuit",
+    "52" => "item_heavyassaultsuit",
+    "54" => "item_nvg",
+    "55" => "item_defuser",
+    "56" => "item_cutters",
+    "57" => "healthshot",
+    "58" => "musickit_default",
+    "59" => "knife_t",
+    "60" => "m4a1_silencer",
+    "61" => "usp_silencer",
+    "62" => "Recipe Trade Up",
+    "63" => "cz75a",
+    "64" => "revolver",
+    "68" => "tagrenade",
+    "69" => "fists",
+    "70" => "breachcharge",
+    "72" => "tablet",
+    "74" => "melee",
+    "75" => "axe",
+    "76" => "hammer",
+    "78" => "spanner",
+    "80" => "knife_ghost",
+    "81" => "firebomb",
+    "82" => "diversion",
+    "83" => "frag_grenade",
+    "84" => "snowball",
+    "85" => "bumpmine",
+    "500" => "bayonet",
+    "503" => "knife_css",
+    "505" => "knife_flip",
+    "506" => "knife_gut",
+    "507" => "knife_karambit",
+    "508" => "knife_m9_bayonet",
+    "509" => "knife_tactical",
+    "512" => "knife_falchion",
+    "514" => "knife_survival_bowie",
+    "515" => "knife_butterfly",
+    "516" => "knife_push",
+    "517" => "knife_cord",
+    "518" => "knife_canis",
+    "519" => "knife_ursus",
+    "520" => "knife_gypsy_jackknife",
+    "521" => "knife_outdoor",
+    "522" => "knife_stiletto",
+    "523" => "knife_widowmaker",
+    "525" => "knife_skeleton",
+};
+
 
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_flNextAttack" => 1,

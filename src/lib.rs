@@ -451,6 +451,7 @@ pub fn get_manager_i32_prop(manager: &Entity, player: &UserInfo, prop_name: &str
         None => -1,
     }
 }
+
 pub fn get_manager_str_prop(manager: &Entity, player: &UserInfo, prop_name: &str) -> String {
     let key = if player.entity_id < 10 {
         prop_name.to_string() + "00" + &player.entity_id.to_string()

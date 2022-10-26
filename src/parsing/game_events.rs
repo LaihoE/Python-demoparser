@@ -31,7 +31,7 @@ fn parse_key_steamid(key: &Key_t, uid_sid_map: &HashMap<u32, u64, RandomState>) 
     let user_id = key.val_short();
 
     match uid_sid_map.get(&(user_id as u32)) {
-        None => KeyData::LongData(0), //panic!("USERID: {} not found in mapping to steamid", user_id),
+        None => KeyData::LongData(0),
         Some(u) => {
             return KeyData::Uint64Data(*u);
         }
@@ -42,39 +42,41 @@ pub fn parse_props(
     key: &Key_t,
     entities: &Vec<(u32, Entity)>,
     wanted_props: &Vec<String>,
+    og_names: &Vec<String>,
     prefix: String,
 ) -> Vec<NameDataPair> {
     let ent_id = key.val_short();
     let mut all_pairs = vec![];
+    //println!("{:?}", wanted_props);
+    //println!("{:?}", og_names);
     match entities.get(ent_id as usize) {
         None => all_pairs,
         Some(ent) => {
-            for wanted_prop in wanted_props {
-                match ent.1.props.get(wanted_prop) {
+            for wanted_prop_inx in 0..og_names.len() {
+                match ent.1.props.get(&wanted_props[wanted_prop_inx]) {
                     Some(p) => {
                         match &p.data {
                             PropData::F32(f) => {
                                 all_pairs.push(NameDataPair {
-                                    name: prefix.clone() + &p.prop_name,
+                                    name: prefix.clone() + &og_names[wanted_prop_inx].to_string(),
                                     data: Some(KeyData::FloatData(*f)),
                                 });
                             }
                             PropData::I32(i) => {
                                 all_pairs.push(NameDataPair {
-                                    name: prefix.clone() + &p.prop_name,
+                                    name: prefix.clone() + &og_names[wanted_prop_inx].to_string(),
                                     data: Some(KeyData::LongData(*i)),
                                 });
                             }
                             PropData::String(s) => {
                                 all_pairs.push(NameDataPair {
-                                    name: p.prop_name.to_owned(),
+                                    name: prefix.clone() + &og_names[wanted_prop_inx].to_owned(),
                                     data: Some(KeyData::StrData(s.clone())),
                                 });
                             }
                             PropData::VecXY(_) => {
                                 // Handled by above sub-types and lets not create it here
                             }
-
                             _ => {
                                 all_pairs.push(NameDataPair {
                                     name: prefix.clone() + &p.prop_name,
@@ -85,7 +87,7 @@ pub fn parse_props(
                     }
                     None => {
                         all_pairs.push(NameDataPair {
-                            name: prefix.clone() + &wanted_prop,
+                            name: prefix.clone() + &og_names[wanted_prop_inx],
                             data: None,
                         });
                     }
@@ -191,6 +193,7 @@ pub fn gen_name_val_pairs(
     round: i32,
     entities: &Vec<(u32, Entity)>,
     wanted_props: &Vec<String>,
+    og_names: &Vec<String>,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
     let mut kv_pairs: Vec<NameDataPair> = Vec::new();
@@ -200,7 +203,7 @@ pub fn gen_name_val_pairs(
         let desc = &event.keys[i];
 
         match desc.name() {
-            "attacker" => {
+            "userid" => {
                 let steamid = parse_key_steamid(ge, uid_sid_map);
                 kv_pairs.push(NameDataPair {
                     name: "player_steamid".to_string(),
@@ -211,12 +214,13 @@ pub fn gen_name_val_pairs(
                     name: "player_name".to_string(),
                     data: Some(steam_name),
                 });
-                let props = parse_props(ge, entities, wanted_props, "player_".to_string());
+                let props =
+                    parse_props(ge, entities, wanted_props, og_names, "player_".to_string());
                 for p in props {
                     kv_pairs.push(p);
                 }
             }
-            "userid" => {
+            "attacker" => {
                 let steamid = parse_key_steamid(ge, uid_sid_map);
                 kv_pairs.push(NameDataPair {
                     name: "attacker_steamid".to_string(),
@@ -227,7 +231,13 @@ pub fn gen_name_val_pairs(
                     name: "attacker_name".to_string(),
                     data: Some(steam_name),
                 });
-                let props = parse_props(ge, entities, wanted_props, "attacker_".to_string());
+                let props = parse_props(
+                    ge,
+                    entities,
+                    wanted_props,
+                    og_names,
+                    "attacker_".to_string(),
+                );
                 for p in props {
                     kv_pairs.push(p);
                 }
@@ -280,6 +290,7 @@ impl Demo {
                             self.round,
                             &self.entities,
                             &self.wanted_props,
+                            &self.friendly_p_names,
                         );
 
                         game_events.push({
@@ -300,6 +311,7 @@ impl Demo {
                             self.round,
                             &self.entities,
                             &self.wanted_props,
+                            &self.friendly_p_names,
                         );
                         game_events.push({
                             GameEvent {

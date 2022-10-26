@@ -153,7 +153,7 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<Py<PyAny>> {
         let (rounds, wanted_props) = parse_kwargs_event(py_kwargs);
-        let real_props = rm_user_friendly_names(wanted_props);
+        let real_props = rm_user_friendly_names(&wanted_props);
         let unk_props = check_validity_props(&real_props);
         if unk_props.len() > 0 {
             return Err(PyKeyError::new_err(format!(
@@ -161,7 +161,6 @@ impl DemoParser {
                 unk_props
             )));
         }
-
         let parser = Demo::new(
             self.path.clone(),
             true,
@@ -173,6 +172,7 @@ impl DemoParser {
             false,
             false,
             9999999,
+            wanted_props,
         );
         match parser {
             Err(e) => {
@@ -236,6 +236,7 @@ impl DemoParser {
             false,
             true,
             biggest_wanted_tick,
+            wanted_props.clone(),
         );
 
         match parser {
@@ -336,6 +337,7 @@ impl DemoParser {
             false,
             true,
             9999999,
+            vec![],
         );
         match parser {
             Err(e) => {
@@ -401,6 +403,7 @@ impl DemoParser {
             false,
             true,
             9999999,
+            vec![],
         );
         match parser {
             Err(e) => {

@@ -41,6 +41,7 @@ fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
         if prop == &this_prop.name
             || this_prop.name == "m_hActiveWeapon"
             || this_prop.name == "m_iClip1"
+            || this_prop.name == "m_iItemDefinitionIndex"
         {
             return true;
         }
@@ -81,7 +82,6 @@ impl Demo {
                 b.read_boolie();
             } else if b.read_boolie() {
                 // IF ENTITY DOES NOT EXIST
-
                 let cls_id = b.read_nbits(cls_bits.try_into().unwrap());
                 let _ = b.read_nbits(10);
                 let mut e = Entity {
@@ -89,7 +89,6 @@ impl Demo {
                     entity_id: entity_id as u32,
                     props: HashMap::default(),
                 };
-                
                 match baselines.get(&cls_id) {
                     Some(baseline) => {
                         for (k, v) in baseline {
@@ -105,7 +104,7 @@ impl Demo {
                     }
                     None => {}
                 }
-                
+
                 if entity_id < 10000 {
                     match cls_map.get_mut(&(cls_id as u16)) {
                         Some(x) => {
@@ -186,12 +185,18 @@ pub fn parse_ent_props(
         let inx = workhorse[i];
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);
-        /* 
+
         if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
-            continue;
+            // if prop is not wanted then dont create propdata from it
+            //continue;
+        }
+        /*
+        if prop.name == "m_iItemDefinitionIndex" {
+            println!("{} {} {:?}", ent.entity_id, sv_cls.dt, prop);
+            println!("{:?}", ent.props);
         }
         */
-        
+        //println!("{}", prop.name);
         match pdata {
             PropData::VecXY(v) => {
                 let endings = ["_X", "_Y"];

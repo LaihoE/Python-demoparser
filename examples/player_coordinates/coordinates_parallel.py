@@ -10,10 +10,8 @@ def coordinates(file):
     # This will early exit parsing after just 10k ticks
     wanted_ticks = [x for x in range(5000, 10000)]
     parser = DemoParser(file)
-    
     # You can remove optional arguments to get all tick or all players
     df = parser.parse_ticks(wanted_props, ticks=wanted_ticks)
-    #print(df)
 
 if __name__ == "__main__":
     files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")

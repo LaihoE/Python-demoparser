@@ -44,6 +44,7 @@ fn main() {
             false,
             false,
             1000000,
+            vec![],
         )
         .unwrap();
 
@@ -52,7 +53,8 @@ fn main() {
         let data = parser.start_parsing(&props_names);
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?}", elapsed);
-        /* 
+
+        /*
         for (k, v) in parser.entities {
             //println!("{}", parser.serverclass_map[&(v.class_id as u16)].dt);
 

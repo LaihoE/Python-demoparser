@@ -33,27 +33,22 @@ fn insert_propcolumn(
     playback_frames: usize,
     col_type: i32,
 ) {
-
     match ent.props.get(prop_name) {
-        None => {
-            ticks_props
+        None => ticks_props
             .entry(prop_name.to_string())
             .or_insert_with(|| create_default(col_type, playback_frames))
             .data
-            .push_none()
-        }
-        Some(p) => {
-            ticks_props
+            .push_none(),
+        Some(p) => ticks_props
             .entry(prop_name.to_string())
             .or_insert_with(|| create_default(col_type, playback_frames))
             .data
-            .push_propdata(p.data.clone())
-        },
+            .push_propdata(p.data.clone()),
     }
 }
 fn insert_weapon_prop(
     ticks_props: &mut HashMap<String, PropColumn, RandomState>,
-    ent: &Entity,
+    _ent: &Entity,
     prop_name: &String,
     playback_frames: usize,
     _col_type: i32,
@@ -88,6 +83,10 @@ fn insert_weapon_name(
     playback_frames: usize,
     prop_name: &String,
 ) {
+    println!(
+        "{:?}",
+        weap_ent.unwrap().props.get("m_iItemDefinitionIndex")
+    );
     match weap_ent {
         Some(we) => match cls_map.get(&(we.class_id as u16)) {
             Some(sc) => ticks_props
@@ -179,7 +178,6 @@ impl Demo {
             if player.xuid == 0 || player.name == "GOTV" {
                 continue;
             };
-
             // Check that we want the tick
             if wanted_ticks.contains(tick) || wanted_ticks.is_empty() {
                 // Check that we want the player

@@ -1,5 +1,3 @@
-use super::entities;
-use super::entities::highest_wanted_entid;
 use super::game_events::GameEvent;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
@@ -10,7 +8,6 @@ use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::*;
 use flate2::read::GzDecoder;
-use memmap::Mmap;
 use memmap::MmapOptions;
 use mimalloc::MiMalloc;
 use phf::phf_map;
@@ -105,6 +102,7 @@ pub struct Demo {
     pub early_exit_tick: i32,
     pub baselines: HashMap<u32, HashMap<String, PropData>>,
     pub baseline_no_cls: HashMap<u32, Vec<u8>>,
+    pub friendly_p_names: Vec<String>,
 }
 impl Demo {
     pub fn new(
@@ -118,6 +116,7 @@ impl Demo {
         only_header: bool,
         no_gameevents: bool,
         early_exit_tick: i32,
+        og_names: Vec<String>,
     ) -> Result<Self, std::io::Error> {
         let mut extra_wanted_props = vec![];
         for p in &wanted_props {
@@ -174,6 +173,7 @@ impl Demo {
                 early_exit_tick: early_exit_tick,
                 baselines: HashMap::new(),
                 baseline_no_cls: HashMap::new(),
+                friendly_p_names: og_names,
             }),
         }
     }

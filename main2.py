@@ -7,8 +7,8 @@ import tqdm
 
 def parse(file):
     parser = DemoParser(file)
-    df = pd.DataFrame(parser.parse_players())
-    #df = parser.parse_ticks(["m_iTeamNum"])
+    #df = pd.DataFrame(parser.parse_players())
+    df = parser.parse_ticks(["health", "m_vecOrigin_X", "Y", "ammo"])
     print(df)
 
 

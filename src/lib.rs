@@ -10,6 +10,7 @@ use parsing::stringtables::UserInfo;
 use parsing::variants::PropAtom;
 use parsing::variants::PropData;
 use phf::phf_map;
+use polars::export::ahash::RandomState;
 use polars::prelude::ArrowField;
 use polars::prelude::NamedFrom;
 use polars::series::Series;
@@ -188,7 +189,7 @@ impl DemoParser {
         mut wanted_props: Vec<String>,
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
-        let mut real_props = rm_user_friendly_names(wanted_props);
+        let mut real_props = rm_user_friendly_names(&wanted_props);
         let unk_props = check_validity_props(&real_props);
 
         if unk_props.len() > 0 {
@@ -241,6 +242,10 @@ impl DemoParser {
                 real_props.push("tick".to_string());
                 real_props.push("steamid".to_string());
                 real_props.push("name".to_string());
+                wanted_props.push("tick".to_string());
+                wanted_props.push("steamid".to_string());
+                wanted_props.push("name".to_string());
+
                 let mut all_series = vec![];
 
                 match data.get("tick") {
@@ -279,13 +284,11 @@ impl DemoParser {
                                 all_series.push(py_series);
                             }
                         }
-                        let elapsed = now.elapsed();
                         let polars = py.import("polars")?;
                         let all_series_py = all_series.to_object(py);
                         let df = polars.call_method1("DataFrame", (all_series_py,))?;
-                        df.setattr("columns", real_props.to_object(py)).unwrap();
+                        df.setattr("columns", wanted_props.to_object(py)).unwrap();
                         let pandas_df = df.call_method0("to_pandas").unwrap();
-                        let elapsed = now.elapsed();
                         Ok(pandas_df.to_object(py))
                     }
                     None => {
@@ -481,31 +484,27 @@ pub fn rank_id_to_name(id: i32) -> String {
         _ => "Unranked".to_string(),
     }
 }
-pub fn rm_user_friendly_names(names: Vec<String>) -> Vec<String> {
+pub fn rm_user_friendly_names(names: &Vec<String>) -> Vec<String> {
     let mut unfriendly_names = vec![];
     for name in names {
         match &name[..] {
             "X" => unfriendly_names.push("m_vecOrigin_X".to_string()),
             "Y" => unfriendly_names.push("m_vecOrigin_Y".to_string()),
             "Z" => unfriendly_names.push("m_vecOrigin[2]".to_string()),
-
+            "ammo" => unfriendly_names.push("m_iClip1".to_string()),
             "velocity_X" => unfriendly_names.push("m_vecVelocity[0]".to_string()),
             "velocity_Y" => unfriendly_names.push("m_vecVelocity[1]".to_string()),
             "velocity_Z" => unfriendly_names.push("m_vecVelocity[2]".to_string()),
-
             "viewangle_pitch" => unfriendly_names.push("m_angEyeAngles[0]".to_string()),
             "viewangle_yaw" => unfriendly_names.push("m_angEyeAngles[1]".to_string()),
-
             "ducked" => unfriendly_names.push("m_bDucked".to_string()),
             "in_buy_zone" => unfriendly_names.push("m_bInBuyZone".to_string()),
             "scoped" => unfriendly_names.push("m_bIsScoped".to_string()),
             "health" => unfriendly_names.push("m_iHealth".to_string()),
             "flash_duration" => unfriendly_names.push("m_flFlashDuration".to_string()),
-
             "aimpunch_X" => unfriendly_names.push("m_aimPunchAngle_X".to_string()),
             "aimpunch_Y" => unfriendly_names.push("m_aimPunchAngle_Y".to_string()),
             "aimpunch_Z" => unfriendly_names.push("m_aimPunchAngle_Z".to_string()),
-
             "aimpunch_vel_X" => unfriendly_names.push("m_aimPunchAngleVel_X".to_string()),
             "aimpunch_vel_Y" => unfriendly_names.push("m_aimPunchAngleVel_Y".to_string()),
             "aimpunch_vel_Z" => unfriendly_names.push("m_aimPunchAngleVel_Z".to_string()),
@@ -614,7 +613,7 @@ pub fn rm_user_friendly_names(names: Vec<String>) -> Vec<String> {
             "last_duck_time" => unfriendly_names.push("m_flLastDuckTime".to_string()),
             "is_ducking" => unfriendly_names.push("m_bDucking".to_string()),
 
-            _ => unfriendly_names.push(name),
+            _ => unfriendly_names.push(name.to_string()),
         }
     }
     unfriendly_names

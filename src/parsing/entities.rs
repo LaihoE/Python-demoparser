@@ -89,7 +89,7 @@ impl Demo {
                     entity_id: entity_id as u32,
                     props: HashMap::default(),
                 };
-
+                
                 match baselines.get(&cls_id) {
                     Some(baseline) => {
                         for (k, v) in baseline {
@@ -105,7 +105,7 @@ impl Demo {
                     }
                     None => {}
                 }
-
+                
                 if entity_id < 10000 {
                     match cls_map.get_mut(&(cls_id as u16)) {
                         Some(x) => {
@@ -186,11 +186,12 @@ pub fn parse_ent_props(
         let inx = workhorse[i];
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop);
-
+        /* 
         if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
             continue;
         }
-
+        */
+        
         match pdata {
             PropData::VecXY(v) => {
                 let endings = ["_X", "_Y"];
@@ -202,7 +203,7 @@ pub fn parse_ent_props(
                         data: data,
                         tick: tick,
                     };
-                    ent.props.insert(prop.name.to_owned(), atom);
+                    ent.props.insert(atom.prop_name.to_owned(), atom);
                 }
             }
             PropData::VecXYZ(v) => {
@@ -215,7 +216,7 @@ pub fn parse_ent_props(
                         data: data,
                         tick: tick,
                     };
-                    ent.props.insert(prop.name.to_owned(), atom);
+                    ent.props.insert(atom.prop_name.to_owned(), atom);
                 }
             }
             _ => {

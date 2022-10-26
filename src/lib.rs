@@ -110,15 +110,27 @@ pub fn parse_kwargs_ticks(kwargs: Option<&PyDict>) -> (Vec<u64>, Vec<i32>) {
         None => (vec![], vec![]),
     }
 }
-pub fn parse_kwargs_event(kwargs: Option<&PyDict>) -> bool {
+
+pub fn parse_kwargs_event(kwargs: Option<&PyDict>) -> (bool, Vec<String>) {
     match kwargs {
-        Some(k) => match k.get_item("rounds") {
-            Some(r) => {
-                return r.extract().unwrap();
+        Some(k) => {
+            let mut rounds = false;
+            let mut props: Vec<String> = vec![];
+            match k.get_item("rounds") {
+                Some(p) => {
+                    rounds = p.extract().unwrap();
+                }
+                None => {}
             }
-            None => return false,
-        },
-        None => return false,
+            match k.get_item("props") {
+                Some(t) => {
+                    props = t.extract().unwrap();
+                }
+                None => {}
+            }
+            return (rounds, props);
+        }
+        None => (false, vec![]),
     }
 }
 
@@ -140,14 +152,22 @@ impl DemoParser {
         event_name: String,
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<Py<PyAny>> {
-        let rounds = parse_kwargs_event(py_kwargs);
+        let (rounds, wanted_props) = parse_kwargs_event(py_kwargs);
+        let real_props = rm_user_friendly_names(wanted_props);
+        let unk_props = check_validity_props(&real_props);
+        if unk_props.len() > 0 {
+            return Err(PyKeyError::new_err(format!(
+                "Unknown fields: {:?}",
+                unk_props
+            )));
+        }
 
         let parser = Demo::new(
             self.path.clone(),
-            rounds,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
+            true,
+            vec![],
+            vec![],
+            real_props,
             event_name,
             false,
             false,
@@ -191,7 +211,6 @@ impl DemoParser {
     ) -> PyResult<PyObject> {
         let mut real_props = rm_user_friendly_names(&wanted_props);
         let unk_props = check_validity_props(&real_props);
-
         if unk_props.len() > 0 {
             return Err(PyKeyError::new_err(format!(
                 "Unknown fields: {:?}",
@@ -237,7 +256,6 @@ impl DemoParser {
 
                 let now = Instant::now();
                 let data = parser.start_parsing(&real_props);
-                let elapsed = now.elapsed();
 
                 real_props.push("tick".to_string());
                 real_props.push("steamid".to_string());
@@ -334,7 +352,6 @@ impl DemoParser {
                 let ent_manager = &parser.entities[parser.manager_id.unwrap() as usize].1;
                 for (_, player) in players {
                     let team = get_player_team(&parser.entities[player.entity_id as usize].1);
-                    println!("{}", team);
                     let mut hm = player.to_hashmap(py);
                     let team = match team {
                         2 => "T",

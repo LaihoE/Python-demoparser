@@ -12,11 +12,13 @@ def coordinates(file):
     parser = DemoParser(file)
     # You can remove optional arguments to get all tick or all players
     df = parser.parse_ticks(wanted_props, ticks=wanted_ticks)
+    return df
+
 
 if __name__ == "__main__":
-    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")
-    print(files)
-    with mp.Pool(processes=12) as pool:
-        results = list(tqdm.tqdm(pool.imap_unordered(coordinates, files), total=len(files)))
+    files = glob.glob("/path/to/directory/with/demos/*")
+    with mp.Pool(processes=8) as pool:
+        results = list(tqdm.tqdm(pool.imap_unordered(
+            coordinates, files), total=len(files)))
     df = pd.concat(results)
     print(df)

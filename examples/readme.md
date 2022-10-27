@@ -1,6 +1,6 @@
 # Examples
-Each folder has a single process example and a multiprocessed example.
-
+Each folder has a single-process example and a multiprocessed example.
+If using multiprocessing adjust processes to your own liking. number of cpu cores * 2 usually gives best performance.
 
 # How to multiprocess
 

@@ -2,9 +2,9 @@ name: Python application
 
 on:
   push:
-    branches: [ "asdf" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "asdf" ]
+    branches: [ "main" ]
 
 permissions:
   contents: read
@@ -15,7 +15,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        python-version: ['3.8', '3.9', '3.10']
+        python-version: ['3.8', '3.9', '3.10', "3.11"]
         target: [x86, x64]
     steps:
     - uses: actions/checkout@v3
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.8', '3.9', '3.10']
+        python-version: ['3.8', '3.9', '3.10', "3.11"]
         target: [x86_64]
     steps:
     - uses: actions/checkout@v3

@@ -51,6 +51,9 @@ there are also these 2 functions for header and player info. Takes no arguments 
 parser.parse_header()
 parser.parse_players()
 ```
+## Check examples for getting started
+[Examples](https://github.com/LaihoE/Python-demoparser/tree/main/examples)
+
 #### Example game event
 ```python
 {
@@ -126,6 +129,6 @@ Also this type of setup makes it easy to create bindings for other languages (ma
 
 ## Special thank you to
 Valve for "official" implementation https://github.com/ValveSoftware/csgo-demoinfo  
-Markuswa's Go parser: https://github.com/markus-wa/demoinfocs-golang  
-Saul's: JS parser: https://github.com/saul/demofile  
-akiver Demos-Manager (really handy for quickly looking at demos) https://github.com/akiver/CSGO-Demos-Manager  
+Markuswa: Go parser: https://github.com/markus-wa/demoinfocs-golang  
+Saul: JS parser: https://github.com/saul/demofile  
+Akiver: Demos-Manager (really handy for quickly looking at demos) https://github.com/akiver/CSGO-Demos-Manager  

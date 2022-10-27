@@ -5,7 +5,7 @@ import pandas as pd
 import tqdm
 
 
-wanted_player = 76561198194694750
+wanted_player = 76561197991348083
 min_blind_duration = 2
 
 parser = DemoParser("demo.dem")
@@ -24,9 +24,9 @@ teammates = players[(players["starting_side"] == wanted_player_team) & (
     players["steamid"] != wanted_player)]
 teammates_steamids = teammates["steamid"].values
 
-players_blinded = players_blinded[(players_blinded["attacker_id"] == wanted_player) & (
-    players_blinded["player_id"].isin(teammates_steamids))]
+players_blinded = players_blinded[(players_blinded["attacker_steamid"] == wanted_player) & (
+    players_blinded["player_steamid"].isin(teammates_steamids))]
 players_blinded = players_blinded[players_blinded["blind_duration"]
                                   > min_blind_duration]
-                                  
+
 print(players_blinded)

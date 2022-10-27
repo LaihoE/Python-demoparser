@@ -4,7 +4,7 @@ If using multiprocessing adjust processes to your own liking. number of cpu core
 
 # How to multiprocess
 
-All examples have parallel version. This will mostly just mean these 2 lines of code:
+All examples have parallel versions. This will mostly just mean these 2 lines of code:
 ```python
 with mp.Pool(processes=8) as pool:
     results = pool.map(parse_function, files)

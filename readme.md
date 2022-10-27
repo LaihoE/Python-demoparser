@@ -4,7 +4,7 @@ Demo parser for Counter-Strike: Global Offensive. Parser is used to collect data
 The goal of the parser fast and simple. Performance is solved by having Rust do the heavy lifting and to keep it simple we completely avoid "hooks" and rather just let users "query" the demo.
 
 ## Installing
-Python >= 3.8
+Python >= 3.7 (but not 3.11 it came out like a few days ago, will add when available)
 ```bash
 pip install demoparser
 ```

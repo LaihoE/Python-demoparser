@@ -9,6 +9,7 @@ Python >= 3.7 (but not 3.11 it came out like a few days ago, will add when avail
 pip install demoparser
 ```
 
+
 ## Game events
 
 ```python
@@ -46,14 +47,17 @@ df = parser.parse_ticks(wanted_props, players=[76561197991348083], ticks=[489, 5
 ```
 
 
+
+
 ## Utility functions
 There are also these 2 functions for header and player info. Takes no arguments and returns some data.
 ```python
 parser.parse_header()
 parser.parse_players()
 ```
-## Check examples for getting started
-[Examples](https://github.com/LaihoE/Python-demoparser/tree/main/examples)
+
+
+
 
 #### Example game event
 ```python
@@ -87,6 +91,9 @@ parser.parse_players()
 
 [90916 rows x 6 columns]
 ```
+### Getting started
+[Examples](https://github.com/LaihoE/Python-demoparser/tree/main/examples) are probably the best way to get started with parsing.
+
 
 ## Performance
 

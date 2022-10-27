@@ -1,7 +1,6 @@
 from demoparser import DemoParser
+import pandas as pd
 
-
-parser = DemoParser("test.dem")
-players = parser.parse_players()
-for player in players:
-    print(player["name"], player["steamid"], player["crosshair_code"])
+parser = DemoParser("demo.dem")
+df = pd.DataFrame(parser.parse_players())
+print(df.loc[:, ["name", "steamid", "crosshair_code"]])

@@ -188,7 +188,7 @@ pub fn parse_ent_props(
 
         if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
             // if prop is not wanted then dont create propdata from it
-            //continue;
+            continue;
         }
 
         //println!("{}", prop.name);
@@ -220,7 +220,6 @@ pub fn parse_ent_props(
                 }
             }
             _ => {
-                
                 let atom = PropAtom {
                     prop_name: prop.name.to_string(),
                     data: pdata,
@@ -232,7 +231,7 @@ pub fn parse_ent_props(
                         *round = r;
                     }
                 }
-                
+
                 // Make sure player metadata isnt erased when players leave.
                 if sv_cls.id == 41
                     || prop.name.contains("m_iCompetitiveRanking0")

@@ -1,5 +1,8 @@
 # CSGO demo parser for Python
-Work in progress! expect some bugs here and there
+
+Demo parser for Counter-Strike: Global Offensive. Parser is used to collect data from replay files (".dem" files).  
+The goal of the parser is to be simple to use without sacrificing in performance. Performance is solved by having Rust do the heavy lifting and to keep it simple we completely avoid "hooks" and rather just let users "query" the demo.
+
 ## Installing
 ```bash
 pip install demoparser
@@ -17,9 +20,13 @@ List of possible events: [GameEvents](https://wiki.alliedmods.net/Counter-Strike
 WARNING all demos do not contain every possible event.
 
 
-Events can also easily be transformed into a df:
+Events can easily be transformed into a df:
 ```python
 df = pd.DataFrame(events)
+```
+You can also add "tick data" into game events like so:
+```python
+events = parser.parse_events("player_death", props=["X", "Y", "health"])
 ```
 ## Tick data
 ```python
@@ -31,12 +38,19 @@ parser = DemoParser("path_to_demo.dem")
 df = parser.parse_ticks(wanted_props)
 ```
 List of possible props:[props](https://github.com/LaihoE/Python-demoparser/blob/main/vars.md)  
-parse_ticks also accepts optional arguments for filtering players and ticks.
+parse_ticks also accepts optional arguments for filtering players and ticks:
 
 ```python
 df = parser.parse_ticks(wanted_props, players=[76511958412365], ticks=[489, 5884])
 ```
 
+
+## Utility functions
+there are also these 2 functions for header and player info. Takes no arguments and returns some data.
+```python
+parser.parse_header()
+parser.parse_players()
+```
 #### Example game event
 ```python
 {
@@ -72,25 +86,28 @@ df = parser.parse_ticks(wanted_props, players=[76511958412365], ticks=[489, 5884
 
 ## Performance
 
-**Your performance will mostly depend on how fast your HDD/SSD is.** You can roughly calculate this part by demo size / reading speed.
+**Your performance will mostly depend on how fast your HDD/SSD is.** You can roughly calculate this part by demo size / reading speed of your drive.
 
-Below are some rough estimates for parsing speeds **excluding I/O**. Unfortunately the demo format does not allow proper skipping of tick data, we have to parse all the data if we want at least 1 field from the tick data. Game events can be parsed seperately and don't depend on tick data.
+Below are some rough estimates for parsing speeds **excluding I/O**. 
 
 
-| Action                        | Time  |
-| ----------------------------- | ----- |
-| Game events                   | 30ms  |
-| Player data: 1 value          | 250ms |
-| Player data: 5 million values | 800ms |
+| Action                             | Time      |
+| ---------------------------------- | --------- |
+| Game events with no "tick data"    | 30ms      |
+| Game events with "tick data"       | 310ms     |
+| Tick data: 1 value (no early exit) | 300ms     |
+| Tick data: 5 million values        | 800ms     |
+| Rust only                          | 150-200ms |
 
 Time taken for the parsing (with ryzen 5900x and no I/O):
 
 If you have a fast SSD then i strongly recommend multiprocessing your parsing. [Examples](https://github.com/LaihoE/Python-demoparser/tree/main/examples) show how to multiprocess across demos. Multiprocessing will most likely max out your drive's reading speed. With multiprocessing ive been able to parse > 5GB/s (of game events) and >3GB/s (tick data). An average MM demo is around 90MB.
 
 
-
 Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python-demoparser/blob/main/flamegraph.svg). Save the image and open it in a browser to zoom.
 
+Performance will definetly still continue to improve, especially tick data with big number of values.
+"Rust only" means one full parse of the demo, compareable to what other parsers are doing. This part is probably quite close to the limit on how fast we can go, but we might be able to partially skip data, leading to even bigger improvements, but parsing every tick is not likely to improve by much.
 
 
 ## Other notes
@@ -103,10 +120,14 @@ Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python
 
 
 ## Why yet another parser?
-Currently you have to take such a big performance hit if you want to use Python, that most people just go elsewhere like Markus-wa's [GO parser](https://github.com/markus-wa/demoinfocs-golang) (great alternative if you want something mature and fast). Unfortunately GO is just not such a popular language and most data analysis is done in Python/R. I also expect that most people interested in parsing demos are not experienced programmers and these people are very unlikely to learn a new language just for demo parsing. Demo parsing is something I think should be doable for very unexperienced programmers. 
+Currently you have to take such a big performance hit if you want to use Python, that most people just go elsewhere like Markus-wa's [GO parser](https://github.com/markus-wa/demoinfocs-golang) (great alternative if you want something mature). Unfortunately GO is just not such a popular language and most data analysis is done in Python/R. I also expect that most people interested in parsing demos are not experienced programmers and these people are very unlikely to learn a new language just for demo parsing. Demo parsing is something I think should be doable for very unexperienced programmers. 
 
-I personally think that querying the demo is a way more elegant way to deal with the data, rather than having an "event hook" type of interface. This might cause you to overfetch a little / take some small performance hit, but I feel the simplicity outweighs the small possible performance/flexibility hit.
-
-The parser is written completely in Rust (same speed as C/C++), (memory safe btw). This leaves the door open for the parser to become more or less as fast as we can go.
+The parser is completely written in Rust (same speed as C/C++), (memory safe btw). This leaves the door open for the parser to become more or less as fast as we can go.
 
 Also this type of setup makes it easy to create bindings for other languages (mainly R). Maybe in the future?
+
+## Special thank you to
+Valve for "official" implementation https://github.com/ValveSoftware/csgo-demoinfo
+Markuswa's Go parser: https://github.com/markus-wa/demoinfocs-golang
+Saul's: JS parser: https://github.com/saul/demofile
+akiver Demos-Manager (really handy for quickly looking at demos) https://github.com/akiver/CSGO-Demos-Manager

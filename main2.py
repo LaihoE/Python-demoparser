@@ -1,23 +1,30 @@
+from ast import JoinedStr
+from tkinter.tix import Tree
 from demoparser import DemoParser
 import glob
 import multiprocessing as mp
 import pandas as pd
 import tqdm
+import random
+import os
 
 
-def parse(file):
-    print(file)
+def coordinates(file):
+
+    before = time.time()
     parser = DemoParser(file)
-    df = pd.DataFrame(parser.parse_events(
-    "player_death", props=["X", "Y", "Z", "weapon_name"]))
-    #print(df.iloc[:40, :])
-    print(df.loc[:40, ["tick", "attacker_X", "attacker_Y", "player_X", "player_Y", "attacker_name", "player_name"]])
-    #print(pd.DataFrame(parser.parse_players()))
+    print(parser.parse_header())
+    events = parser.parse_ticks(["X"], ticks=[153860])
+    print(time.time() - before)
+    # print(events)
+
 
 if __name__ == "__main__":
-    from collections import Counter
-    files = glob.glob("/mnt/d/b/mygames/*")
+    import time
+    files = glob.glob("/home/laiho/Documents/demos/faceits/average/*")  # [:30]
+    print(files)
+    before = time.time()
     with mp.Pool(processes=1) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(
-            parse, files), total=len(files)))
+            coordinates, files), total=len(files)))
     df = pd.concat(results)

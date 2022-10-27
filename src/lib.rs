@@ -161,9 +161,14 @@ impl DemoParser {
                 unk_props
             )));
         }
+        let parse_props = if wanted_props.len() == 0 && !rounds {
+            false
+        } else {
+            true
+        };
         let parser = Demo::new(
             self.path.clone(),
-            true,
+            parse_props,
             vec![],
             vec![],
             real_props,

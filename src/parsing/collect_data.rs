@@ -61,19 +61,19 @@ fn insert_weapon_prop(
         Some(w) => match w.props.get(prop_name) {
             Some(w) => {
                 {
-                let data = if let PropData::I32(x) = w.data{
-                    PropData::I32(x-1)
-                }else{
-                    // Should not happen
-                    w.data.clone()
-                };
-                ticks_props
-                .entry(prop_name.to_string())
-                .or_insert_with(|| create_default(0, playback_frames))
-                .data
-                .push_propdata(data)
+                    let data = if let PropData::I32(x) = w.data {
+                        PropData::I32(x - 1)
+                    } else {
+                        // Should not happen
+                        w.data.clone()
+                    };
+                    ticks_props
+                        .entry(prop_name.to_string())
+                        .or_insert_with(|| create_default(0, playback_frames))
+                        .data
+                        .push_propdata(data)
+                }
             }
-            },
             None => ticks_props
                 .entry(prop_name.to_string())
                 .or_insert_with(|| create_default(0, playback_frames))
@@ -100,74 +100,60 @@ fn insert_weapon_name(
     match weapon {
         Some(w) => match w.props.get("m_iItemDefinitionIndex") {
             Some(w) => {
-                if let PropData::I32(x) = w.data{
+                if let PropData::I32(x) = w.data {
                     let name = WEAPINDICIES[&x.to_string()];
-                        ticks_props
+                    ticks_props
                         .entry(prop_name.to_string())
                         .or_insert_with(|| create_default(4, playback_frames))
                         .data
                         .push_propdata(PropData::String(name.to_string()))
                 }
             }
-            None => {
-                match weapon {
-                    Some(we) => match cls_map.get(&(we.class_id as u16)) {
-                        Some(sc) => {
-                            let full_name = sc.dt.to_string();
-                            let weap_name = match  full_name.split("Weapon").last(){
-                                Some(w) => {
-                                    if w == "M4A1"{
-                                        "M4A4"
-                                    }else{
-                                        match  full_name.split("_").last(){
-                                            Some(x) => {
-                                                x
-                                            }
-                                            None => {
-                                                &full_name
-                                            }
-                                        }
+            None => match weapon {
+                Some(we) => match cls_map.get(&(we.class_id as u16)) {
+                    Some(sc) => {
+                        let full_name = sc.dt.to_string();
+                        let weap_name = match full_name.split("Weapon").last() {
+                            Some(w) => {
+                                if w == "M4A1" {
+                                    "M4A4"
+                                } else {
+                                    match full_name.split("_").last() {
+                                        Some(x) => x,
+                                        None => &full_name,
                                     }
                                 }
-                                None => {
-                                    match  full_name.split("_").last(){
-                                        Some(x) => {
-                                            x
-                                        }
-                                        None => {
-                                            &full_name
-                                        }
-                                    }
-                                }
-                            };
+                            }
+                            None => match full_name.split("_").last() {
+                                Some(x) => x,
+                                None => &full_name,
+                            },
+                        };
 
-                            ticks_props
+                        ticks_props
                             .entry(prop_name.to_string())
                             .or_insert_with(|| create_default(4, playback_frames))
                             .data
                             .push_propdata(variants::PropData::String(weap_name.to_string()))
-                        }
-                        None => ticks_props
-                            .entry(prop_name.to_string())
-                            .or_insert_with(|| create_default(4, playback_frames))
-                            .data
-                            .push_none(),
-                    },
+                    }
                     None => ticks_props
                         .entry(prop_name.to_string())
                         .or_insert_with(|| create_default(4, playback_frames))
                         .data
                         .push_none(),
-                }
+                },
+                None => ticks_props
+                    .entry(prop_name.to_string())
+                    .or_insert_with(|| create_default(4, playback_frames))
+                    .data
+                    .push_none(),
             },
         },
-        None => {
-            ticks_props
+        None => ticks_props
             .entry(prop_name.to_string())
             .or_insert_with(|| create_default(4, playback_frames))
             .data
-            .push_none()
-        }
+            .push_none(),
     }
 }
 #[inline(always)]
@@ -435,7 +421,6 @@ pub static WEAPINDICIES: phf::Map<&'static str, &'static str> = phf_map! {
     "523" => "knife_widowmaker",
     "525" => "knife_skeleton",
 };
-
 
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_flNextAttack" => 1,

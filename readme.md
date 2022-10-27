@@ -4,6 +4,7 @@ Demo parser for Counter-Strike: Global Offensive. Parser is used to collect data
 The goal of the parser fast and simple. Performance is solved by having Rust do the heavy lifting and to keep it simple we completely avoid "hooks" and rather just let users "query" the demo.
 
 ## Installing
+Python >= 3.8
 ```bash
 pip install demoparser
 ```
@@ -41,12 +42,12 @@ List of possible props:[props](https://github.com/LaihoE/Python-demoparser/blob/
 parse_ticks also accepts optional arguments for filtering players and ticks:
 
 ```python
-df = parser.parse_ticks(wanted_props, players=[76511958412365], ticks=[489, 5884])
+df = parser.parse_ticks(wanted_props, players=[76561197991348083], ticks=[489, 5884])
 ```
 
 
 ## Utility functions
-there are also these 2 functions for header and player info. Takes no arguments and returns some data.
+There are also these 2 functions for header and player info. Takes no arguments and returns some data.
 ```python
 parser.parse_header()
 parser.parse_players()

@@ -1,7 +1,7 @@
 # CSGO demo parser for Python
 
 Demo parser for Counter-Strike: Global Offensive. Parser is used to collect data from replay files (".dem" files).  
-The goal of the parser is to be simple to use without sacrificing in performance. Performance is solved by having Rust do the heavy lifting and to keep it simple we completely avoid "hooks" and rather just let users "query" the demo.
+The goal of the parser fast and simple. Performance is solved by having Rust do the heavy lifting and to keep it simple we completely avoid "hooks" and rather just let users "query" the demo.
 
 ## Installing
 ```bash
@@ -68,7 +68,7 @@ parser.parse_players()
 
 
 ```python
-       m_iHealth  m_vecOrigin_X  m_vecOrigin_Y    tick            steamid    name
+           health         X              Y        tick        steamid       name
 0            100     148.867508    -413.923218   10000  76561197991348083  flusha
 1            100     149.625168    -412.063995   10001  76561197991348083  flusha
 2            100     150.342468    -410.183685   10002  76561197991348083  flusha
@@ -103,12 +103,10 @@ Time taken for the parsing (with ryzen 5900x and no I/O):
 
 If you have a fast SSD then i strongly recommend multiprocessing your parsing. [Examples](https://github.com/LaihoE/Python-demoparser/tree/main/examples) show how to multiprocess across demos. Multiprocessing will most likely max out your drive's reading speed. With multiprocessing ive been able to parse > 5GB/s (of game events) and >3GB/s (tick data). An average MM demo is around 90MB.
 
-
-Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python-demoparser/blob/main/flamegraph.svg). Save the image and open it in a browser to zoom.
-
 Performance will definetly still continue to improve, especially tick data with big number of values.
 "Rust only" means one full parse of the demo, compareable to what other parsers are doing. This part is probably quite close to the limit on how fast we can go, but we might be able to partially skip data, leading to even bigger improvements, but parsing every tick is not likely to improve by much.
 
+Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python-demoparser/blob/main/flamegraph.svg). Save the image and open it in a browser to zoom.
 
 ## Other notes
 - Demo tickrate is not the same as server tickrate. Often demo tickrate is half of server tickrate. For example faceit demos are 64 tick and MM demos are 32 tick. This means that every other tick is "missing". Pro games are often recorded at native tickrate.
@@ -127,7 +125,7 @@ The parser is completely written in Rust (same speed as C/C++), (memory safe btw
 Also this type of setup makes it easy to create bindings for other languages (mainly R). Maybe in the future?
 
 ## Special thank you to
-Valve for "official" implementation https://github.com/ValveSoftware/csgo-demoinfo
-Markuswa's Go parser: https://github.com/markus-wa/demoinfocs-golang
-Saul's: JS parser: https://github.com/saul/demofile
-akiver Demos-Manager (really handy for quickly looking at demos) https://github.com/akiver/CSGO-Demos-Manager
+Valve for "official" implementation https://github.com/ValveSoftware/csgo-demoinfo  
+Markuswa's Go parser: https://github.com/markus-wa/demoinfocs-golang  
+Saul's: JS parser: https://github.com/saul/demofile  
+akiver Demos-Manager (really handy for quickly looking at demos) https://github.com/akiver/CSGO-Demos-Manager  

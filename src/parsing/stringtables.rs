@@ -95,40 +95,40 @@ impl Demo {
         &mut self,
         data: &[u8],
         mut st: StringTable,
-        userinfo: bool,
+        _userinfo: bool,
         num_entries: i32,
         max_entries: i32,
-        user_data_size: i32,
+        _user_data_size: i32,
         user_data_fixsize: bool,
-    ) -> StringTable {
+    ) -> Option<StringTable> {
         let mut buf = MyBitreader::new(data);
-        let mut entry_bits = (max_entries as f32).log2() as i32;
+        let entry_bits = (max_entries as f32).log2() as i32;
         let mut entry_index = 0;
         let mut last_inx: i32 = -1;
         let mut history: Vec<String> = Vec::new();
         let mut entry = String::new();
 
-        buf.read_boolie();
+        buf.read_boolie()?;
 
-        for i in 0..num_entries {
+        for _i in 0..num_entries {
             let mut user_data = vec![];
             entry_index = last_inx + 1;
-            if !buf.read_boolie() {
+            if !buf.read_boolie()? {
                 entry_index = buf
-                    .read_nbits(entry_bits.try_into().unwrap())
+                    .read_nbits(entry_bits.try_into().unwrap())?
                     .try_into()
                     .unwrap();
             }
             last_inx = entry_index;
-            if buf.read_boolie() {
-                if buf.read_boolie() {
-                    let idx = buf.read_nbits(5) as i32;
-                    let bytes_to_copy = buf.read_nbits(5);
+            if buf.read_boolie()? {
+                if buf.read_boolie()? {
+                    let idx = buf.read_nbits(5)? as i32;
+                    let bytes_to_copy = buf.read_nbits(5)?;
                     let s = &history[idx as usize];
                     let s_slice = &s[..bytes_to_copy as usize];
-                    entry = s_slice.to_owned() + &buf.read_string(4096);
+                    entry = s_slice.to_owned() + &buf.read_string(4096)?;
                 } else {
-                    entry = buf.read_string(4096);
+                    entry = buf.read_string(4096)?;
                 }
                 st.data[entry_index as usize].entry = entry.to_string()
             }
@@ -136,24 +136,18 @@ impl Demo {
                 history.remove(0);
             }
             history.push(entry.clone());
-            if buf.read_boolie() {
+            if buf.read_boolie()? {
                 user_data = if user_data_fixsize {
-                    let mut u = vec![];
-                    u.push(
-                        buf.read_nbits(user_data_size.try_into().unwrap())
-                            .try_into()
-                            .unwrap(),
-                    );
-                    u
+                    vec![buf
+                        .read_nbits(st.uds.try_into().unwrap())?
+                        .try_into()
+                        .unwrap()]
                 } else {
-                    let size = buf.read_nbits(14);
-                    buf.read_bits_st(size)
+                    let size = buf.read_nbits(14)?;
+                    buf.read_bits_st(size)?
                 };
                 if st.name == "instancebaseline" {
-                    let k = match entry.parse::<u32>() {
-                        Ok(x) => x,
-                        Err(_) => 999999,
-                    };
+                    let k = entry.parse::<u32>().unwrap_or(999999);
                     match self.serverclass_map.get(&(k as u16)) {
                         Some(sv_cls) => {
                             parse_baselines(&user_data, sv_cls, &mut self.baselines);
@@ -168,24 +162,24 @@ impl Demo {
                 }
                 if st.userinfo {
                     let mut ui = Demo::parse_userinfo(user_data);
-                    ui.entity_id = entry_index as u32 +1;
+                    ui.entity_id = entry_index as u32 + 1;
                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                         self.players_connected += 1;
                     }
-                    ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
-                    ui.name = ui.name.trim_end_matches("\x00").to_string();
-                    self.uid_eid_map.insert(ui.user_id, ui.entity_id.try_into().unwrap());
+                    ui.friends_name = ui.friends_name.trim_end_matches('0').to_string();
+                    ui.name = ui.name.trim_end_matches('0').to_string();
+                    self.uid_eid_map
+                        .insert(ui.user_id, ui.entity_id.try_into().unwrap());
                     self.userid_sid_map.insert(ui.user_id, ui.xuid);
                     self.entid_is_player.insert(ui.entity_id, ui.xuid);
                     self.players.insert(ui.xuid, ui);
                 }
             }
         }
-
-        st
+        Some(st)
     }
 
-    pub fn create_string_table(&mut self, data: CSVCMsg_CreateStringTable) {
+    pub fn create_string_table(&mut self, data: CSVCMsg_CreateStringTable) -> Option<bool> {
         let mut uinfo = false;
 
         if data.name() == "userinfo" {
@@ -215,13 +209,13 @@ impl Demo {
                 data.max_entries(),
                 data.user_data_size_bits(),
                 data.user_data_fixed_size(),
-            );
+            )?;
         }
-
         self.stringtables.push(st.clone());
+        Some(true)
     }
 
-    pub fn update_string_table_msg(&mut self, data: CSVCMsg_UpdateStringTable) {
+    pub fn update_string_table_msg(&mut self, data: CSVCMsg_UpdateStringTable) -> Option<bool> {
         let st = self.stringtables.get_mut(data.table_id() as usize).unwrap();
         let mut buf = MyBitreader::new(data.string_data());
         let entry_bits = (st.max_entries as f32).log2() as i32;
@@ -231,30 +225,30 @@ impl Demo {
         let mut btc = 0;
         let mut history: Vec<String> = Vec::new();
         let mut entry = String::new();
-        buf.read_boolie();
+        buf.read_boolie()?;
 
         if !(st.name == "userinfo" || st.name == "instancebaseline") {
-            return;
+            return Some(true);
         }
 
         for _i in 0..data.num_changed_entries() {
             index = last_inx + 1;
-            if buf.read_boolie() == false {
+            if !(buf.read_boolie()?) {
                 index = buf
-                    .read_nbits(entry_bits.try_into().unwrap())
+                    .read_nbits(entry_bits.try_into().unwrap())?
                     .try_into()
                     .unwrap();
             }
             last_inx = index;
-            if buf.read_boolie() {
-                if buf.read_boolie() {
-                    let idx = buf.read_nbits(5) as i32;
-                    let bytes_to_copy = buf.read_nbits(5);
+            if buf.read_boolie()? {
+                if buf.read_boolie()? {
+                    let idx = buf.read_nbits(5)? as i32;
+                    let bytes_to_copy = buf.read_nbits(5)?;
                     let s = &history[idx as usize];
                     let s_slice = &s[..bytes_to_copy as usize + 1];
-                    entry = s_slice.to_owned() + &buf.read_string(4096);
+                    entry = s_slice.to_owned() + &buf.read_string(4096)?;
                 } else {
-                    entry = buf.read_string(4096);
+                    entry = buf.read_string(4096)?;
                 }
                 st.data[index as usize].entry = entry.to_string()
             }
@@ -262,24 +256,18 @@ impl Demo {
                 history.remove(0);
             }
             history.push(entry.clone());
-            if buf.read_boolie() {
+            if buf.read_boolie()? {
                 let user_data = if st.udfs {
-                    let mut u = vec![];
-                    u.push(
-                        buf.read_nbits(st.uds.try_into().unwrap())
-                            .try_into()
-                            .unwrap(),
-                    );
-                    u
+                    vec![buf
+                        .read_nbits(st.uds.try_into().unwrap())?
+                        .try_into()
+                        .unwrap()]
                 } else {
-                    let size = buf.read_nbits(14);
-                    buf.read_bits_st(size)
+                    let size = buf.read_nbits(14)?;
+                    buf.read_bits_st(size)?
                 };
                 if st.name == "instancebaseline" {
-                    let k = match entry.parse::<u32>() {
-                        Ok(x) => x,
-                        Err(_) => 999999,
-                    };
+                    let k = entry.parse::<u32>().unwrap_or(999999);
                     match self.serverclass_map.get(&(k as u16)) {
                         Some(sv_cls) => {
                             parse_baselines(&user_data, sv_cls, &mut self.baselines);
@@ -293,19 +281,21 @@ impl Demo {
                 }
                 if st.userinfo {
                     let mut ui = Demo::parse_userinfo(user_data.clone());
-                    ui.entity_id = index as u32 +1;
+                    ui.entity_id = index as u32 + 1;
                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                         self.players_connected += 1;
                     }
-                    ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
-                    ui.name = ui.name.trim_end_matches("\x00").to_string();
+                    ui.friends_name = ui.friends_name.trim_end_matches('0').to_string();
+                    ui.name = ui.name.trim_end_matches('0').to_string();
                     self.userid_sid_map.insert(ui.user_id, ui.xuid);
-                    self.uid_eid_map.insert(ui.user_id, ui.entity_id.try_into().unwrap());
+                    self.uid_eid_map
+                        .insert(ui.user_id, ui.entity_id.try_into().unwrap());
                     self.entid_is_player.insert(ui.entity_id, ui.xuid);
                     self.players.insert(ui.xuid, ui);
                 }
             }
             history.push(entry.to_string());
         }
+        Some(true)
     }
 }

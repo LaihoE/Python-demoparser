@@ -9,6 +9,7 @@ use parsing::parser::Demo;
 use parsing::stringtables::UserInfo;
 use parsing::variants::PropAtom;
 use parsing::variants::PropData;
+use parsing::variants::VarVec;
 use phf::phf_map;
 use polars::export::ahash::RandomState;
 use polars::prelude::ArrowField;
@@ -105,7 +106,7 @@ pub fn parse_kwargs_ticks(kwargs: Option<&PyDict>) -> (Vec<u64>, Vec<i32>) {
                 }
                 None => {}
             }
-            return (players, ticks);
+            (players, ticks)
         }
         None => (vec![], vec![]),
     }
@@ -128,7 +129,7 @@ pub fn parse_kwargs_event(kwargs: Option<&PyDict>) -> (bool, Vec<String>) {
                 }
                 None => {}
             }
-            return (rounds, props);
+            (rounds, props)
         }
         None => (false, vec![]),
     }
@@ -155,17 +156,13 @@ impl DemoParser {
         let (rounds, wanted_props) = parse_kwargs_event(py_kwargs);
         let real_props = rm_user_friendly_names(&wanted_props);
         let unk_props = check_validity_props(&real_props);
-        if unk_props.len() > 0 {
+        if !unk_props.is_empty() {
             return Err(PyKeyError::new_err(format!(
                 "Unknown fields: {:?}",
                 unk_props
             )));
         }
-        let parse_props = if wanted_props.len() == 0 && !rounds {
-            false
-        } else {
-            true
-        };
+        let parse_props = !wanted_props.is_empty() || rounds;
         let parser = Demo::new(
             self.path.clone(),
             parse_props,
@@ -180,12 +177,10 @@ impl DemoParser {
             wanted_props,
         );
         match parser {
-            Err(e) => {
-                return Err(PyFileNotFoundError::new_err(format!(
-                    "Couldnt read demo file. Error: {}",
-                    e
-                )))
-            }
+            Err(e) => Err(PyFileNotFoundError::new_err(format!(
+                "Couldnt read demo file. Error: {}",
+                e
+            ))),
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
 
@@ -216,7 +211,7 @@ impl DemoParser {
     ) -> PyResult<PyObject> {
         let mut real_props = rm_user_friendly_names(&wanted_props);
         let unk_props = check_validity_props(&real_props);
-        if unk_props.len() > 0 {
+        if !unk_props.is_empty() {
             return Err(PyKeyError::new_err(format!(
                 "Unknown fields: {:?}",
                 unk_props
@@ -225,32 +220,30 @@ impl DemoParser {
         let (wanted_players, wanted_ticks) = parse_kwargs_ticks(py_kwargs);
         let wanted_ticks_len = wanted_ticks.len();
         let biggest_wanted_tick = if wanted_ticks_len > 0 {
-            wanted_ticks.iter().max().unwrap().clone()
+            wanted_ticks.iter().max().unwrap()
         } else {
-            99999999
+            &99999999
         };
 
         let parser = Demo::new(
             self.path.clone(),
             true,
-            wanted_ticks,
+            wanted_ticks.clone(),
             wanted_players,
             real_props.clone(),
             "".to_string(),
             false,
             false,
             true,
-            biggest_wanted_tick,
+            *biggest_wanted_tick,
             wanted_props.clone(),
         );
 
         match parser {
-            Err(e) => {
-                return Err(PyFileNotFoundError::new_err(format!(
-                    "Couldnt read demo file. Error: {}",
-                    e
-                )))
-            }
+            Err(e) => Err(PyFileNotFoundError::new_err(format!(
+                "Couldnt read demo file. Error: {}",
+                e
+            ))),
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
 
@@ -259,8 +252,6 @@ impl DemoParser {
                 } else {
                     wanted_ticks_len
                 };
-
-                let now = Instant::now();
                 let data = parser.start_parsing(&real_props);
 
                 real_props.push("tick".to_string());
@@ -277,35 +268,37 @@ impl DemoParser {
                         let df_len = d.data.get_len();
                         for prop_name in &real_props {
                             if data.contains_key(prop_name) {
-                                if let parsing::parser::VarVec::F32(data) = &data[prop_name].data {
-                                    let s = Series::new(prop_name, data);
-                                    let py_series = rust_series_to_py_series(&s).unwrap();
-                                    all_series.push(py_series);
+                                match &data[prop_name].data {
+                                    VarVec::F32(data) => {
+                                        let s = Series::new(prop_name, data);
+                                        let py_series = rust_series_to_py_series(&s).unwrap();
+                                        all_series.push(py_series);
+                                    }
+                                    VarVec::I32(data) => {
+                                        let s = Series::new(prop_name, data);
+                                        let py_series = rust_series_to_py_series(&s).unwrap();
+                                        all_series.push(py_series);
+                                    }
+                                    VarVec::String(data) => {
+                                        let s = Series::new(prop_name, data);
+                                        let py_series = rust_series_to_py_series(&s).unwrap();
+                                        all_series.push(py_series);
+                                    }
+                                    VarVec::U64(data) => {
+                                        let s = Series::new(prop_name, data);
+                                        let py_series = rust_series_to_py_series(&s).unwrap();
+                                        all_series.push(py_series);
+                                    }
+                                    _ => {
+                                        let mut empty_col: Vec<Option<i32>> = vec![];
+                                        for _ in 0..df_len {
+                                            empty_col.push(None);
+                                        }
+                                        let s = Series::new(prop_name, empty_col);
+                                        let py_series = rust_series_to_py_series(&s).unwrap();
+                                        all_series.push(py_series);
+                                    }
                                 }
-                                if let parsing::parser::VarVec::String(data) = &data[prop_name].data
-                                {
-                                    let s = Series::new(prop_name, data);
-                                    let py_series = rust_series_to_py_series(&s).unwrap();
-                                    all_series.push(py_series);
-                                }
-                                if let parsing::parser::VarVec::I32(data) = &data[prop_name].data {
-                                    let s = Series::new(prop_name, data);
-                                    let py_series = rust_series_to_py_series(&s).unwrap();
-                                    all_series.push(py_series);
-                                }
-                                if let parsing::parser::VarVec::U64(data) = &data[prop_name].data {
-                                    let s = Series::new(prop_name, data);
-                                    let py_series = rust_series_to_py_series(&s).unwrap();
-                                    all_series.push(py_series);
-                                }
-                            } else {
-                                let mut empty_col: Vec<Option<i32>> = vec![];
-                                for _ in 0..df_len {
-                                    empty_col.push(None);
-                                }
-                                let s = Series::new(prop_name, empty_col);
-                                let py_series = rust_series_to_py_series(&s).unwrap();
-                                all_series.push(py_series);
                             }
                         }
                         let polars = py.import("polars")?;
@@ -345,12 +338,10 @@ impl DemoParser {
             vec![],
         );
         match parser {
-            Err(e) => {
-                return Err(PyFileNotFoundError::new_err(format!(
-                    "Couldnt read demo file. Error: {}",
-                    e
-                )))
-            }
+            Err(e) => Err(PyFileNotFoundError::new_err(format!(
+                "Couldnt read demo file. Error: {}",
+                e
+            ))),
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
                 let _ = parser.start_parsing(&vec![]);
@@ -367,14 +358,14 @@ impl DemoParser {
                     };
 
                     let rank_id =
-                        get_manager_i32_prop(&ent_manager, &player, "m_iCompetitiveRanking");
+                        get_manager_i32_prop(ent_manager, &player, "m_iCompetitiveRanking");
                     let rank_name = rank_id_to_name(rank_id);
 
                     let crosshair_code =
-                        get_manager_str_prop(&ent_manager, &player, "m_szCrosshairCodes");
+                        get_manager_str_prop(ent_manager, &player, "m_szCrosshairCodes");
 
                     let comp_wins =
-                        get_manager_i32_prop(&ent_manager, &player, "m_iCompetitiveWins");
+                        get_manager_i32_prop(ent_manager, &player, "m_iCompetitiveWins");
 
                     hm.insert("starting_side".to_string(), team.to_string().to_object(py));
                     hm.insert(
@@ -411,12 +402,10 @@ impl DemoParser {
             vec![],
         );
         match parser {
-            Err(e) => {
-                return Err(PyFileNotFoundError::new_err(format!(
-                    "Couldnt read demo file. Error: {}",
-                    e
-                )))
-            }
+            Err(e) => Err(PyFileNotFoundError::new_err(format!(
+                "Couldnt read demo file. Error: {}",
+                e
+            ))),
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
                 let dict = h.to_py_hashmap();
@@ -429,9 +418,7 @@ impl DemoParser {
 pub fn get_player_team(ent: &Entity) -> i32 {
     match ent.props.get("m_iTeamNum") {
         Some(p) => match p.data {
-            PropData::I32(x) => {
-                return x;
-            }
+            PropData::I32(x) => x,
             _ => -1,
         },
         None => -1,
@@ -448,9 +435,7 @@ pub fn get_manager_i32_prop(manager: &Entity, player: &UserInfo, prop_name: &str
     };
     match manager.props.get(&key) {
         Some(p) => match p.data {
-            PropData::I32(x) => {
-                return x;
-            }
+            PropData::I32(x) => x,
             _ => -1,
         },
         None => -1,
@@ -467,9 +452,7 @@ pub fn get_manager_str_prop(manager: &Entity, player: &UserInfo, prop_name: &str
     };
     match manager.props.get(&key) {
         Some(p) => match &p.data {
-            PropData::String(x) => {
-                return x.to_string();
-            }
+            PropData::String(x) => x.to_string(),
             _ => "".to_string(),
         },
         None => "".to_string(),
@@ -849,5 +832,5 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
 #[pymodule]
 fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<DemoParser>()?;
-    return Ok(());
+    Ok(())
 }

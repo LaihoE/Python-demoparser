@@ -49,8 +49,7 @@ impl Header {
     }
     pub fn to_py_hashmap(&self) -> Py<PyAny> {
         let hm = self.to_hashmap();
-        let dict = pyo3::Python::with_gil(|py| hm.to_object(py));
-        dict
+        pyo3::Python::with_gil(|py| hm.to_object(py))
     }
 }
 
@@ -59,36 +58,36 @@ impl Demo {
         let h = Header {
             header_magic: str::from_utf8(&self.bytes[..8])
                 .unwrap()
-                .trim_end_matches("\x00")
+                .trim_end_matches('0')
                 .to_string(),
             protocol: i32::from_le_bytes(self.bytes[8..12].try_into().unwrap()),
             network_protocol: u32::from_le_bytes(self.bytes[12..16].try_into().unwrap()),
             server_name: str::from_utf8(&self.bytes[16..276])
                 .unwrap()
                 .to_string()
-                .trim_end_matches("\x00")
+                .trim_end_matches('0')
                 .to_string(),
             client_name: str::from_utf8(&self.bytes[276..536])
                 .unwrap()
                 .to_string()
-                .trim_end_matches("\x00")
+                .trim_end_matches('0')
                 .to_string(),
             map_name: str::from_utf8(&self.bytes[536..796])
                 .unwrap()
                 .to_string()
-                .trim_end_matches("\x00")
+                .trim_end_matches('0')
                 .to_string(),
             game_dir: str::from_utf8(&self.bytes[796..1056])
                 .unwrap()
                 .to_string()
-                .trim_end_matches("\x00")
+                .trim_end_matches('0')
                 .to_string(),
             playback_time: f32::from_le_bytes(self.bytes[1056..1060].try_into().unwrap()),
             playback_ticks: i32::from_le_bytes(self.bytes[1060..1064].try_into().unwrap()),
             playback_frames: i32::from_le_bytes(self.bytes[1064..1068].try_into().unwrap()),
             signon_length: i32::from_le_bytes(self.bytes[1068..1072].try_into().unwrap()),
         };
-        self.fp += 1072 as usize;
+        self.fp += 1072_usize;
         h
     }
 }

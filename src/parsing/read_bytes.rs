@@ -19,7 +19,7 @@ impl Demo {
                 break;
             }
         }
-        return result as u32;
+        result as u32
     }
     #[inline]
     pub fn read_short(&mut self) -> u16 {
@@ -67,7 +67,7 @@ impl Demo {
     pub fn read_frame(&mut self) -> (u8, i32) {
         let cmd = self.read_byte();
         let tick = self.read_i32();
-        _ = self.skip_n_bytes(1);
+        self.skip_n_bytes(1);
         (cmd, tick)
     }
 }

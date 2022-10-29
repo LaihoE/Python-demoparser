@@ -17,6 +17,9 @@ pub struct ServerClass {
 
 impl Demo {
     pub fn parse_datatable(&mut self) {
+        /*
+        Parse datatables. These are the tables that entities refer to for values. If this fails then gg?
+        */
         let _ = self.read_i32();
         loop {
             let _ = self.read_varint();

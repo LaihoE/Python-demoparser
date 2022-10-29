@@ -71,18 +71,18 @@ impl Demo {
         let mut player_ents = vec![];
 
         for _ in 0..n_upd_ents {
-            entity_id += 1 + (b.read_u_bit_var() as i32);
+            entity_id += 1 + (b.read_u_bit_var()? as i32);
             /*
             Disabled for now
             if entity_id > highest_wanted_entid {
                 break;
             }
             */
-            if b.read_boolie() {
+            if b.read_boolie()? {
                 b.read_boolie();
-            } else if b.read_boolie() {
+            } else if b.read_boolie()? {
                 // IF ENTITY DOES NOT EXIST
-                let cls_id = b.read_nbits(cls_bits.try_into().unwrap());
+                let cls_id = b.read_nbits(cls_bits.try_into().unwrap())?;
                 let _ = b.read_nbits(10);
                 let mut e = Entity {
                     class_id: cls_id,
@@ -167,12 +167,12 @@ pub fn parse_ent_props(
     workhorse: &mut Vec<i32>,
     _fp: i32,
     round: &mut i32,
-) {
+) -> Option<i32> {
     let mut val = -1;
-    let new_way = b.read_boolie();
+    let new_way = b.read_boolie()?;
     let mut upd = 0;
     loop {
-        val = b.read_inx(val, new_way);
+        val = b.read_inx(val, new_way)?;
 
         if val == -1 {
             break;
@@ -184,14 +184,12 @@ pub fn parse_ent_props(
     for i in 0..upd {
         let inx = workhorse[i];
         let prop = &sv_cls.props[inx as usize];
-        let pdata = b.decode(prop);
+        let pdata = b.decode(prop)?;
 
+        // if prop is not wanted then dont create propdata from it
         if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
-            // if prop is not wanted then dont create propdata from it
             continue;
         }
-
-        //println!("{}", prop.name);
         match pdata {
             PropData::VecXY(v) => {
                 let endings = ["_X", "_Y"];
@@ -259,6 +257,8 @@ pub fn parse_ent_props(
             }
         }
     }
+    // number of updated entries
+    Some(upd.try_into().unwrap())
 }
 #[inline(always)]
 pub fn update_entity(
@@ -314,11 +314,11 @@ pub fn parse_baselines(
 ) {
     let mut b = MyBitreader::new(data);
     let mut val = -1;
-    let new_way = b.read_boolie();
+    let new_way = b.read_boolie().unwrap();
     let mut indicies = vec![];
     let mut baseline: HashMap<String, PropData> = HashMap::default();
     loop {
-        val = b.read_inx(val, new_way);
+        val = b.read_inx(val, new_way).unwrap();
 
         if val == -1 {
             break;
@@ -327,7 +327,7 @@ pub fn parse_baselines(
     }
     for inx in indicies {
         let prop = &sv_cls.props[inx as usize];
-        let pdata = b.decode(prop);
+        let pdata = b.decode(prop).unwrap();
         baseline.insert(prop.name.to_owned(), pdata);
     }
     baselines.insert(sv_cls.id.try_into().unwrap(), baseline);

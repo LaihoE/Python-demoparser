@@ -24,9 +24,9 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 pub fn decompress_gz(demo_path: String) -> Result<BytesVariant, std::io::Error> {
     match File::open(demo_path.clone()) {
-        Err(e) => return Err(e),
-        Ok(_) => match std::fs::read(demo_path.clone()) {
-            Err(e) => return Err(e),
+        Err(e) => Err(e),
+        Ok(_) => match std::fs::read(demo_path) {
+            Err(e) => Err(e),
             Ok(bytes) => {
                 let mut gz = GzDecoder::new(&bytes[..]);
                 let mut out: Vec<u8> = vec![];
@@ -38,9 +38,9 @@ pub fn decompress_gz(demo_path: String) -> Result<BytesVariant, std::io::Error> 
 }
 pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
     match File::open(demo_path) {
-        Err(e) => return Err(e),
+        Err(e) => Err(e),
         Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
             Ok(m) => Ok(BytesVariant::Mmap(m)),
         },
     }
@@ -50,7 +50,7 @@ pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
     let extension = Path::new(&demo_path).extension().unwrap();
     match extension.to_str().unwrap() {
         "gz" => match decompress_gz(demo_path) {
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
             Ok(bytes) => Ok(bytes),
         },
         ".info" => {
@@ -58,7 +58,7 @@ pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
         }
         // All other formats, .dem is the "correct" but let others work too
         _ => match create_mmap(demo_path) {
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
             Ok(map) => Ok(map),
         },
     }
@@ -104,7 +104,6 @@ pub struct Demo {
     pub baselines: HashMap<u32, HashMap<String, PropData>>,
     pub baseline_no_cls: HashMap<u32, Vec<u8>>,
     pub friendly_p_names: Vec<String>,
-    
 }
 impl Demo {
     pub fn new(
@@ -122,7 +121,7 @@ impl Demo {
     ) -> Result<Self, std::io::Error> {
         let mut extra_wanted_props = vec![];
         for p in &wanted_props {
-            match TYPEHM.get(&p) {
+            match TYPEHM.get(p) {
                 Some(_) => match &p[(p.len() - 1)..] {
                     "X" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
                     "Y" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
@@ -136,7 +135,7 @@ impl Demo {
         }
         wanted_props.extend(extra_wanted_props);
         match read_file(demo_path) {
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
             Ok(data) => Ok(Self {
                 userid_sid_map: HashMap::default(),
                 bytes: data,
@@ -265,7 +264,7 @@ impl Demo {
                 // Game event
                 25 => {
                     if !no_gameevents {
-                        let game_event = Message::parse_from_bytes(&data);
+                        let game_event = Message::parse_from_bytes(data);
                         match game_event {
                             Ok(ge) => {
                                 let game_event = ge;
@@ -287,7 +286,7 @@ impl Demo {
                 // Game event list
                 30 => {
                     if !no_gameevents {
-                        let event_list = Message::parse_from_bytes(&data);
+                        let event_list = Message::parse_from_bytes(data);
                         match event_list {
                             Ok(ev) => {
                                 let event_list = ev;
@@ -303,7 +302,7 @@ impl Demo {
                 // Packet entites
                 26 => {
                     if parse_props {
-                        let pack_ents = Message::parse_from_bytes(&data);
+                        let pack_ents = Message::parse_from_bytes(data);
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;
@@ -340,7 +339,7 @@ impl Demo {
                 }
                 // Create string table
                 12 => {
-                    let string_table = Message::parse_from_bytes(&data);
+                    let string_table = Message::parse_from_bytes(data);
                     match string_table {
                         Ok(st) => {
                             let string_table = st;
@@ -354,7 +353,7 @@ impl Demo {
                 }
                 // Update string table
                 13 => {
-                    let data = Message::parse_from_bytes(&data);
+                    let data = Message::parse_from_bytes(data);
                     match data {
                         Ok(st) => {
                             let data = st;
@@ -371,7 +370,7 @@ impl Demo {
         }
     }
 }
-pub fn check_round_change(entities: &Vec<(u32, Entity)>, rules_id: &Option<u32>, round: &mut i32) {
+pub fn check_round_change(entities: &[(u32, Entity)], rules_id: &Option<u32>, round: &mut i32) {
     if rules_id.is_some() {
         match entities.get(rules_id.unwrap() as usize) {
             Some(e) => match e.1.props.get("m_totalRoundsPlayed") {

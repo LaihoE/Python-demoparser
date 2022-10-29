@@ -126,20 +126,16 @@ where
     #[inline(always)]
     fn index(&self, i: Idx) -> &Self::Output {
         match self {
-            Self::Mmap(m) => {
-                return &m[i];
-            }
-            Self::Vec(v) => {
-                return &v[i];
-            }
+            Self::Mmap(m) => &m[i],
+            Self::Vec(v) => &v[i],
         }
     }
 }
 impl BytesVariant {
     pub fn get_len(&self) -> usize {
         match self {
-            Self::Mmap(m) => return m.len(),
-            Self::Vec(v) => return v.len(),
+            Self::Mmap(m) => m.len(),
+            Self::Vec(v) => v.len(),
         }
     }
 }

@@ -1,9 +1,11 @@
 mod parsing;
+use crate::parsing::game_events::GameEvent;
 use arrow::ffi;
 use flate2::read::GzDecoder;
 use fxhash::FxHashMap;
 use memmap::MmapOptions;
 use parsing::entities::Entity;
+use parsing::game_events::KeyData;
 use parsing::header::Header;
 use parsing::parser::Demo;
 use parsing::stringtables::UserInfo;
@@ -17,6 +19,7 @@ use polars::prelude::NamedFrom;
 use polars::series::Series;
 use polars_arrow::export::arrow;
 use polars_arrow::prelude::ArrayRef;
+use protobuf::Message;
 use pyo3::exceptions::PyFileNotFoundError;
 use pyo3::exceptions::PyKeyError;
 use pyo3::exceptions::PyTypeError;
@@ -252,8 +255,7 @@ impl DemoParser {
                 } else {
                     wanted_ticks_len
                 };
-                let data = parser.start_parsing(&real_props);
-
+                let (data, _) = parser.start_parsing(&real_props);
                 real_props.push("tick".to_string());
                 real_props.push("steamid".to_string());
                 real_props.push("name".to_string());
@@ -413,6 +415,169 @@ impl DemoParser {
             }
         }
     }
+    #[args(py_kwargs = "**")]
+    pub fn parse_events_fast(
+        &self,
+        py: Python<'_>,
+        event_name: String,
+        py_kwargs: Option<&PyDict>,
+    ) -> PyResult<Py<PyAny>> {
+        let (rounds, wanted_props) = parse_kwargs_event(py_kwargs);
+        let real_props = rm_user_friendly_names(&wanted_props);
+        let unk_props = check_validity_props(&real_props);
+        if !unk_props.is_empty() {
+            return Err(PyKeyError::new_err(format!(
+                "Unknown fields: {:?}",
+                unk_props
+            )));
+        }
+        let parse_props = !wanted_props.is_empty() || rounds;
+        let parser = Demo::new(
+            self.path.clone(),
+            true,
+            vec![],
+            vec![],
+            real_props,
+            event_name,
+            false,
+            false,
+            false,
+            9999999,
+            wanted_props,
+        );
+        match parser {
+            Err(e) => Err(PyFileNotFoundError::new_err(format!(
+                "Couldnt read demo file. Error: {}",
+                e
+            ))),
+            Ok(mut parser) => {
+                let _: Header = parser.parse_demo_header();
+
+                let (_, mut tc) = parser.start_parsing(&vec!["m_iMVPs".to_owned()]);
+                let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
+
+                let mut cur_tick = 0;
+
+                let kill_ticks = get_event_md(&parser.game_events, &parser.sid_entid_map);
+                //println!("{:?}", kill_ticks);
+
+                for (k, v) in parser.uid_eid_map {
+                    println!("{} {}", k, v);
+                }
+
+                for event_md in kill_ticks {
+                    cur_tick = event_md.tick;
+                    if cur_tick < 10000 {
+                        continue;
+                    }
+                    match tc.get_prop_at_tick(cur_tick, 10000, 5) {
+                        Some(v) => {
+                            println!("DELTA FOUND IN CACHE AT TICK {} with val {:?}", cur_tick, v)
+                        }
+                        None => 'outer: loop {
+                            //println!("{}", cur_tick);
+                            match tc.get_tick_inxes(cur_tick as usize) {
+                                Some(inxes) => {
+                                    let bs = &parser.bytes[inxes.0..inxes.1];
+                                    let msg = Message::parse_from_bytes(bs).unwrap();
+                                    let d = tc.parse_packet_ents_simple(
+                                        msg,
+                                        &parser.entities,
+                                        &parser.serverclass_map,
+                                    );
+                                    tc.insert_cache_multiple(cur_tick.try_into().unwrap(), &d);
+                                    match d.get(&event_md.player) {
+                                        Some(x) => {
+                                            for i in x {
+                                                if i.0 == 10000 {
+                                                    println!(
+                                                        "Delta found at tick: {} start: {} val: {:?} ent:{:?}",
+                                                        cur_tick,event_md.tick, i.1, &event_md.player
+                                                    );
+                                                    break 'outer;
+                                                }
+                                            }
+                                        }
+                                        None => {}
+                                    }
+                                }
+                                None => {}
+                            }
+                            cur_tick -= 1;
+                            if cur_tick < 10000 {
+                                //panic!("tick {}", cur_tick);
+                                break;
+                            }
+                        },
+                    }
+                }
+
+                // Create Hashmap with <string, pyobject> to be able to convert to python dict
+                for ge in parser.game_events {
+                    let mut hm: FxHashMap<String, PyObject> = FxHashMap::default();
+                    let tuples = ge.to_py_tuples(py);
+                    for (k, v) in tuples {
+                        hm.insert(k, v);
+                    }
+                    game_evs.push(hm);
+                }
+                let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
+                Ok(dict)
+            }
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub struct EventMd {
+    pub tick: i32,
+    pub player: u32,
+    pub attacker: Option<u32>,
+}
+
+pub fn get_event_md(game_events: &Vec<GameEvent>, sid_eid_map: &HashMap<u64, u32>) -> Vec<EventMd> {
+    let mut md = vec![];
+    for event in game_events {
+        if event.name == "player_death" {
+            let mut player = 420000000;
+            let mut attacker = Default::default();
+            let mut tick = -10000;
+
+            for f in &event.fields {
+                if f.name == "tick" {
+                    match f.data.as_ref().unwrap() {
+                        KeyData::Long(x) => {
+                            tick = *x;
+                        }
+                        _ => {}
+                    }
+                }
+                if f.name == "player_steamid" {
+                    match f.data.as_ref().unwrap() {
+                        KeyData::Uint64(x) => match sid_eid_map.get(x) {
+                            Some(eid) => player = *eid,
+                            None => panic!("no ent found for sid"),
+                        },
+                        _ => {}
+                    }
+                }
+                if f.name == "attacker_steamid" {
+                    match f.data.as_ref().unwrap() {
+                        KeyData::Uint64(x) => match sid_eid_map.get(x) {
+                            Some(eid) => attacker = Some(*eid),
+                            None => panic!("no ent found for sid"),
+                        },
+                        _ => {}
+                    }
+                }
+            }
+            md.push(EventMd {
+                tick,
+                player,
+                attacker,
+            })
+        }
+    }
+    md
 }
 
 pub fn get_player_team(ent: &Entity) -> i32 {

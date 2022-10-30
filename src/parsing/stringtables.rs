@@ -172,6 +172,7 @@ impl Demo {
                         .insert(ui.user_id, ui.entity_id.try_into().unwrap());
                     self.userid_sid_map.insert(ui.user_id, ui.xuid);
                     self.entid_is_player.insert(ui.entity_id, ui.xuid);
+                    self.sid_entid_map.insert(ui.xuid, ui.entity_id);
                     self.players.insert(ui.xuid, ui);
                 }
             }
@@ -291,6 +292,7 @@ impl Demo {
                     self.uid_eid_map
                         .insert(ui.user_id, ui.entity_id.try_into().unwrap());
                     self.entid_is_player.insert(ui.entity_id, ui.xuid);
+                    self.sid_entid_map.insert(ui.xuid, ui.entity_id);
                     self.players.insert(ui.xuid, ui);
                 }
             }

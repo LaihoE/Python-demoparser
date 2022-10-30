@@ -107,6 +107,7 @@ pub struct Demo {
     pub baselines: HashMap<u32, HashMap<String, PropData>>,
     pub baseline_no_cls: HashMap<u32, Vec<u8>>,
     pub friendly_p_names: Vec<String>,
+    pub sid_entid_map: HashMap<u64, u32>,
 }
 impl Demo {
     pub fn new(
@@ -179,6 +180,7 @@ impl Demo {
                 baseline_no_cls: HashMap::new(),
                 friendly_p_names: og_names,
                 uid_eid_map: HashMap::default(),
+                sid_entid_map: HashMap::default(),
             }),
         }
     }
@@ -188,7 +190,7 @@ impl Demo {
     pub fn start_parsing(
         &mut self,
         props_names: &Vec<String>,
-    ) -> HashMap<String, PropColumn, RandomState> {
+    ) -> (HashMap<String, PropColumn, RandomState>, TickCache) {
         let mut ticks_props: HashMap<String, PropColumn, RandomState> = HashMap::default();
         let mut tc = TickCache::new();
         for _ in 0..10000 {
@@ -216,7 +218,6 @@ impl Demo {
                 break;
             }
             self.tick = tick;
-
             // EARLY EXIT
             if self.only_header {
                 break;
@@ -239,89 +240,7 @@ impl Demo {
             */
             self.parse_cmd(cmd, &mut tc);
         }
-        let mut kill_ticks = vec![];
-        for event in &self.game_events {
-            if event.name == "player_death" {
-                for f in &event.fields {
-                    if f.name == "tick" {
-                        match f.data.as_ref().unwrap() {
-                            KeyData::Long(x) => {
-                                kill_ticks.push(x);
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut cur_tick = 0;
-        for event_tick in kill_ticks {
-            cur_tick = *event_tick;
-            if cur_tick < 5000 {
-                continue;
-            }
-            match tc.get_prop_at_tick(cur_tick, 21, 5) {
-                Some(v) => println!("DELTA FOUND IN CACHE AT TICK {} with val {:?}", cur_tick, v),
-                None => 'outer: loop {
-                    //println!("{}", cur_tick);
-                    match tc.get_tick_inxes(cur_tick as usize) {
-                        Some(inxes) => {
-                            let bs = &self.bytes[inxes.0..inxes.1];
-                            let msg = Message::parse_from_bytes(bs).unwrap();
-                            let d = tc.parse_packet_ents_simple(
-                                msg,
-                                &self.entities,
-                                &self.serverclass_map,
-                            );
-                            //tc.insert_cache_multiple(cur_tick.try_into().unwrap(), &d);
-                            match d.get(&5) {
-                                Some(x) => {
-                                    for i in x {
-                                        if i.0 == 21 {
-                                            println!(
-                                                "Delta found at tick: {} val: {:?}",
-                                                cur_tick, i.1
-                                            );
-                                            break 'outer;
-                                        }
-                                    }
-                                }
-                                None => {}
-                            }
-                        }
-                        None => {}
-                    }
-                    cur_tick -= 1;
-                    if cur_tick < 0 {
-                        panic!("tick {}", cur_tick);
-                    }
-                },
-            }
-        }
-
-        for p in tc.ents {
-            for (k, v) in &p.1 {
-                if p.0 == 5 {
-                    for i in 46000..47000 {
-                        match v {
-                            VarVec::I32(x) => {
-                                if x[i].is_some() {
-                                    //println!("Tick:{} {:?}", i, x[i]);
-                                }
-                            }
-                            VarVec::F32(x) => {
-                                if x[i].is_some() {
-                                    //(println!("Tick:{} {:?}", i, x[i]);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
-        ticks_props
+        (ticks_props, tc)
     }
     #[inline(always)]
     pub fn parse_cmd(&mut self, cmd: u8, tc: &mut TickCache) {
@@ -392,7 +311,7 @@ impl Demo {
                 }
                 // Packet entites
                 26 => {
-                    if t < 3000 {
+                    if t < 2000 {
                         if parse_props {
                             let pack_ents = Message::parse_from_bytes(data);
                             match pack_ents {

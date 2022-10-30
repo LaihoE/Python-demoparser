@@ -13,9 +13,7 @@ use protobuf::Message;
 use std::collections::HashMap;
 
 pub struct TickCache {
-    // Tick (left, right)
     ticks: Vec<(usize, usize)>,
-    // Ent_id <var_id, data>
     pub ents: HashMap<u32, HashMap<u32, VarVec>>,
 }
 
@@ -125,18 +123,23 @@ impl TickCache {
 
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var().unwrap() as i32);
-            if entity_id > 10 {
+            if entity_id > 20 {
                 break;
             }
+            //println!("{}", entity_id);
 
             if b.read_boolie().unwrap() {
                 b.read_boolie().unwrap();
             } else if b.read_boolie().unwrap() {
-                panic!("this can't happen in this mode");
+                panic!("Tried to create new ent in speedy mode {}", entity_id);
             } else {
                 // IF ENTITY DOES EXIST
                 let ent = &entities[entity_id as usize];
                 let sv_cls = &serverclass_map[&(ent.1.class_id as u16)];
+                if sv_cls.dt != "DT_CSPlayer" {
+                    println!("NOT PLAYER: {}", entity_id);
+                    break;
+                }
                 let mut val = -1;
                 let new_way = b.read_boolie().unwrap();
                 let mut v = vec![];
@@ -153,9 +156,18 @@ impl TickCache {
                 for inx in v {
                     let prop = &sv_cls.props[inx as usize];
                     let pdata = b.decode(prop).unwrap();
-                    if prop.name == "m_angEyeAngles[1]" {
-                        //println!("{}", inx);
-                        this_v.push((inx.try_into().unwrap(), pdata));
+                    match pdata {
+                        PropData::VecXY(v) => {
+                            //let endings = ["_X", "_Y"];
+                            for inx in 0..2 {
+                                let data = PropData::F32(v[inx]);
+                                this_v.push(((10000 + inx) as u32, data));
+                            }
+                        }
+                        PropData::VecXYZ(v) => {}
+                        _ => {
+                            this_v.push((inx.try_into().unwrap(), pdata));
+                        }
                     }
                 }
             }

@@ -186,10 +186,12 @@ pub fn parse_ent_props(
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop)?;
 
+        //println!("INX: {}  e{}", inx, prop.name);
         // if prop is not wanted then dont create propdata from it
         if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
             continue;
         }
+
         match pdata {
             PropData::VecXY(v) => {
                 let endings = ["_X", "_Y"];

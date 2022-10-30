@@ -24,8 +24,9 @@ fn main() {
     for demo_path in paths {
         let now = Instant::now();
         let props_names = vec!["m_angEyeAngles[0]".to_string()];
-        let dp = "/home/laiho/Documents/demos/faceits/average".to_string();
+        let dp = "/home/laiho/Documents/demos/mygames/ww.dem".to_string();
         let mut parser = Demo::new(
+            /*
             demo_path
                 .as_ref()
                 .unwrap()
@@ -33,14 +34,16 @@ fn main() {
                 .to_str()
                 .unwrap()
                 .to_string(),
+            */
+            dp,
             true,
-            (50..100).collect(),
+            (50..70000).collect(),
             vec![],
-            vec![],
+            vec!["m_angEyeAngles[0]".to_string()],
             "".to_string(),
             false,
             false,
-            true,
+            false,
             1000000,
             props_names.clone(),
         )
@@ -52,6 +55,7 @@ fn main() {
 
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?}", elapsed);
+        break;
     }
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 67);

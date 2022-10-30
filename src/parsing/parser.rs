@@ -1,8 +1,11 @@
 use super::game_events::GameEvent;
+use super::tick_cache;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
+use crate::parsing::game_events::KeyData;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
+use crate::parsing::tick_cache::TickCache;
 pub use crate::parsing::variants::*;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
@@ -187,6 +190,7 @@ impl Demo {
         props_names: &Vec<String>,
     ) -> HashMap<String, PropColumn, RandomState> {
         let mut ticks_props: HashMap<String, PropColumn, RandomState> = HashMap::default();
+        let mut tc = TickCache::new();
         for _ in 0..10000 {
             self.entities.push((
                 1111111,
@@ -217,7 +221,7 @@ impl Demo {
             if self.only_header {
                 break;
             }
-
+            /*
             if self.parse_props {
                 Demo::collect_player_data(
                     &self.players,
@@ -232,22 +236,105 @@ impl Demo {
                     &self.serverclass_map,
                 );
             }
-            self.parse_cmd(cmd);
+            */
+            self.parse_cmd(cmd, &mut tc);
+        }
+        let mut kill_ticks = vec![];
+        for event in &self.game_events {
+            if event.name == "player_death" {
+                for f in &event.fields {
+                    if f.name == "tick" {
+                        match f.data.as_ref().unwrap() {
+                            KeyData::Long(x) => {
+                                kill_ticks.push(x);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut cur_tick = 0;
+        for event_tick in kill_ticks {
+            cur_tick = *event_tick;
+            if cur_tick < 5000 {
+                continue;
+            }
+            match tc.get_prop_at_tick(cur_tick, 21, 5) {
+                Some(v) => println!("DELTA FOUND IN CACHE AT TICK {} with val {:?}", cur_tick, v),
+                None => 'outer: loop {
+                    //println!("{}", cur_tick);
+                    match tc.get_tick_inxes(cur_tick as usize) {
+                        Some(inxes) => {
+                            let bs = &self.bytes[inxes.0..inxes.1];
+                            let msg = Message::parse_from_bytes(bs).unwrap();
+                            let d = tc.parse_packet_ents_simple(
+                                msg,
+                                &self.entities,
+                                &self.serverclass_map,
+                            );
+                            //tc.insert_cache_multiple(cur_tick.try_into().unwrap(), &d);
+                            match d.get(&5) {
+                                Some(x) => {
+                                    for i in x {
+                                        if i.0 == 21 {
+                                            println!(
+                                                "Delta found at tick: {} val: {:?}",
+                                                cur_tick, i.1
+                                            );
+                                            break 'outer;
+                                        }
+                                    }
+                                }
+                                None => {}
+                            }
+                        }
+                        None => {}
+                    }
+                    cur_tick -= 1;
+                    if cur_tick < 0 {
+                        panic!("tick {}", cur_tick);
+                    }
+                },
+            }
+        }
+
+        for p in tc.ents {
+            for (k, v) in &p.1 {
+                if p.0 == 5 {
+                    for i in 46000..47000 {
+                        match v {
+                            VarVec::I32(x) => {
+                                if x[i].is_some() {
+                                    //println!("Tick:{} {:?}", i, x[i]);
+                                }
+                            }
+                            VarVec::F32(x) => {
+                                if x[i].is_some() {
+                                    //(println!("Tick:{} {:?}", i, x[i]);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
         }
         ticks_props
     }
     #[inline(always)]
-    pub fn parse_cmd(&mut self, cmd: u8) {
+    pub fn parse_cmd(&mut self, cmd: u8, tc: &mut TickCache) {
         match cmd {
-            1 => self.parse_packet(),
-            2 => self.parse_packet(),
+            1 => self.parse_packet(tc),
+            2 => self.parse_packet(tc),
             6 => self.parse_datatable(),
             _ => {}
         }
     }
 
     #[inline(always)]
-    pub fn parse_packet(&mut self) {
+    pub fn parse_packet(&mut self, tc: &mut TickCache) {
         check_round_change(&self.entities, &self.rules_id, &mut self.round);
         self.fp += 160;
         let packet_len = self.read_i32();
@@ -255,11 +342,15 @@ impl Demo {
         let parse_props = self.parse_props;
         let mut is_con_tick = false;
         let no_gameevents = self.no_gameevents;
-
+        let t = self.tick;
         while self.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();
+            let before_inx = self.fp.clone();
             let data = self.read_n_bytes(size);
+            if t > 1 && msg == 26 {
+                tc.insert_tick(t, before_inx, before_inx + size as usize);
+            }
             match msg as i32 {
                 // Game event
                 25 => {
@@ -301,39 +392,41 @@ impl Demo {
                 }
                 // Packet entites
                 26 => {
-                    if parse_props {
-                        let pack_ents = Message::parse_from_bytes(data);
-                        match pack_ents {
-                            Ok(pe) => {
-                                let pack_ents = pe;
-                                let res = Demo::parse_packet_entities(
-                                    &mut self.serverclass_map,
-                                    self.tick,
-                                    self.class_bits as usize,
-                                    pack_ents,
-                                    &mut self.entities,
-                                    &self.wanted_props,
-                                    &mut self.workhorse,
-                                    self.fp as i32,
-                                    self.highest_wanted_entid,
-                                    &mut self.manager_id,
-                                    &mut self.rules_id,
-                                    &mut self.round,
-                                    &self.baselines,
-                                );
-                                match res {
-                                    Some(v) => {
-                                        for e in v {
-                                            self.entids_not_connected.remove(&e);
+                    if t < 3000 {
+                        if parse_props {
+                            let pack_ents = Message::parse_from_bytes(data);
+                            match pack_ents {
+                                Ok(pe) => {
+                                    let pack_ents = pe;
+                                    let res = Demo::parse_packet_entities(
+                                        &mut self.serverclass_map,
+                                        self.tick,
+                                        self.class_bits as usize,
+                                        pack_ents,
+                                        &mut self.entities,
+                                        &self.wanted_props,
+                                        &mut self.workhorse,
+                                        self.fp as i32,
+                                        self.highest_wanted_entid,
+                                        &mut self.manager_id,
+                                        &mut self.rules_id,
+                                        &mut self.round,
+                                        &self.baselines,
+                                    );
+                                    match res {
+                                        Some(v) => {
+                                            for e in v {
+                                                self.entids_not_connected.remove(&e);
+                                            }
                                         }
+                                        None => {}
                                     }
-                                    None => {}
                                 }
+                                Err(e) => panic!(
+                                    "Failed to parse Packet entities at tick {}. Error: {e}",
+                                    self.tick
+                                ),
                             }
-                            Err(e) => panic!(
-                                "Failed to parse Packet entities at tick {}. Error: {e}",
-                                self.tick
-                            ),
                         }
                     }
                 }

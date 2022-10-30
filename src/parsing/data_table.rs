@@ -55,22 +55,20 @@ impl Demo {
             let _ = self.read_string();
             let dt = self.read_string();
 
-            if self.parse_props {
-                let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt], dt.clone());
-                let server_class = ServerClass { id, dt, props };
-                // Set baselines parsed earlier in stringtables.
-                // Happens when stringtable, with instancebaseline, comes
-                // before this event. Seems oddly complicated
-                match self.baseline_no_cls.get(&(id as u32)) {
-                    Some(user_data) => {
-                        parse_baselines(&user_data, &server_class, &mut self.baselines);
-                        // Remove after being parsed
-                        self.baseline_no_cls.remove(&(id as u32));
-                    }
-                    None => {}
+            let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt], dt.clone());
+            let server_class = ServerClass { id, dt, props };
+            // Set baselines parsed earlier in stringtables.
+            // Happens when stringtable, with instancebaseline, comes
+            // before this event. Seems oddly complicated
+            match self.baseline_no_cls.get(&(id as u32)) {
+                Some(user_data) => {
+                    parse_baselines(&user_data, &server_class, &mut self.baselines);
+                    // Remove after being parsed
+                    self.baseline_no_cls.remove(&(id as u32));
                 }
-                self.serverclass_map.insert(id, server_class);
+                None => {}
             }
+            self.serverclass_map.insert(id, server_class);
         }
     }
     pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 32]> {

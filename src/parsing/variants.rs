@@ -32,6 +32,17 @@ pub struct PropAtom {
     pub tick: i32,
 }
 
+#[inline(always)]
+pub fn create_default_from_pdata(pdata: PropData, playback_frames: usize) -> VarVec {
+    match pdata {
+        PropData::I32(_) => VarVec::I32(vec![None; playback_frames]),
+        PropData::I64(_) => VarVec::I32(vec![None; playback_frames]),
+        PropData::F32(_) => VarVec::F32(vec![None; playback_frames]),
+        PropData::String(_) => VarVec::String(vec![None; playback_frames]),
+        _ => panic!("no matching varvec for propdata: {:?}", pdata),
+    }
+}
+
 impl VarVec {
     pub fn push_propdata(&mut self, item: PropData) {
         match item {
@@ -109,6 +120,30 @@ impl VarVec {
             VarVec::F32(v) => v.len(),
             VarVec::String(v) => v.len(),
             _ => panic!("bad len type"),
+        }
+    }
+    pub fn insert_propdata(&mut self, inx: usize, pdata: PropData) {
+        match self {
+            VarVec::I32(v) => match pdata {
+                PropData::I32(i) => v[inx] = Some(i),
+                _ => panic!("varvec didnt match propdata"),
+            },
+            VarVec::F32(v) => match pdata {
+                PropData::F32(f) => v[inx] = Some(f),
+                _ => panic!("varvec didnt match propdata"),
+            },
+            VarVec::String(v) => match pdata {
+                PropData::String(s) => v[inx] = Some(s),
+                _ => panic!("varvec didnt match propdata"),
+            },
+            VarVec::U64(v) => match pdata {
+                PropData::I64(s) => v[inx] = Some(s.try_into().unwrap()),
+                _ => panic!("varvec didnt match propdata"),
+            },
+            VarVec::I64(v) => match pdata {
+                PropData::I64(s) => v[inx] = Some(s.try_into().unwrap()),
+                _ => panic!("varvec didnt match propdata"),
+            },
         }
     }
 }

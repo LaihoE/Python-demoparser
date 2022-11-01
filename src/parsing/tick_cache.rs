@@ -79,7 +79,7 @@ impl TickCache {
                     v.insert_propdata(tick as usize, prop);
                 }
                 None => {
-                    e.insert(prop_inx, create_default_from_pdata(prop, 100000));
+                    e.insert(prop_inx, create_default_from_pdata(prop, 300000));
                     // Bug watch out
                     // v.insert_propdata(tick as usize, prop);
                 }
@@ -126,8 +126,6 @@ impl TickCache {
             if entity_id > 20 {
                 break;
             }
-            //println!("{}", entity_id);
-
             if b.read_boolie().unwrap() {
                 b.read_boolie().unwrap();
             } else if b.read_boolie().unwrap() {

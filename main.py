@@ -3,18 +3,12 @@ import pandas as pd
 import time
 
 parser = DemoParser(
-    "/home/laiho/Documents/demos/mygames/dd.dem")
-"""print(pd.DataFrame(parser.parse_events("player_connect")))
-print(pd.DataFrame(parser.parse_players()))
+    "/home/laiho/Documents/demos/mygames/1.dem")
 
-"""
-df = pd.DataFrame(parser.parse_events(
-    "player_jump", props=["X"]))
-players = parser.parse_players()
+df = pd.DataFrame(parser.parse_events_fast("player_death", props=["X"]))
 
-#df = df[df["player_steamid"] == 76561198048924300]
 print(df.columns)
-print(df.loc[:, ["tick", "player_X", "player_steamid"]])
+print(df.loc[:, ["tick", "attacker_X", "player_steamid"]])
 
 
 """for p in players:
@@ -26,54 +20,33 @@ parser.parse_events("player_death")
 print(time.time() - before)"""
 
 # 100  46909      219.924316  76561198048924300
-
+print(parser.parse_ticks(["X", "Y", "Z"]))
 """
-185  148097  1021.277466  76561197992897289
-186  148253   602.211731  76561198134270402
-187  148361   646.589722  76561198258044111
-188  148623  1172.984863  76561197999069229
-189  148737   -78.504364  76561198194694750
+Delta found at tick: 133913 start: 133913 val: F32(108.27322) ent:5
+Delta found at tick: 135725 start: 135727 val: F32(-531.2773) ent:8
+Delta found at tick: 136180 start: 138512 val: F32(1296.0) ent:10
+Delta found at tick: 139079 start: 139079 val: F32(387.8189) ent:11
+Delta found at tick: 139283 start: 139283 val: F32(155.59035) ent:8
+Delta found at tick: 139767 start: 139767 val: F32(-1719.9042) ent:5
+Delta found at tick: 141675 start: 141675 val: F32(-1066.8125) ent:2
+Delta found at tick: 141775 start: 141775 val: F32(-684.79724) ent:9
+Delta found at tick: 142165 start: 142165 val: F32(-359.3629) ent:3
+Delta found at tick: 142637 start: 142637 val: F32(-126.58538) ent:4
+Delta found at tick: 142745 start: 142777 val: F32(-680.03125) ent:7
+Delta found at tick: 144877 start: 144877 val: F32(-95.969505) ent:3
+Delta found at tick: 144919 start: 144919 val: F32(111.33612) ent:8
+Delta found at tick: 145199 start: 145199 val: F32(60.360386) ent:10
+Delta found at tick: 146219 start: 146219 val: F32(399.16318) ent:9
+Delta found at tick: 147079 start: 147079 val: F32(133.50241) ent:7
+Delta found at tick: 147969 start: 147969 val: F32(-1163.5692) ent:2
+Delta found at tick: 148357 start: 148357 val: F32(-719.96875) ent:6
+Delta found at tick: 148749 start: 148749 val: F32(135.86215) ent:11
+Delta found at tick: 150886 start: 150886 val: F32(-167.79878) ent:7
+Delta found at tick: 151066 start: 151076 val: F32(-777.46857) ent:2
+Delta found at tick: 151898 start: 151898 val: F32(-2253.8918) ent:5
+Delta found at tick: 151996 start: 151996 val: F32(-592.1735) ent:4
+Delta found at tick: 152248 start: 152264 val: F32(-2162.2932) ent:3
 
-
-
-Delta found at tick: 117966 start: 117990 val: F32(677.16846) ent:6
-Delta found at tick: 118044 start: 118044 val: F32(405.40253) ent:9
-Delta found at tick: 118996 start: 118996 val: F32(1040.8673) ent:5
-Delta found at tick: 119844 start: 119844 val: F32(666.1038) ent:7
-Delta found at tick: 121850 start: 121850 val: F32(476.41525) ent:3
-Delta found at tick: 122076 start: 122076 val: F32(124.56452) ent:12
-Delta found at tick: 125327 start: 126067 val: F32(223.96875) ent:10
-Delta found at tick: 127371 start: 127371 val: F32(458.12128) ent:11
-Delta found at tick: 127891 start: 127903 val: F32(126.56157) ent:6
-Delta found at tick: 128069 start: 128069 val: F32(14.263841) ent:2
-Delta found at tick: 128281 start: 128281 val: F32(396.55685) ent:9
-Delta found at tick: 128939 start: 128939 val: F32(651.64496) ent:12
-Delta found at tick: 130511 start: 130511 val: F32(-86.65525) ent:3
-Delta found at tick: 130877 start: 130877 val: F32(-27.045773) ent:7
-Delta found at tick: 133479 start: 133479 val: F32(650.3293) ent:10
-Delta found at tick: 134581 start: 134581 val: F32(661.7746) ent:9
-Delta found at tick: 134683 start: 134683 val: F32(1164.1848) ent:2
-Delta found at tick: 134757 start: 134757 val: F32(1173.6451) ent:7
-Delta found at tick: 135305 start: 135323 val: F32(1140.7435) ent:6
-Delta found at tick: 135365 start: 135365 val: F32(656.17816) ent:12
-Delta found at tick: 138725 start: 138725 val: F32(1112.4366) ent:12
-Delta found at tick: 139089 start: 139089 val: F32(440.78122) ent:6
-Delta found at tick: 139113 start: 139113 val: F32(863.54095) ent:2
-Delta found at tick: 139135 start: 139135 val: F32(950.5324) ent:7
-Delta found at tick: 139231 start: 139231 val: F32(722.83405) ent:10
-Delta found at tick: 142075 start: 142075 val: F32(-140.64252) ent:10
-Delta found at tick: 142631 start: 142631 val: F32(-124.79848) ent:6
-Delta found at tick: 142497 start: 142841 val: F32(860.9933) ent:5
-Delta found at tick: 142865 start: 142865 val: F32(244.59663) ent:12
-Delta found at tick: 144359 start: 144359 val: F32(75.04462) ent:2
-Delta found at tick: 145407 start: 145407 val: F32(311.25122) ent:7
-Delta found at tick: 147961 start: 147961 val: F32(384.11884) ent:10
-Delta found at tick: 148093 start: 148093 val: F32(780.28564) ent:2
-Delta found at tick: 148077 start: 148097 val: F32(359.55063) ent:11
-Delta found at tick: 148253 start: 148253 val: F32(378.15485) ent:6
-Delta found at tick: 148361 start: 148361 val: F32(293.92288) ent:7
-Delta found at tick: 148621 start: 148623 val: F32(804.8111) ent:3
-Delta found at tick: 148737 start: 148737 val: F32(348.2599) ent:12
 
 
 

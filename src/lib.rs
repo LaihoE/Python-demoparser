@@ -459,12 +459,11 @@ impl DemoParser {
                 let mut cur_tick = 0;
 
                 let kill_ticks = get_event_md(&parser.game_events, &parser.sid_entid_map);
-                //println!("{:?}", kill_ticks);
 
                 for (k, v) in parser.uid_eid_map {
                     println!("{} {}", k, v);
                 }
-
+                let mut tot = 0;
                 for event_md in kill_ticks {
                     cur_tick = event_md.tick;
                     if cur_tick < 10000 {
@@ -475,7 +474,7 @@ impl DemoParser {
                             println!("DELTA FOUND IN CACHE AT TICK {} with val {:?}", cur_tick, v)
                         }
                         None => 'outer: loop {
-                            //println!("{}", cur_tick);
+                            tot += 1;
                             match tc.get_tick_inxes(cur_tick as usize) {
                                 Some(inxes) => {
                                     let bs = &parser.bytes[inxes.0..inxes.1];
@@ -511,6 +510,7 @@ impl DemoParser {
                         },
                     }
                 }
+                println!("Total ticks parsed: {}", tot);
 
                 // Create Hashmap with <string, pyobject> to be able to convert to python dict
                 for ge in parser.game_events {

@@ -26,7 +26,7 @@ fn main() {
     for demo_path in paths {
         let now = Instant::now();
         let props_names = vec!["m_vecOrigin".to_string()];
-        let dp = "/home/laiho/Documents/demos/mygames/dd.dem".to_string();
+        let dp = "/home/laiho/Documents/demos/mygames/c.dem".to_string();
         let mut parser = Demo::new(
             /*
             demo_path
@@ -42,7 +42,7 @@ fn main() {
             (50..70000).collect(),
             vec![],
             vec!["m_angEyeAngles[0]".to_string()],
-            "".to_string(),
+            "player_death".to_string(),
             false,
             false,
             false,
@@ -67,49 +67,43 @@ fn main() {
         let mut cur_tick = 0;
         for event_md in kill_ticks {
             cur_tick = event_md.tick;
-            if cur_tick < 10000 {
+            if cur_tick < 5000 {
                 continue;
             }
-            match tc.get_prop_at_tick(cur_tick, 10000, event_md.player) {
-                Some(v) => {
-                    println!("DELTA FOUND IN CACHE AT TICK {} with val {:?}", cur_tick, v)
-                }
-                None => 'outer: loop {
-                    total += 1;
-                    //println!("{}", cur_tick);
-                    match tc.get_tick_inxes(cur_tick as usize) {
-                        Some(inxes) => {
-                            let bs = &parser.bytes[inxes.0..inxes.1];
-                            let msg = Message::parse_from_bytes(bs).unwrap();
-                            let d = tc.parse_packet_ents_simple(
-                                msg,
-                                &parser.entities,
-                                &parser.serverclass_map,
-                            );
-                            //tc.insert_cache_multiple(cur_tick.try_into().unwrap(), &d);
-                            match d.get(&event_md.player) {
-                                Some(x) => {
-                                    for i in x {
-                                        if i.0 == 10000 {
-                                            println!(
-                                                "Delta found at tick: {} start: {} val: {:?} ent:{:?}",
-                                                cur_tick,event_md.tick, i.1, &event_md.player
-                                            );
-                                            break 'outer;
-                                        }
+
+            'outer: loop {
+                total += 1;
+                match tc.get_tick_inxes(cur_tick as usize) {
+                    Some(inxes) => {
+                        let bs = &parser.bytes[inxes.0..inxes.1];
+                        let msg = Message::parse_from_bytes(bs).unwrap();
+                        let d = tc.parse_packet_ents_simple(
+                            msg,
+                            &parser.entities,
+                            &parser.serverclass_map,
+                        );
+                        match d.get(&event_md.player) {
+                            Some(x) => {
+                                for i in x {
+                                    if i.0 == 10000 {
+                                        println!(
+                                            "Delta found at tick: {} start: {} val: {:?} ent:{:?}",
+                                            cur_tick, event_md.tick, i.1, &event_md.player
+                                        );
+                                        break 'outer;
                                     }
                                 }
-                                None => {}
                             }
+                            None => {}
                         }
-                        None => {}
                     }
-                    cur_tick -= 1;
-                    if cur_tick < 10000 {
-                        //panic!("tick {}", cur_tick);
-                        break;
-                    }
-                },
+                    None => {}
+                }
+                cur_tick -= 1;
+                if cur_tick < 5000 {
+                    //panic!("tick {}", cur_tick);
+                    break;
+                }
             }
         }
         println!("Total ticks parsed: {}", total);

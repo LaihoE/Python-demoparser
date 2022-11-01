@@ -311,7 +311,7 @@ impl Demo {
                 }
                 // Packet entites
                 26 => {
-                    if t < 2000 {
+                    if t < 2000000 {
                         if parse_props {
                             let pack_ents = Message::parse_from_bytes(data);
                             match pack_ents {

@@ -126,6 +126,7 @@ Current flamegraph of performance: [flamegraph](https://github.com/LaihoE/Python
 - Exact granade trajectories are currently not supported. What you can find is where the granade was thrown from ("weapon_fire" event) and where it detonated (for example "hegrenade_detonate" event). Detonate event also includes coordinates but the weapon fire does not.
 - Parser early exits when biggest wanted tick is reached
 - If using WSL make sure the demos are also on WSL (or it will be slower)
+- Coordinates of dead players can be strange
 
 
 ## Why yet another parser?

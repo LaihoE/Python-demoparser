@@ -166,7 +166,9 @@ impl Demo {
                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                         self.players_connected += 1;
                     }
-                    ui.friends_name = ui.friends_name.trim_end_matches('0').to_string();
+                    //println!("CREATE: {} {} {}", ui.xuid, ui.entity_id, self.tick);
+
+                    ui.friends_name = ui.friends_name.trim_end_matches("x\00").to_string();
                     ui.name = ui.name.trim_end_matches('0').to_string();
                     self.uid_eid_map
                         .insert(ui.user_id, ui.entity_id.try_into().unwrap());
@@ -286,6 +288,7 @@ impl Demo {
                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                         self.players_connected += 1;
                     }
+                    //println!("UPD: {} {} {}", ui.xuid, ui.entity_id, self.tick);
                     ui.friends_name = ui.friends_name.trim_end_matches('0').to_string();
                     ui.name = ui.name.trim_end_matches('0').to_string();
                     self.userid_sid_map.insert(ui.user_id, ui.xuid);

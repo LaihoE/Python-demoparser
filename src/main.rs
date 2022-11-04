@@ -20,15 +20,34 @@ use std::fs;
 use std::fs::File;
 use std::time::Instant;
 
+pub fn max_skip_tick(game_events: &Vec<GameEvent>) -> i32 {
+    let mut biggest_needed_tick = 0;
+    for ge in game_events {
+        if ge.name == "player_connect_full" {
+            for field in &ge.fields {
+                match field.name.as_str() {
+                    "tick" => {
+                        if let Some(KeyData::Long(t)) = field.data {
+                            biggest_needed_tick = t;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    println!("Biggest needed {}", biggest_needed_tick);
+    biggest_needed_tick
+}
+
 fn main() {
     let now = Instant::now();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/average/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
     for demo_path in paths {
         let now = Instant::now();
         let props_names = vec!["m_vecOrigin".to_string()];
-        let dp = "/home/laiho/Documents/demos/mygames/c.dem".to_string();
+        let dp = "/home/laiho/Documents/demos/mygames/aa.dem".to_string();
         let mut parser = Demo::new(
-            /*
             demo_path
                 .as_ref()
                 .unwrap()
@@ -36,13 +55,11 @@ fn main() {
                 .to_str()
                 .unwrap()
                 .to_string(),
-            */
-            dp,
-            true,
+            false,
             (50..70000).collect(),
             vec![],
             vec!["m_angEyeAngles[0]".to_string()],
-            "player_death".to_string(),
+            "".to_string(),
             false,
             false,
             false,
@@ -55,19 +72,44 @@ fn main() {
         let mut event_names: Vec<String> = Vec::new();
         let (data, mut tc) = parser.start_parsing(&props_names);
 
-        let elapsed = now.elapsed();
-        println!("Elapsed: {:.2?}", elapsed);
+        //let elapsed = now.elapsed();
+
         let kill_ticks = get_event_md(&parser.game_events, &parser.sid_entid_map);
         //println!("{:?}", kill_ticks);
 
-        for (k, v) in parser.uid_eid_map {
-            println!("{} {}", k, v);
-        }
+        let m = max_skip_tick(&parser.game_events);
+
+        let mut parser2 = Demo::new(
+            demo_path
+                .as_ref()
+                .unwrap()
+                .path()
+                .to_str()
+                .unwrap()
+                .to_string(),
+            true,
+            (50..70000).collect(),
+            vec![],
+            vec!["m_angEyeAngles[0]".to_string()],
+            "".to_string(),
+            false,
+            false,
+            true,
+            m,
+            props_names.clone(),
+        )
+        .unwrap();
+
+        let h: Header = parser2.parse_demo_header();
+        let mut event_names: Vec<String> = Vec::new();
+        let (data, _) = parser2.start_parsing(&props_names);
+
         let mut total = 0;
         let mut cur_tick = 0;
         for event_md in kill_ticks {
             cur_tick = event_md.tick;
-            if cur_tick < 5000 {
+
+            if cur_tick <= m {
                 continue;
             }
 
@@ -79,17 +121,19 @@ fn main() {
                         let msg = Message::parse_from_bytes(bs).unwrap();
                         let d = tc.parse_packet_ents_simple(
                             msg,
-                            &parser.entities,
-                            &parser.serverclass_map,
+                            &parser2.entities,
+                            &parser2.serverclass_map,
                         );
                         match d.get(&event_md.player) {
                             Some(x) => {
                                 for i in x {
-                                    if i.0 == 10000 {
+                                    if i.0 == "m_vecOrigin_X" {
+                                        /*
                                         println!(
                                             "Delta found at tick: {} start: {} val: {:?} ent:{:?}",
                                             cur_tick, event_md.tick, i.1, &event_md.player
                                         );
+                                        */
                                         break 'outer;
                                     }
                                 }
@@ -100,15 +144,18 @@ fn main() {
                     None => {}
                 }
                 cur_tick -= 1;
-                if cur_tick < 5000 {
+                if cur_tick <= m {
                     //panic!("tick {}", cur_tick);
                     break;
                 }
             }
         }
+        //let elapsed = println!("tick {}", parser2.tick);
         println!("Total ticks parsed: {}", total);
-
-        break;
+        let elapsed = now.elapsed();
+        //println!("Elapsed: {:.2?} (avg: {:.2?})");
+        println!("Elapsed: {:.2?}", elapsed);
+        //break;
     }
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 67);

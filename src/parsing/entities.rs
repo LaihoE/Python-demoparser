@@ -84,6 +84,7 @@ impl Demo {
                 // IF ENTITY DOES NOT EXIST
                 let cls_id = b.read_nbits(cls_bits.try_into().unwrap())?;
                 let _ = b.read_nbits(10);
+
                 let mut e = Entity {
                     class_id: cls_id,
                     entity_id: entity_id as u32,
@@ -321,7 +322,6 @@ pub fn parse_baselines(
     let mut baseline: HashMap<String, PropData> = HashMap::default();
     loop {
         val = b.read_inx(val, new_way).unwrap();
-
         if val == -1 {
             break;
         }

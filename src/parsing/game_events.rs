@@ -140,7 +140,26 @@ impl Default for KeyData {
         KeyData::Bool(false)
     }
 }
+/*
+1 => Some(KeyData::Str(key.val_string().to_owned())),
+2 => Some(KeyData::Float(key.val_float())),
+3 => Some(KeyData::Long(key.val_long())),
+4 => Some(KeyData::Short(key.val_short().try_into().unwrap())),
+5 => Some(KeyData::Byte(key.val_byte().try_into().unwrap())),
+6 => Some(KeyData::Bool(key.val_bool())),
+7 => Some(KeyData::Uint64(key.val_uint64())),
+*/
+
 impl KeyData {
+    pub fn from_pdata(pdata: &PropData) -> Self {
+        match pdata {
+            PropData::F32(f) => KeyData::Float(*f),
+            PropData::I32(f) => KeyData::Long(*f),
+            PropData::String(f) => KeyData::Str(f.to_string()),
+            _ => panic!("not yet suppored"),
+        }
+    }
+
     pub fn to_string_py(&self, py: Python<'_>) -> PyObject {
         match self {
             KeyData::Str(f) => f.to_string().to_object(py),

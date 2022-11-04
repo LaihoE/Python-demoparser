@@ -58,29 +58,29 @@ impl Demo {
         let h = Header {
             header_magic: str::from_utf8(&self.bytes[..8])
                 .unwrap()
-                .trim_end_matches('0')
+                .trim_end_matches("\x00")
                 .to_string(),
             protocol: i32::from_le_bytes(self.bytes[8..12].try_into().unwrap()),
             network_protocol: u32::from_le_bytes(self.bytes[12..16].try_into().unwrap()),
             server_name: str::from_utf8(&self.bytes[16..276])
                 .unwrap()
                 .to_string()
-                .trim_end_matches('0')
+                .trim_end_matches("\x00")
                 .to_string(),
             client_name: str::from_utf8(&self.bytes[276..536])
                 .unwrap()
                 .to_string()
-                .trim_end_matches('0')
+                .trim_end_matches("\x00")
                 .to_string(),
             map_name: str::from_utf8(&self.bytes[536..796])
                 .unwrap()
                 .to_string()
-                .trim_end_matches('0')
+                .trim_end_matches("\x00")
                 .to_string(),
             game_dir: str::from_utf8(&self.bytes[796..1056])
                 .unwrap()
                 .to_string()
-                .trim_end_matches('0')
+                .trim_end_matches("\x00")
                 .to_string(),
             playback_time: f32::from_le_bytes(self.bytes[1056..1060].try_into().unwrap()),
             playback_ticks: i32::from_le_bytes(self.bytes[1060..1064].try_into().unwrap()),

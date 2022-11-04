@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 pub struct TickCache {
     ticks: Vec<(usize, usize)>,
-    pub ents: HashMap<u32, HashMap<u32, VarVec>>,
+    pub ents: HashMap<u32, HashMap<String, VarVec>>,
 }
 
 impl TickCache {
@@ -28,7 +28,7 @@ impl TickCache {
             ents: HashMap::default(),
         }
     }
-    pub fn get_prop_at_tick(&self, tick: i32, prop_inx: u32, ent_id: u32) -> Option<PropData> {
+    pub fn get_prop_at_tick(&self, tick: i32, prop_inx: String, ent_id: u32) -> Option<PropData> {
         match self.ents.get(&ent_id) {
             Some(u) => match u.get(&prop_inx) {
                 Some(var_v) => match var_v {
@@ -64,7 +64,7 @@ impl TickCache {
         // Tick indicies in bytes. Could also be ref to bytes
         self.ticks[tick as usize] = (left, right);
     }
-    pub fn insert_cache(&mut self, tick: i32, prop_inx: u32, prop: PropData, ent_id: u32) {
+    pub fn insert_cache(&mut self, tick: i32, prop_inx: String, prop: PropData, ent_id: u32) {
         // insert already parsed ticks into cache so that we don't
         // parse the same stuff multiple times
         match prop {
@@ -79,7 +79,7 @@ impl TickCache {
                     v.insert_propdata(tick as usize, prop);
                 }
                 None => {
-                    e.insert(prop_inx, create_default_from_pdata(prop, 300000));
+                    e.insert(prop_inx, create_default_from_pdata(prop, 500000));
                     // Bug watch out
                     // v.insert_propdata(tick as usize, prop);
                 }
@@ -89,10 +89,10 @@ impl TickCache {
             }
         }
     }
-    pub fn insert_cache_multiple(&mut self, tick: i32, hm: &HashMap<u32, Vec<(u32, PropData)>>) {
+    pub fn insert_cache_multiple(&mut self, tick: i32, hm: &HashMap<u32, Vec<(String, PropData)>>) {
         for (player, data) in hm {
             for (prop_inx, p) in data {
-                self.insert_cache(tick, *prop_inx, p.clone(), *player)
+                self.insert_cache(tick, prop_inx.to_string(), p.clone(), *player)
             }
         }
     }
@@ -108,28 +108,34 @@ impl TickCache {
         }
     }
 
-    // Stripped down version of the main function
+    // Stripped down version of the "real" parse packet ents
     pub fn parse_packet_ents_simple(
         &mut self,
         pack_ents: CSVCMsg_PacketEntities,
         entities: &Vec<(u32, Entity)>,
         serverclass_map: &HashMap<u16, ServerClass, RandomState>,
-    ) -> HashMap<u32, Vec<(u32, PropData)>> {
+    ) -> HashMap<u32, Vec<(String, PropData)>> {
         let n_upd_ents = pack_ents.updated_entries();
         let mut b = MyBitreader::new(pack_ents.entity_data());
         let mut entity_id: i32 = -1;
 
-        let mut updated_vals: HashMap<u32, Vec<(u32, PropData)>> = HashMap::default();
+        let mut updated_vals: HashMap<u32, Vec<(String, PropData)>> = HashMap::default();
 
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var().unwrap() as i32);
-            if entity_id > 20 {
+            if entity_id > 15 {
                 break;
             }
             if b.read_boolie().unwrap() {
                 b.read_boolie().unwrap();
             } else if b.read_boolie().unwrap() {
-                panic!("Tried to create new ent in speedy mode {}", entity_id);
+                /*
+                panic!(
+                    "Tried to create new ent in speedy mode. Entid: {}",
+                    entity_id
+                );
+                */
+                break;
             } else {
                 // IF ENTITY DOES EXIST
                 let ent = &entities[entity_id as usize];
@@ -154,17 +160,18 @@ impl TickCache {
                 for inx in v {
                     let prop = &sv_cls.props[inx as usize];
                     let pdata = b.decode(prop).unwrap();
+                    //println!("{}", prop.name);
                     match pdata {
                         PropData::VecXY(v) => {
-                            //let endings = ["_X", "_Y"];
+                            let endings = ["_X", "_Y"];
                             for inx in 0..2 {
                                 let data = PropData::F32(v[inx]);
-                                this_v.push(((10000 + inx) as u32, data));
+                                this_v.push((prop.name.to_string() + endings[inx], data));
                             }
                         }
                         PropData::VecXYZ(v) => {}
                         _ => {
-                            this_v.push((inx.try_into().unwrap(), pdata));
+                            this_v.push((prop.name.to_string(), pdata));
                         }
                     }
                 }

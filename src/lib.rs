@@ -1,5 +1,6 @@
 mod parsing;
 use crate::parsing::game_events::GameEvent;
+use crate::parsing::game_events::NameDataPair;
 use arrow::ffi;
 use flate2::read::GzDecoder;
 use fxhash::FxHashMap;
@@ -455,21 +456,18 @@ impl DemoParser {
 
                 let (_, mut tc) = parser.start_parsing(&vec!["m_iMVPs".to_owned()]);
                 let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
-
                 let mut cur_tick = 0;
-
                 let kill_ticks = get_event_md(&parser.game_events, &parser.sid_entid_map);
 
-                for (k, v) in parser.uid_eid_map {
-                    println!("{} {}", k, v);
-                }
                 let mut tot = 0;
+                let mut ge_inx = 0;
                 for event_md in kill_ticks {
-                    cur_tick = event_md.tick;
+                    cur_tick = event_md.tick - 1;
                     if cur_tick < 10000 {
+                        ge_inx += 1;
                         continue;
                     }
-                    match tc.get_prop_at_tick(cur_tick, 10000, 5) {
+                    match tc.get_prop_at_tick(cur_tick, "asdf".to_string(), 5) {
                         Some(v) => {
                             println!("DELTA FOUND IN CACHE AT TICK {} with val {:?}", cur_tick, v)
                         }
@@ -488,11 +486,19 @@ impl DemoParser {
                                     match d.get(&event_md.player) {
                                         Some(x) => {
                                             for i in x {
-                                                if i.0 == 10000 {
+                                                if i.0 == "m_vecOrigin_X" {
                                                     println!(
                                                         "Delta found at tick: {} start: {} val: {:?} ent:{:?}",
                                                         cur_tick,event_md.tick, i.1, &event_md.player
                                                     );
+                                                    let ge = &mut parser.game_events[ge_inx];
+
+                                                    let new_filed = NameDataPair {
+                                                        name: "oompaloompa".to_string(),
+                                                        data: Some(KeyData::from_pdata(&i.1)),
+                                                    };
+
+                                                    ge.fields.push(new_filed);
                                                     break 'outer;
                                                 }
                                             }
@@ -503,12 +509,13 @@ impl DemoParser {
                                 None => {}
                             }
                             cur_tick -= 1;
-                            if cur_tick < 10000 {
-                                //panic!("tick {}", cur_tick);
+                            if cur_tick <= 10000 {
+                                ge_inx += 1;
                                 break;
                             }
                         },
                     }
+                    ge_inx += 1;
                 }
                 println!("Total ticks parsed: {}", tot);
 
@@ -517,6 +524,7 @@ impl DemoParser {
                     let mut hm: FxHashMap<String, PyObject> = FxHashMap::default();
                     let tuples = ge.to_py_tuples(py);
                     for (k, v) in tuples {
+                        //println!("K {} V {}", k, v);
                         hm.insert(k, v);
                     }
                     game_evs.push(hm);

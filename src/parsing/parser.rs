@@ -311,41 +311,39 @@ impl Demo {
                 }
                 // Packet entites
                 26 => {
-                    if t < 2000000 {
-                        if parse_props {
-                            let pack_ents = Message::parse_from_bytes(data);
-                            match pack_ents {
-                                Ok(pe) => {
-                                    let pack_ents = pe;
-                                    let res = Demo::parse_packet_entities(
-                                        &mut self.serverclass_map,
-                                        self.tick,
-                                        self.class_bits as usize,
-                                        pack_ents,
-                                        &mut self.entities,
-                                        &self.wanted_props,
-                                        &mut self.workhorse,
-                                        self.fp as i32,
-                                        self.highest_wanted_entid,
-                                        &mut self.manager_id,
-                                        &mut self.rules_id,
-                                        &mut self.round,
-                                        &self.baselines,
-                                    );
-                                    match res {
-                                        Some(v) => {
-                                            for e in v {
-                                                self.entids_not_connected.remove(&e);
-                                            }
+                    if parse_props {
+                        let pack_ents = Message::parse_from_bytes(data);
+                        match pack_ents {
+                            Ok(pe) => {
+                                let pack_ents = pe;
+                                let res = Demo::parse_packet_entities(
+                                    &mut self.serverclass_map,
+                                    self.tick,
+                                    self.class_bits as usize,
+                                    pack_ents,
+                                    &mut self.entities,
+                                    &self.wanted_props,
+                                    &mut self.workhorse,
+                                    self.fp as i32,
+                                    self.highest_wanted_entid,
+                                    &mut self.manager_id,
+                                    &mut self.rules_id,
+                                    &mut self.round,
+                                    &self.baselines,
+                                );
+                                match res {
+                                    Some(v) => {
+                                        for e in v {
+                                            self.entids_not_connected.remove(&e);
                                         }
-                                        None => {}
                                     }
+                                    None => {}
                                 }
-                                Err(e) => panic!(
-                                    "Failed to parse Packet entities at tick {}. Error: {e}",
-                                    self.tick
-                                ),
                             }
+                            Err(e) => panic!(
+                                "Failed to parse Packet entities at tick {}. Error: {e}",
+                                self.tick
+                            ),
                         }
                     }
                 }

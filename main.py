@@ -3,13 +3,7 @@ import pandas as pd
 import time
 
 parser = DemoParser(
-    "/home/laiho/Documents/demos/mygames/1.dem")
-
-df = pd.DataFrame(parser.parse_events_fast("player_death", props=["X"]))
-
-print(df.columns)
-print(df.loc[:, ["tick", "attacker_X", "player_steamid"]])
-
+    "/home/laiho/Documents/demos/mygames/aa.dem")
 
 """for p in players:
     if p["steamid"] == 76561198048924300:
@@ -19,33 +13,45 @@ before = time.time()
 parser.parse_events("player_death")
 print(time.time() - before)"""
 
+print(pd.DataFrame(parser.parse_events("player_connect_full")))
+print(pd.DataFrame(parser.parse_players()))
+print(pd.DataFrame(parser.parse_events(
+    "player_connect_full")).loc[:, ["player_name", "tick", "index"]])
 # 100  46909      219.924316  76561198048924300
-print(parser.parse_ticks(["X", "Y", "Z"]))
+# , ticks=[x for x in range(100000, 110000)])
+#df = parser.parse_ticks(["X", "Y"], ticks=[76561198194694750])
+#print(df.iloc[10000:11000, :])
+"""df = pd.DataFrame(parser.parse_events_fast(
+    "player_death", props=["X", "Y"]))
+
+print(df.columns)
+print(df.loc[30:50, ["attacker_steamid", "tick", "attacker_X",
+      "attacker_Y", "player_X", "player_Y", "oompaloompa"]])
 """
-Delta found at tick: 133913 start: 133913 val: F32(108.27322) ent:5
-Delta found at tick: 135725 start: 135727 val: F32(-531.2773) ent:8
-Delta found at tick: 136180 start: 138512 val: F32(1296.0) ent:10
-Delta found at tick: 139079 start: 139079 val: F32(387.8189) ent:11
-Delta found at tick: 139283 start: 139283 val: F32(155.59035) ent:8
-Delta found at tick: 139767 start: 139767 val: F32(-1719.9042) ent:5
-Delta found at tick: 141675 start: 141675 val: F32(-1066.8125) ent:2
-Delta found at tick: 141775 start: 141775 val: F32(-684.79724) ent:9
-Delta found at tick: 142165 start: 142165 val: F32(-359.3629) ent:3
-Delta found at tick: 142637 start: 142637 val: F32(-126.58538) ent:4
-Delta found at tick: 142745 start: 142777 val: F32(-680.03125) ent:7
-Delta found at tick: 144877 start: 144877 val: F32(-95.969505) ent:3
-Delta found at tick: 144919 start: 144919 val: F32(111.33612) ent:8
-Delta found at tick: 145199 start: 145199 val: F32(60.360386) ent:10
-Delta found at tick: 146219 start: 146219 val: F32(399.16318) ent:9
-Delta found at tick: 147079 start: 147079 val: F32(133.50241) ent:7
-Delta found at tick: 147969 start: 147969 val: F32(-1163.5692) ent:2
-Delta found at tick: 148357 start: 148357 val: F32(-719.96875) ent:6
-Delta found at tick: 148749 start: 148749 val: F32(135.86215) ent:11
-Delta found at tick: 150886 start: 150886 val: F32(-167.79878) ent:7
-Delta found at tick: 151066 start: 151076 val: F32(-777.46857) ent:2
-Delta found at tick: 151898 start: 151898 val: F32(-2253.8918) ent:5
-Delta found at tick: 151996 start: 151996 val: F32(-592.1735) ent:4
-Delta found at tick: 152248 start: 152264 val: F32(-2162.2932) ent:3
+
+"""
+     attacker_steamid   tick   attacker_X   attacker_Y     player_X     player_Y
+30  76561197992858497  17224  -641.551819  -363.700623  -631.679199 -1297.262329
+31  76561197992858497  17396  -841.746765  -244.423706 -1281.987305 -1008.610596
+32  76561197977601843  17876   274.758698 -1513.572510  -466.017181 -2087.101562
+33  76561198222973128  18224 -1967.204956   307.168671 -2003.217163   796.294189
+34  76561198222973128  18548 -2038.890625   458.601746 -1528.210205   713.777405
+35  76561198222973128  20732 -1297.749390   756.205627 -1725.941895   685.196716
+36  76561198222973128  21482 -1146.330566   761.598022 -1840.527100   690.040405
+37  76561198086340795  23844  -721.494812  -285.652313  -890.734436   232.513809
+38  76561198222973128  24386 -2250.407715   820.567749 -1944.564819   750.861938
+39  76561197977601843  24606  -871.024048  -183.759811  -673.491272 -1019.758484
+40  76561198222973128  24912 -2232.662598   822.468933 -1905.045898   748.475891
+41  76561197977601843  24936 -1218.386841   249.691818 -2511.385010   198.540543
+42  76561198086340795  25118 -2124.179199   503.529541 -2221.961426   809.904846
+43  76561198194694750  25638  -679.606140  -936.548889  -512.106140  -379.659088
+44  76561198194694750  26786  -828.407349   128.128922 -2620.357422   325.045197
+45  76561198194694750  27542 -2203.404053   550.443665 -2176.659424   798.253967
+46  76561198258044111  30219  -263.741608  -557.255981   484.049713  -504.260284
+47  76561198048924300  30333   -94.434349 -2050.056641    13.406161 -1419.063721
+48  76561198048924300  30339   -92.846581 -2050.273193   -31.814499 -1419.956787
+49  76561198004064785  30895    62.309185 -2094.463623  -923.479858 -2338.862549
+50  76561198004064785  30977   131.990021 -2037.316772   113.521805 -1972.855713
 
 
 

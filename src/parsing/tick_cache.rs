@@ -470,12 +470,6 @@ pub fn get_event_md(
                 player_min_tick: player_eid.1,
                 attacker_min_tick: attacker_eid.unwrap().1,
             });
-            /*
-            println!(
-                "{} {} {} {:?} {:?}",
-                tick, player_eid, player_sid, attacker_eid, attacker_sid
-            );
-            */
         }
     }
     md

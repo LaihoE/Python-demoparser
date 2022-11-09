@@ -67,19 +67,30 @@ pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
     }
 }
 
+pub struct Maps {
+    /*
+    Different lookup maps used during parsing
+    */
+    pub serverclass_map: HashMap<u16, ServerClass, RandomState>,
+    pub event_map: Option<HashMap<i32, Descriptor_t, RandomState>>,
+    pub dt_map: Option<HashMap<String, CSVCMsg_SendTable, RandomState>>,
+    pub players: HashMap<u64, UserInfo, RandomState>,
+    pub userid_sid_map: HashMap<u32, Vec<(u64, i32)>, RandomState>,
+    pub uid_eid_map: HashMap<u32, Vec<(u32, i32)>, RandomState>,
+    pub baselines: HashMap<u32, HashMap<String, PropData>>,
+    pub baseline_no_cls: HashMap<u32, Vec<u8>>,
+    pub sid_entid_map: HashMap<u64, Vec<(u32, i32)>>,
+}
+
 pub struct Demo {
+    pub maps: Maps,
     pub fp: usize,
     pub tick: i32,
     pub cmd: u8,
     pub bytes: BytesVariant,
     pub class_bits: u32,
-    pub event_list: Option<CSVCMsg_GameEventList>,
-    pub event_map: Option<HashMap<i32, Descriptor_t, RandomState>>,
-    pub dt_map: Option<HashMap<String, CSVCMsg_SendTable, RandomState>>,
-    pub serverclass_map: HashMap<u16, ServerClass, RandomState>,
     pub entities: Vec<(u32, Entity)>,
     pub stringtables: Vec<StringTable>,
-    pub players: HashMap<u64, UserInfo, RandomState>,
     pub parse_props: bool,
     pub game_events: Vec<GameEvent>,
     pub event_name: String,
@@ -90,24 +101,16 @@ pub struct Demo {
     pub players_connected: i32,
     pub only_players: bool,
     pub only_header: bool,
-    pub userid_sid_map: HashMap<u32, Vec<(u64, i32)>, RandomState>,
-    pub uid_eid_map: HashMap<u32, Vec<(u32, i32)>, RandomState>,
     pub playback_frames: usize,
     pub frames_parsed: i32,
-    pub entid_is_player: HashMap<u32, u64>,
     pub workhorse: Vec<i32>,
-    pub poisoned_until: i32,
     pub entids_not_connected: HashSet<u32>,
     pub highest_wanted_entid: i32,
     pub all_wanted_connected: bool,
     pub manager_id: Option<u32>,
-    pub rules_id: Option<u32>,
     pub no_gameevents: bool,
     pub early_exit_tick: i32,
-    pub baselines: HashMap<u32, HashMap<String, PropData>>,
-    pub baseline_no_cls: HashMap<u32, Vec<u8>>,
     pub friendly_p_names: Vec<String>,
-    pub sid_entid_map: HashMap<u64, Vec<(u32, i32)>>,
 }
 impl Demo {
     pub fn new(
@@ -137,51 +140,54 @@ impl Demo {
                 }
             }
         }
+
         wanted_props.extend(extra_wanted_props);
         match read_file(demo_path) {
             Err(e) => Err(e),
-            Ok(data) => Ok(Self {
-                userid_sid_map: HashMap::default(),
-                bytes: data,
-                fp: 0,
-                cmd: 0,
-                tick: 0,
-                round: 0,
-                event_list: None,
-                event_map: None,
-                class_bits: 0,
-                parse_props: parse_props,
-                event_name: event_name,
-                dt_map: Some(HashMap::default()),
-                serverclass_map: HashMap::default(),
-                entities: vec![],
-                stringtables: Vec::new(),
-                players: HashMap::default(),
-                wanted_props: wanted_props,
-                game_events: Vec::new(),
-                wanted_players: wanted_players,
-                wanted_ticks: HashSet::from_iter(wanted_ticks),
-                players_connected: 0,
-                only_header: only_header,
-                only_players: only_players,
-                playback_frames: 0,
-                frames_parsed: 0,
-                entid_is_player: HashMap::default(),
-                workhorse: Vec::new(),
-                poisoned_until: 0,
-                entids_not_connected: HashSet::new(),
-                highest_wanted_entid: 9999999,
-                all_wanted_connected: false,
-                manager_id: None,
-                rules_id: None,
-                no_gameevents: no_gameevents,
-                early_exit_tick: early_exit_tick,
-                baselines: HashMap::new(),
-                baseline_no_cls: HashMap::new(),
-                friendly_p_names: og_names,
-                uid_eid_map: HashMap::default(),
-                sid_entid_map: HashMap::default(),
-            }),
+            Ok(data) => {
+                let maps = Maps {
+                    serverclass_map: HashMap::default(),
+                    event_map: Some(HashMap::default()),
+                    dt_map: Some(HashMap::default()),
+                    players: HashMap::default(),
+                    userid_sid_map: HashMap::default(),
+                    baselines: HashMap::default(),
+                    baseline_no_cls: HashMap::default(),
+                    sid_entid_map: HashMap::default(),
+                    uid_eid_map: HashMap::default(),
+                };
+
+                Ok(Self {
+                    maps: maps,
+                    bytes: data,
+                    fp: 0,
+                    cmd: 0,
+                    tick: 0,
+                    round: 0,
+                    class_bits: 0,
+                    parse_props: parse_props,
+                    event_name: event_name,
+                    entities: vec![],
+                    stringtables: Vec::new(),
+                    wanted_props: wanted_props,
+                    game_events: Vec::new(),
+                    wanted_players: wanted_players,
+                    wanted_ticks: HashSet::from_iter(wanted_ticks),
+                    players_connected: 0,
+                    only_header: only_header,
+                    only_players: only_players,
+                    playback_frames: 0,
+                    frames_parsed: 0,
+                    workhorse: Vec::new(),
+                    entids_not_connected: HashSet::new(),
+                    highest_wanted_entid: 9999999,
+                    all_wanted_connected: false,
+                    manager_id: None,
+                    no_gameevents: no_gameevents,
+                    early_exit_tick: early_exit_tick,
+                    friendly_p_names: og_names,
+                })
+            }
         }
     }
 }
@@ -210,7 +216,6 @@ impl Demo {
             self.entids_not_connected.insert(i);
         }
 
-        self.poisoned_until = 1000;
         while self.fp < self.bytes.get_len() as usize {
             self.frames_parsed += 1;
             let (cmd, tick) = self.read_frame();
@@ -254,7 +259,7 @@ impl Demo {
 
     #[inline(always)]
     pub fn parse_packet(&mut self, tc: &mut TickCache) {
-        check_round_change(&self.entities, &self.rules_id, &mut self.round);
+        check_round_change(&self.entities, &mut self.round);
         self.fp += 160;
         let packet_len = self.read_i32();
         let goal_inx = self.fp + packet_len as usize;
@@ -280,10 +285,6 @@ impl Demo {
                                 let game_event = ge;
                                 let (game_events, con_tick) = self.parse_game_events(game_event);
                                 is_con_tick = con_tick;
-
-                                if is_con_tick {
-                                    self.poisoned_until = self.tick + 1000;
-                                }
                                 self.game_events.extend(game_events);
                             }
                             Err(e) => panic!(
@@ -318,7 +319,7 @@ impl Demo {
                                 Ok(pe) => {
                                     let pack_ents = pe;
                                     let res = Demo::parse_packet_entities(
-                                        &mut self.serverclass_map,
+                                        &mut self.maps.serverclass_map,
                                         self.tick,
                                         self.class_bits as usize,
                                         pack_ents,
@@ -328,9 +329,8 @@ impl Demo {
                                         self.fp as i32,
                                         self.highest_wanted_entid,
                                         &mut self.manager_id,
-                                        &mut self.rules_id,
                                         &mut self.round,
-                                        &self.baselines,
+                                        &self.maps.baselines,
                                     );
                                 }
                                 Err(e) => panic!(
@@ -374,19 +374,17 @@ impl Demo {
         }
     }
 }
-pub fn check_round_change(entities: &[(u32, Entity)], rules_id: &Option<u32>, round: &mut i32) {
-    if rules_id.is_some() {
-        match entities.get(rules_id.unwrap() as usize) {
-            Some(e) => match e.1.props.get("m_totalRoundsPlayed") {
-                Some(r) => {
-                    if let PropData::I32(p) = r.data {
-                        *round = p;
-                    }
+pub fn check_round_change(entities: &[(u32, Entity)], round: &mut i32) {
+    match entities.get(70) {
+        Some(e) => match e.1.props.get("m_totalRoundsPlayed") {
+            Some(r) => {
+                if let PropData::I32(p) = r.data {
+                    *round = p;
                 }
-                None => {}
-            },
+            }
             None => {}
-        }
+        },
+        None => {}
     }
 }
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {

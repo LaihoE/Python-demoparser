@@ -73,7 +73,7 @@ fn main() {
         let mut event_names: Vec<String> = Vec::new();
         let (data, mut tc) = parser.start_parsing(&props_names);
 
-        let kill_ticks = get_event_md(&parser.game_events, &parser.sid_entid_map);
+        let kill_ticks = get_event_md(&parser.game_events, &parser.maps.sid_entid_map);
         let m = max_skip_tick(&parser.game_events);
         //println!("{}", m);
         if m > 20000 {
@@ -101,8 +101,8 @@ fn main() {
                         let d = tc.parse_packet_ents_simple(
                             msg,
                             &mut parser.entities,
-                            &parser.serverclass_map,
-                            &parser.baselines,
+                            &parser.maps.serverclass_map,
+                            &parser.maps.baselines,
                             489,
                         );
                         match d.get(&event_md.player) {

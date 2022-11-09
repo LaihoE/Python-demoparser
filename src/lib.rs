@@ -343,7 +343,7 @@ impl DemoParser {
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
                 let _ = parser.start_parsing(&vec![]);
-                let players = parser.players;
+                let players = parser.maps.players;
                 let mut py_players = vec![];
                 let ent_manager = &parser.entities[parser.manager_id.unwrap() as usize].1;
                 for (_, player) in players {
@@ -456,10 +456,10 @@ impl DemoParser {
                     &mut parser.game_events,
                     real_props.clone(),
                     &parser.bytes,
-                    &parser.baselines,
-                    &parser.serverclass_map,
-                    &parser.userid_sid_map,
-                    &parser.uid_eid_map,
+                    &parser.maps.baselines,
+                    &parser.maps.serverclass_map,
+                    &parser.maps.userid_sid_map,
+                    &parser.maps.uid_eid_map,
                 );
                 // Create Hashmap with <string, pyobject> to be able to convert to python dict
                 for ge in parser.game_events {

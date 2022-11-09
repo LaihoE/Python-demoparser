@@ -148,14 +148,14 @@ impl Demo {
                 };
                 if st.name == "instancebaseline" {
                     let k = entry.parse::<u32>().unwrap_or(999999);
-                    match self.serverclass_map.get(&(k as u16)) {
+                    match self.maps.serverclass_map.get(&(k as u16)) {
                         Some(sv_cls) => {
-                            parse_baselines(&user_data, sv_cls, &mut self.baselines);
+                            parse_baselines(&user_data, sv_cls, &mut self.maps.baselines);
                         }
                         None => {
                             // Serverclass_map is not initiated yet, we need to parse this
                             // later. Just why??? :() just seems unnecessarily complicated
-                            self.baseline_no_cls.insert(k, user_data.clone());
+                            self.maps.baseline_no_cls.insert(k, user_data.clone());
                         }
                     }
                     history.push(entry.to_string());
@@ -171,24 +171,24 @@ impl Demo {
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
 
-                    self.userid_sid_map
+                    self.maps
+                        .userid_sid_map
                         .entry(ui.user_id)
                         .or_insert(Vec::new())
                         .push((ui.xuid.clone(), self.tick));
 
-                    self.uid_eid_map
+                    self.maps
+                        .uid_eid_map
                         .entry(ui.user_id)
                         .or_insert(Vec::new())
                         .push((ui.entity_id, self.tick));
-
-                    self.entid_is_player.insert(ui.entity_id, ui.xuid);
-
-                    self.sid_entid_map
+                    self.maps
+                        .sid_entid_map
                         .entry(ui.xuid.clone())
                         .or_insert(Vec::new())
                         .push((ui.entity_id, self.tick));
 
-                    self.players.insert(ui.xuid.clone(), ui);
+                    self.maps.players.insert(ui.xuid.clone(), ui);
                 }
             }
         }
@@ -284,14 +284,14 @@ impl Demo {
                 };
                 if st.name == "instancebaseline" {
                     let k = entry.parse::<u32>().unwrap_or(999999);
-                    match self.serverclass_map.get(&(k as u16)) {
+                    match self.maps.serverclass_map.get(&(k as u16)) {
                         Some(sv_cls) => {
-                            parse_baselines(&user_data, sv_cls, &mut self.baselines);
+                            parse_baselines(&user_data, sv_cls, &mut self.maps.baselines);
                         }
                         None => {
                             // Serverclass_map is not initiated yet, we need to parse this
                             // later. Just why??? :() just seems unnecessarily complicated
-                            self.baseline_no_cls.insert(k, user_data.clone());
+                            self.maps.baseline_no_cls.insert(k, user_data.clone());
                         }
                     }
                 }
@@ -306,24 +306,25 @@ impl Demo {
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
                     //println!("{} {}", ui.name, ui.xuid);
 
-                    self.userid_sid_map
+                    self.maps
+                        .userid_sid_map
                         .entry(ui.user_id)
                         .or_insert(Vec::new())
                         .push((ui.xuid.clone(), self.tick));
 
-                    self.uid_eid_map
+                    self.maps
+                        .uid_eid_map
                         .entry(ui.user_id)
                         .or_insert(Vec::new())
                         .push((ui.entity_id, self.tick));
 
-                    self.entid_is_player.insert(ui.entity_id, ui.xuid);
-
-                    self.sid_entid_map
+                    self.maps
+                        .sid_entid_map
                         .entry(ui.xuid.clone())
                         .or_insert(Vec::new())
                         .push((ui.entity_id, self.tick));
 
-                    self.players.insert(ui.xuid.clone(), ui);
+                    self.maps.players.insert(ui.xuid.clone(), ui);
                 }
             }
             history.push(entry.to_string());

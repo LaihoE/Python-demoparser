@@ -61,7 +61,6 @@ impl Demo {
         fp: i32,
         _highest_wanted_entid: i32,
         manager_id: &mut Option<u32>,
-        rules_id: &mut Option<u32>,
         round: &mut i32,
         baselines: &HashMap<u32, HashMap<String, PropData>>,
     ) -> Option<Vec<u32>> {
@@ -125,7 +124,7 @@ impl Demo {
                                 player_ents.push(entity_id as u32);
                             }
                             if cls_id == 39 {
-                                *rules_id = Some(entity_id as u32);
+                                println!("RULES ID: {}", entity_id);
                             }
                             if cls_id == 41 {
                                 *manager_id = Some(entity_id as u32);

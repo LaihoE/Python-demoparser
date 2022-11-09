@@ -34,7 +34,7 @@ impl Demo {
                         break;
                     }
 
-                    self.dt_map.as_mut().unwrap().insert(
+                    self.maps.dt_map.as_mut().unwrap().insert(
                         table.net_table_name.as_ref().unwrap().to_string(),
                         table.clone(),
                     );
@@ -55,20 +55,20 @@ impl Demo {
             let _ = self.read_string();
             let dt = self.read_string();
 
-            let props = self.flatten_dt(&self.dt_map.as_ref().unwrap()[&dt], dt.clone());
+            let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
             let server_class = ServerClass { id, dt, props };
             // Set baselines parsed earlier in stringtables.
             // Happens when stringtable, with instancebaseline, comes
             // before this event. Seems oddly complicated
-            match self.baseline_no_cls.get(&(id as u32)) {
+            match self.maps.baseline_no_cls.get(&(id as u32)) {
                 Some(user_data) => {
-                    parse_baselines(&user_data, &server_class, &mut self.baselines);
+                    parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
                     // Remove after being parsed
-                    self.baseline_no_cls.remove(&(id as u32));
+                    self.maps.baseline_no_cls.remove(&(id as u32));
                 }
                 None => {}
             }
-            self.serverclass_map.insert(id, server_class);
+            self.maps.serverclass_map.insert(id, server_class);
         }
     }
     pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 32]> {
@@ -80,7 +80,7 @@ impl Demo {
             }
 
             if prop.type_() == 6 {
-                let sub_table = &self.dt_map.as_ref().unwrap()[prop.dt_name()];
+                let sub_table = &self.maps.dt_map.as_ref().unwrap()[prop.dt_name()];
                 excl.extend(self.get_excl_props(&sub_table.clone()));
             }
         }
@@ -158,7 +158,7 @@ impl Demo {
                 continue;
             }
             if prop.type_() == 6 {
-                let sub_table = &self.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
+                let sub_table = &self.maps.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
                 let child_props = self.get_props(sub_table, prop.dt_name().to_string(), excl);
 
                 if (prop.flags() & (1 << 11)) == 0 {

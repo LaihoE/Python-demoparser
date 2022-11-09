@@ -304,7 +304,7 @@ impl Demo {
     pub fn parse_game_events(&mut self, game_event: CSVCMsg_GameEvent) -> (Vec<GameEvent>, bool) {
         let mut game_events: Vec<GameEvent> = Vec::new();
         let connect_tick = false;
-        match &self.event_map {
+        match &self.maps.event_map {
             Some(ev_desc_map) => {
                 let event_desc = &ev_desc_map[&game_event.eventid()];
 
@@ -314,8 +314,8 @@ impl Demo {
                             &game_event,
                             event_desc,
                             &self.tick,
-                            &self.userid_sid_map,
-                            &self.players,
+                            &self.maps.userid_sid_map,
+                            &self.maps.players,
                             self.round,
                             &self.entities,
                             &self.wanted_props,
@@ -336,8 +336,8 @@ impl Demo {
                             &game_event,
                             event_desc,
                             &self.tick,
-                            &self.userid_sid_map,
-                            &self.players,
+                            &self.maps.userid_sid_map,
+                            &self.maps.players,
                             self.round,
                             &self.entities,
                             &self.wanted_props,
@@ -364,6 +364,6 @@ impl Demo {
         for event_desc in event_list.descriptors {
             hm.insert(event_desc.eventid(), event_desc);
         }
-        self.event_map = Some(hm);
+        self.maps.event_map = Some(hm);
     }
 }

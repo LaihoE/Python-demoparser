@@ -1,96 +1,138 @@
+import tqdm
+import multiprocessing as mp
 from demoparser import DemoParser
 import pandas as pd
 import time
+import glob
+from pandas.testing import assert_frame_equal
 
-parser = DemoParser(
-    "/home/laiho/Documents/demos/mygames/aa.dem")
-
-"""for p in players:
-    if p["steamid"] == 76561198048924300:
-        print(p)
 
 before = time.time()
-parser.parse_events("player_death")
-print(time.time() - before)"""
-
-print(pd.DataFrame(parser.parse_events("player_connect_full")))
-print(pd.DataFrame(parser.parse_players()))
-print(pd.DataFrame(parser.parse_events(
-    "player_connect_full")).loc[:, ["player_name", "tick", "index"]])
-# 100  46909      219.924316  76561198048924300
-# , ticks=[x for x in range(100000, 110000)])
-#df = parser.parse_ticks(["X", "Y"], ticks=[76561198194694750])
-#print(df.iloc[10000:11000, :])
-"""df = pd.DataFrame(parser.parse_events_fast(
-    "player_death", props=["X", "Y"]))
-
-print(df.columns)
-print(df.loc[30:50, ["attacker_steamid", "tick", "attacker_X",
-      "attacker_Y", "player_X", "player_Y", "oompaloompa"]])
-"""
+files = glob.glob("/home/laiho/Documents/demos/mygames/*")
 
 """
-     attacker_steamid   tick   attacker_X   attacker_Y     player_X     player_Y
-30  76561197992858497  17224  -641.551819  -363.700623  -631.679199 -1297.262329
-31  76561197992858497  17396  -841.746765  -244.423706 -1281.987305 -1008.610596
-32  76561197977601843  17876   274.758698 -1513.572510  -466.017181 -2087.101562
-33  76561198222973128  18224 -1967.204956   307.168671 -2003.217163   796.294189
-34  76561198222973128  18548 -2038.890625   458.601746 -1528.210205   713.777405
-35  76561198222973128  20732 -1297.749390   756.205627 -1725.941895   685.196716
-36  76561198222973128  21482 -1146.330566   761.598022 -1840.527100   690.040405
-37  76561198086340795  23844  -721.494812  -285.652313  -890.734436   232.513809
-38  76561198222973128  24386 -2250.407715   820.567749 -1944.564819   750.861938
-39  76561197977601843  24606  -871.024048  -183.759811  -673.491272 -1019.758484
-40  76561198222973128  24912 -2232.662598   822.468933 -1905.045898   748.475891
-41  76561197977601843  24936 -1218.386841   249.691818 -2511.385010   198.540543
-42  76561198086340795  25118 -2124.179199   503.529541 -2221.961426   809.904846
-43  76561198194694750  25638  -679.606140  -936.548889  -512.106140  -379.659088
-44  76561198194694750  26786  -828.407349   128.128922 -2620.357422   325.045197
-45  76561198194694750  27542 -2203.404053   550.443665 -2176.659424   798.253967
-46  76561198258044111  30219  -263.741608  -557.255981   484.049713  -504.260284
-47  76561198048924300  30333   -94.434349 -2050.056641    13.406161 -1419.063721
-48  76561198048924300  30339   -92.846581 -2050.273193   -31.814499 -1419.956787
-49  76561198004064785  30895    62.309185 -2094.463623  -923.479858 -2338.862549
-50  76561198004064785  30977   131.990021 -2037.316772   113.521805 -1972.855713
+files = []
+files.append(
+    "/home/laiho/Documents/demos/mygames/match730_003418549680613621938_0984855660_183.dem")
+files.append(
+    "/home/laiho/Documents/demos/mygames/match730_003564210687548850263_1135999279_184.dem")
+files.append(
+    "/home/laiho/Documents/demos/mygames/match730_003439547603925074007_0749396926_184.dem")
+files.append(
+    "/home/laiho/Documents/demos/mygames/match730_003434548923417493974_0621905606_184.dem")
+files.append("/home/laiho/Documents/demos/mygames/e.dem")
 
+files.append(
+    "/home/laiho/Documents/demos/mygames/match730_003421736756800651551_0387184790_184.dem")
+files.append(
+    "/home/laiho/Documents/demos/mygames/match730_003425781074100224332_0845925734_132.dem")
 
-
-
-
-
-
-18    3553            358.698120  76561198048924300
-21    4021            337.626343  76561198048924300
-24    4411             11.601562  76561198048924300
-26    4799            358.341064  76561198048924300
-27    5085              3.999023  76561198048924300
-40    6605             14.924927  76561198048924300
-43    9198            155.813599  76561198048924300
-56   16680            269.555054  76561198048924300
-64   21562            297.053833  76561198048924300
-71   26438            280.354614  76561198048924300
-75   29430            161.636353  76561198048924300
-82   34081            138.746338  76561198048924300
-91   38735            281.315918  76561198048924300
-93   41911             56.425781  76561198048924300
-100  46909            219.924316  76561198048924300
+files = []
+# files.append("/home/laiho/Documents/demos/mygames/e.dem")
+files.append(
+    "/home/laiho/Documents/demos/mygames/match730_003439547603925074007_0749396926_184.dem")
 """
+# files = ["/home/laiho/Documents/demos/mygames/match730_003564210687548850263_1135999279_184.dem"]
+#files = ["/home/laiho/Documents/demos/mygames/match730_003575550120617312564_1824169885_187.dem"]
+for file in files:
+    parser = DemoParser(file)
+    print(file)
+    df = pd.DataFrame(parser.parse_events_fast(
+        "player_death", props=["X", "Y", "Z"]))
+    # print(df["m_vecOrigin_Xlol"])
+    df = df.iloc[1:, :]
+
+    """df = pd.DataFrame(parser.parse_events_fast(
+        "player_death", props=["X", "Y", "Z"])).round(3)
+    print(df.columns)
+    # if "precuimplayer_X" in df.columns:
+    #print(df["precuimplayer_X"], df["m_vecOrigin_Xlol"])
+    print(pd.DataFrame(parser.parse_players()))
+    print(pd.DataFrame(parser.parse_events("player_connect")))"""
+
+    """dfm = pd.read_csv(
+        "/home/laiho/Documents/programming/rust/demoparse/tests/gen_go_out/killevent.csv")
+    dfm = dfm.loc[:, ["player_X", "player_Y", "player_Z",
+                      "player_name", "player_steamid", "attacker_steamid"]]
+    # print(df)
+    for i in range(len(df)):
+        print(df.iloc[i]["m_vecOrigin_Xlol"], df.iloc[i]["m_vecOrigin_Ylol"],
+              dfm.iloc[i]["player_X"], dfm.iloc[i]["player_Y"])"""
+
+    #dfm = dfm.iloc[40:, :]
+
+    #a = a[a["tick"] > 10000]
+    #b = b[b["tick"] > 10000]
+
+    # for sid in dfm["player_steamid"].unique():
+    # print("markus", sid, dfm[dfm["player_steamid"] == sid])
+
+    """for i in range(len(df)):
+        if df.iloc[i]["precuimplayer_X"] != df.iloc[i]["m_vecOrigin_Xlol"]:
+            print(df.iloc[i]["precuimplayer_X"], df.iloc[i]
+                  ["m_vecOrigin_Xlol"], df.iloc[i]["tick"], df.iloc[i]["player_name"], df.iloc[i]["player_steamid"])"""
+
+    """for i in df:
+        if len(i) != 32:
+            print(len(i), i)
+    """
+    """df = pd.DataFrame(parser.parse_events_fast(
+        "player_death", props=["X", "Y", "Z"])).round(3)
+
+    df2 = pd.DataFrame(parser.parse_events(
+        "player_death", props=["X", "Y", "Z"])).round(3)
+
+    fast = df.loc[:, ["m_vecOrigin_X", "m_vecOrigin_Y",
+                      "m_vecOrigin[2]", "player_name", "player_steamid", "attacker_steamid", "tick"]]
+
+    fast.columns = ["player_X", "player_Y", "player_Z",
+                    "player_name", "player_steamid", "attacker_steamid", "tick"]
+    fast = fast.iloc[40:, :]
+    df2 = df2.iloc[40:, :]
+
+    a = df2.loc[:, ["player_X", "player_Y", "player_Z",
+                    "player_name", "player_steamid", "attacker_steamid", "tick"]]
+    b = fast.loc[:, ["player_X", "player_Y", "player_Z",
+                     "player_name", "player_steamid", "attacker_steamid", "tick"]]
+
+    a = a[a["player_steamid"] != 0]
+    b = b[b["player_steamid"] != 0]
+
+    a = a[a["attacker_steamid"] != 0]
+    b = b[b["attacker_steamid"] != 0]
+
+    for sid in b["player_steamid"].unique():
+        print(b[b["player_steamid"] == sid])
+    print("******************", type(sid))
+    for sid in a["player_steamid"].unique():
+        print(a[a["player_steamid"] == sid])
+    
+    print("******************", b["attacker_steamid"].dtype)
+    print("NANNANNANNANNANNANNANNANNANNAN", b.iloc[11])
+
+    print("******************", a["attacker_steamid"].dtype)
+    print("NANNANNANNANNANNANNANNANNANNAN", a.iloc[11])
+
+    dfm = pd.read_csv(
+        "/home/laiho/Documents/programming/rust/demoparse/tests/gen_go_out/killevent.csv")
+    dfm = dfm.loc[:, ["player_X", "player_Y", "player_Z",
+                      "player_name", "player_steamid", "attacker_steamid"]]
+    dfm = dfm.iloc[40:, :]
+
+    #a = a[a["tick"] > 10000]
+    #b = b[b["tick"] > 10000]
+
+    # for sid in dfm["player_steamid"].unique():
+    # print("markus", sid, dfm[dfm["player_steamid"] == sid])
+
+    # print("\U0001F923")
+    # print(pd.DataFrame(parser.parse_events("player_connect")))
+    # print(pd.DataFrame(parser.parse_players()))
+    assert_frame_equal(a, b)"""
 
 
 """
-18    3553  2656.021973  76561198048924300
-21    4021  2631.000244  76561198048924300
-24    4411  2678.225586  76561198048924300
-26    4799   602.892700  76561198048924300
-27    5085   677.680542  76561198048924300
-40    6605  2643.068115  76561198048924300
-43    9198 -1329.155762  76561198048924300
-56   16680  -830.396057  76561198048924300
-64   21562 -1550.193604  76561198048924300
-71   26438  -786.321838  76561198048924300
-75   29430  -520.667236  76561198048924300
-82   34081 -1491.861450  76561198048924300
-91   38735  -719.968750  76561198048924300
-93   41911 -1863.942017  76561198048924300
-100  46909    64.733200  76561198048924300
+for i in range(len(fast)):
+    print(fast.iloc[i].to_list())
+print(pd.DataFrame(parser.parse_events("player_connect")))
 """

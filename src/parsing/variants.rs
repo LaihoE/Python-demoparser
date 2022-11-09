@@ -25,7 +25,7 @@ pub enum PropData {
     Vec(Vec<i32>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PropAtom {
     pub prop_name: String,
     pub data: PropData,
@@ -67,7 +67,7 @@ impl VarVec {
             PropData::String(p) => match self {
                 VarVec::String(f) => f.push(Some(p)),
                 _ => {
-                    println!("{:?}", self);
+                    //println!("{:?}", self);
                     panic!("Tried to push a {:?} into a string column", p);
                 }
             },

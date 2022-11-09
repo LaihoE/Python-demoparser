@@ -90,8 +90,8 @@ pub struct Demo {
     pub players_connected: i32,
     pub only_players: bool,
     pub only_header: bool,
-    pub userid_sid_map: HashMap<u32, u64, RandomState>,
-    pub uid_eid_map: HashMap<u32, u64, RandomState>,
+    pub userid_sid_map: HashMap<u32, Vec<(u64, i32)>, RandomState>,
+    pub uid_eid_map: HashMap<u32, Vec<(u32, i32)>, RandomState>,
     pub playback_frames: usize,
     pub frames_parsed: i32,
     pub entid_is_player: HashMap<u32, u64>,
@@ -107,7 +107,7 @@ pub struct Demo {
     pub baselines: HashMap<u32, HashMap<String, PropData>>,
     pub baseline_no_cls: HashMap<u32, Vec<u8>>,
     pub friendly_p_names: Vec<String>,
-    pub sid_entid_map: HashMap<u64, u32>,
+    pub sid_entid_map: HashMap<u64, Vec<(u32, i32)>>,
 }
 impl Demo {
     pub fn new(
@@ -267,7 +267,7 @@ impl Demo {
             let size = self.read_varint();
             let before_inx = self.fp.clone();
             let data = self.read_n_bytes(size);
-            if t > 1 && msg == 26 {
+            if msg == 26 {
                 tc.insert_tick(t, before_inx, before_inx + size as usize);
             }
             match msg as i32 {
@@ -311,39 +311,33 @@ impl Demo {
                 }
                 // Packet entites
                 26 => {
-                    if parse_props {
-                        let pack_ents = Message::parse_from_bytes(data);
-                        match pack_ents {
-                            Ok(pe) => {
-                                let pack_ents = pe;
-                                let res = Demo::parse_packet_entities(
-                                    &mut self.serverclass_map,
-                                    self.tick,
-                                    self.class_bits as usize,
-                                    pack_ents,
-                                    &mut self.entities,
-                                    &self.wanted_props,
-                                    &mut self.workhorse,
-                                    self.fp as i32,
-                                    self.highest_wanted_entid,
-                                    &mut self.manager_id,
-                                    &mut self.rules_id,
-                                    &mut self.round,
-                                    &self.baselines,
-                                );
-                                match res {
-                                    Some(v) => {
-                                        for e in v {
-                                            self.entids_not_connected.remove(&e);
-                                        }
-                                    }
-                                    None => {}
+                    if t < -5555555 {
+                        if parse_props {
+                            let pack_ents = Message::parse_from_bytes(data);
+                            match pack_ents {
+                                Ok(pe) => {
+                                    let pack_ents = pe;
+                                    let res = Demo::parse_packet_entities(
+                                        &mut self.serverclass_map,
+                                        self.tick,
+                                        self.class_bits as usize,
+                                        pack_ents,
+                                        &mut self.entities,
+                                        &self.wanted_props,
+                                        &mut self.workhorse,
+                                        self.fp as i32,
+                                        self.highest_wanted_entid,
+                                        &mut self.manager_id,
+                                        &mut self.rules_id,
+                                        &mut self.round,
+                                        &self.baselines,
+                                    );
                                 }
+                                Err(e) => panic!(
+                                    "Failed to parse Packet entities at tick {}. Error: {e}",
+                                    self.tick
+                                ),
                             }
-                            Err(e) => panic!(
-                                "Failed to parse Packet entities at tick {}. Error: {e}",
-                                self.tick
-                            ),
                         }
                     }
                 }

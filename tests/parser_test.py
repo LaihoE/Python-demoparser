@@ -16,38 +16,19 @@ from pandas.testing import assert_frame_equal
 
 class TestFullDemo(unittest.TestCase):
     def setUp(self) -> None:
-        demo_path = os.path.join(os.path.dirname(__file__), 'test.dem')
+        demo_path = os.path.join(os.path.dirname(__file__), '1.dem')
         self.parser = DemoParser(demo_path)
 
-    def test_header(self):
-        header = self.parser.parse_header()
-        correct_header = joblib.load(os.path.join(os.path.dirname(
-            __file__), 'correct_outputs', 'header.pkl'))
-        self.assertEqual(header, correct_header)
+    def test_player_death_event(self):
+        events = pd.DataFrame(self.parser.parse_events_fast("player_death", props=["X", "Y", "Z"])).round(3)
 
-    def test_events(self):
-        events = self.parser.parse_events("")
         correct_path = os.path.join(os.path.dirname(
-            __file__), 'correct_outputs', 'events.gz')
-        with gzip.open(correct_path, 'rt', encoding='UTF-8') as zipfile:
-            data = json.load(zipfile)
-        self.assertEqual(events, data)
+            __file__), 'correct_outputs', 'killevent_markus_parser.csv')
+        dfgo = pd.read_csv(correct_path)
 
-    """def test_players(self):
-        players = pd.DataFrame(self.parser.parse_players())
-        correct_players = joblib.load(os.path.join(os.path.dirname(
-            __file__), 'correct_outputs', 'players.pkl'))
-        players = players.reindex(
-            sorted(players.columns), axis=1)
-        self.assertEqual(assert_frame_equal(players, correct_players), True)"""
+        a = events.loc[:, ["player_X", "player_Y", "player_Z",
+                           "attacker_X", "attacker_Y", "attacker_Z", "attacker_steamid"]]
+        b = dfgo.loc[:, ["player_X", "player_Y", "player_Z",
+                         "attacker_X", "attacker_Y", "attacker_Z", "attacker_steamid"]]
 
-    def test_ticks(self):
-        df = self.parser.parse_ticks(["X", "Y", "Z", "m_bIsScoped", "velocity_X",
-                                      "velocity_Y", "velocity_Z",
-                                      "viewangle_yaw", "viewangle_pitch",
-                                      "health", "in_buy_zone",  "flash_duration"
-                                      ])
-        df = df.drop("name", axis=1)
-        df = df.drop("steamid", axis=1)
-        s = int(np.nansum(df.to_numpy()))
-        self.assertEqual(s, 14427302575)
+        self.assertEqual(a.equals(b), True)

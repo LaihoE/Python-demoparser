@@ -10,10 +10,6 @@ use csgoproto::netmessages::CSVCMsg_GameEventList;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
-/*
-All of these are relatively cheap operations, doesn't really matter how performant
-*/
-
 fn parse_key(key: &Key_t) -> Option<KeyData> {
     match key.type_() {
         1 => Some(KeyData::Str(key.val_string().to_owned())),
@@ -27,15 +23,52 @@ fn parse_key(key: &Key_t) -> Option<KeyData> {
     }
 }
 
-fn parse_key_steamid(key: &Key_t, uid_sid_map: &HashMap<u32, u64, RandomState>) -> KeyData {
-    let user_id = key.val_short();
+fn parse_key_steamid(key: &Key_t, players: &HashMap<u64, UserInfo, RandomState>) -> KeyData {
+    return KeyData::Uint64(key.val_short() as u64);
+}
 
-    match uid_sid_map.get(&(user_id as u32)) {
-        None => KeyData::Long(0),
-        Some(u) => {
-            return KeyData::Uint64(*u);
+fn parse_key_steam_name(key: &Key_t, players: &HashMap<u64, UserInfo, RandomState>) -> KeyData {
+    let uid = key.val_short();
+    for player in players.values() {
+        if &player.user_id == &(uid as u32) {
+            if key.type_() == 4 {
+                return KeyData::Str(
+                    player
+                        .name
+                        .to_string()
+                        .trim_matches(char::from(0))
+                        .to_string(),
+                );
+            }
         }
     }
+    KeyData::Str("None".to_string())
+}
+
+pub fn get_current_steamid(
+    tick: &i32,
+    uid: &i32,
+    uid_sid_map: &HashMap<u32, Vec<(u64, i32)>, RandomState>,
+) -> u64 {
+    match uid_sid_map.get(&(*uid as u32)) {
+        None => {
+            panic!("No entid for steamid")
+        }
+        Some(tups) => {
+            if tups.len() == 1 {
+                return tups[0].0;
+            }
+            for t in 0..tups.len() - 1 {
+                if tups[t + 1].1 > *tick && tups[t].1 < *tick {
+                    return tups[t].0;
+                }
+            }
+            if tups[tups.len() - 1].1 < *tick {
+                return tups[tups.len() - 1].0;
+            }
+            return tups[0].0;
+        }
+    };
 }
 
 pub fn parse_props(
@@ -58,7 +91,9 @@ pub fn parse_props(
                         match &p.data {
                             PropData::F32(f) => {
                                 all_pairs.push(NameDataPair {
-                                    name: prefix.clone() + &og_names[wanted_prop_inx].to_string(),
+                                    name: "precuim".to_string()
+                                        + &prefix.clone()
+                                        + &og_names[wanted_prop_inx].to_string(),
                                     data: Some(KeyData::Float(*f)),
                                 });
                             }
@@ -96,33 +131,6 @@ pub fn parse_props(
             all_pairs
         }
     }
-}
-
-fn parse_key_steam_name(
-    key: &Key_t,
-    players: &HashMap<u64, UserInfo, RandomState>,
-    uid_sid_map: &HashMap<u32, u64, RandomState>,
-) -> KeyData {
-    let uid = key.val_short();
-    match uid_sid_map.get(&(uid as u32)) {
-        None => return KeyData::Str("None".to_string()),
-        Some(sid) => {
-            for player in players.values() {
-                if &player.xuid == sid {
-                    if key.type_() == 4 {
-                        return KeyData::Str(
-                            player
-                                .name
-                                .to_string()
-                                .trim_matches(char::from(0))
-                                .to_string(),
-                        );
-                    }
-                }
-            }
-        }
-    }
-    KeyData::Str("None".to_string())
 }
 
 #[derive(Debug)]
@@ -204,13 +212,13 @@ pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
     tick: &i32,
-    uid_sid_map: &HashMap<u32, u64, RandomState>,
+    uid_sid_map: &HashMap<u32, Vec<(u64, i32)>, RandomState>,
     players: &HashMap<u64, UserInfo, RandomState>,
     round: i32,
     entities: &[(u32, Entity)],
     wanted_props: &Vec<String>,
     og_names: &[String],
-    uid_eid_map: &HashMap<u32, u64, RandomState>,
+    //uid_eid_map: &HashMap<u32, u64, RandomState>,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
     let mut kv_pairs: Vec<NameDataPair> = Vec::new();
@@ -221,50 +229,47 @@ pub fn gen_name_val_pairs(
 
         match desc.name() {
             "userid" => {
-                let steamid = parse_key_steamid(ge, uid_sid_map);
+                let steamid = parse_key_steamid(ge, players);
                 kv_pairs.push(NameDataPair {
-                    name: "player_steamid".to_string(),
+                    name: "player_uid".to_string(),
                     data: Some(steamid),
                 });
-                let steam_name = parse_key_steam_name(ge, players, uid_sid_map);
+                let steam_name = parse_key_steam_name(ge, players);
                 kv_pairs.push(NameDataPair {
                     name: "player_name".to_string(),
                     data: Some(steam_name),
                 });
-                let props = parse_props(
-                    ge,
-                    entities,
-                    wanted_props,
-                    og_names,
-                    "player_".to_string(),
-                    uid_eid_map,
-                );
+                /*
+                let props =
+                    parse_props(ge, entities, wanted_props, og_names, "player_".to_string());
                 for p in props {
                     kv_pairs.push(p);
                 }
+                */
             }
             "attacker" => {
-                let steamid = parse_key_steamid(ge, uid_sid_map);
+                let steamid = parse_key_steamid(ge, players);
                 kv_pairs.push(NameDataPair {
-                    name: "attacker_steamid".to_string(),
+                    name: "attacker_uid".to_string(),
                     data: Some(steamid),
                 });
-                let steam_name = parse_key_steam_name(ge, players, uid_sid_map);
+                let steam_name = parse_key_steam_name(ge, players);
                 kv_pairs.push(NameDataPair {
                     name: "attacker_name".to_string(),
                     data: Some(steam_name),
                 });
+                /*
                 let props = parse_props(
                     ge,
                     entities,
                     wanted_props,
                     og_names,
                     "attacker_".to_string(),
-                    uid_eid_map,
                 );
                 for p in props {
                     kv_pairs.push(p);
                 }
+                */
             }
             _ => {
                 let val = parse_key(ge);
@@ -315,7 +320,7 @@ impl Demo {
                             &self.entities,
                             &self.wanted_props,
                             &self.friendly_p_names,
-                            &self.uid_eid_map,
+                            //&self.uid_eid_map,
                         );
 
                         game_events.push({
@@ -337,7 +342,7 @@ impl Demo {
                             &self.entities,
                             &self.wanted_props,
                             &self.friendly_p_names,
-                            &self.uid_eid_map,
+                            //&self.uid_eid_map,
                         );
                         game_events.push({
                             GameEvent {
@@ -356,7 +361,6 @@ impl Demo {
     }
     pub fn parse_game_event_map(&mut self, event_list: CSVCMsg_GameEventList) {
         let mut hm: HashMap<i32, Descriptor_t, RandomState> = HashMap::default();
-
         for event_desc in event_list.descriptors {
             hm.insert(event_desc.eventid(), event_desc);
         }

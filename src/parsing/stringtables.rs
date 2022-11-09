@@ -168,14 +168,27 @@ impl Demo {
                     }
                     //println!("CREATE: {} {} {}", ui.xuid, ui.entity_id, self.tick);
 
-                    ui.friends_name = ui.friends_name.trim_end_matches("x\00").to_string();
-                    ui.name = ui.name.trim_end_matches('0').to_string();
+                    ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
+                    ui.name = ui.name.trim_end_matches("\x00").to_string();
+
+                    self.userid_sid_map
+                        .entry(ui.user_id)
+                        .or_insert(Vec::new())
+                        .push((ui.xuid.clone(), self.tick));
+
                     self.uid_eid_map
-                        .insert(ui.user_id, ui.entity_id.try_into().unwrap());
-                    self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                        .entry(ui.user_id)
+                        .or_insert(Vec::new())
+                        .push((ui.entity_id, self.tick));
+
                     self.entid_is_player.insert(ui.entity_id, ui.xuid);
-                    self.sid_entid_map.insert(ui.xuid, ui.entity_id);
-                    self.players.insert(ui.xuid, ui);
+
+                    self.sid_entid_map
+                        .entry(ui.xuid.clone())
+                        .or_insert(Vec::new())
+                        .push((ui.entity_id, self.tick));
+
+                    self.players.insert(ui.xuid.clone(), ui);
                 }
             }
         }
@@ -289,14 +302,28 @@ impl Demo {
                         self.players_connected += 1;
                     }
                     //println!("UPD: {} {} {}", ui.xuid, ui.entity_id, self.tick);
-                    ui.friends_name = ui.friends_name.trim_end_matches('0').to_string();
-                    ui.name = ui.name.trim_end_matches('0').to_string();
-                    self.userid_sid_map.insert(ui.user_id, ui.xuid);
+                    ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
+                    ui.name = ui.name.trim_end_matches("\x00").to_string();
+                    //println!("{} {}", ui.name, ui.xuid);
+
+                    self.userid_sid_map
+                        .entry(ui.user_id)
+                        .or_insert(Vec::new())
+                        .push((ui.xuid.clone(), self.tick));
+
                     self.uid_eid_map
-                        .insert(ui.user_id, ui.entity_id.try_into().unwrap());
+                        .entry(ui.user_id)
+                        .or_insert(Vec::new())
+                        .push((ui.entity_id, self.tick));
+
                     self.entid_is_player.insert(ui.entity_id, ui.xuid);
-                    self.sid_entid_map.insert(ui.xuid, ui.entity_id);
-                    self.players.insert(ui.xuid, ui);
+
+                    self.sid_entid_map
+                        .entry(ui.xuid.clone())
+                        .or_insert(Vec::new())
+                        .push((ui.entity_id, self.tick));
+
+                    self.players.insert(ui.xuid.clone(), ui);
                 }
             }
             history.push(entry.to_string());

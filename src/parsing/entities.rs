@@ -12,7 +12,7 @@ use std::convert::TryInto;
 
 use super::stringtables::UserInfo;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Entity {
     pub class_id: u32,
     pub entity_id: u32,
@@ -84,12 +84,18 @@ impl Demo {
                 // IF ENTITY DOES NOT EXIST
                 let cls_id = b.read_nbits(cls_bits.try_into().unwrap())?;
                 let _ = b.read_nbits(10);
+                //println!("CLS BITS {}", cls_bits);
 
                 let mut e = Entity {
                     class_id: cls_id,
                     entity_id: entity_id as u32,
                     props: HashMap::default(),
                 };
+
+                if entity_id < 50 {
+                    println!("{} {}", cls_id, entity_id);
+                }
+
                 match baselines.get(&cls_id) {
                     Some(baseline) => {
                         for (k, v) in baseline {
@@ -97,8 +103,14 @@ impl Demo {
                                 let atom = PropAtom {
                                     prop_name: k.to_string(),
                                     data: v.clone(),
-                                    tick: tick,
+                                    tick: -69420,
                                 };
+
+                                /*
+                                if cls_id == 40 || cls_id == 0 {
+                                    println!("{} {:?}", k, v.clone());
+                                }
+                                */
                                 e.props.insert(k.to_string(), atom);
                             }
                         }
@@ -189,6 +201,10 @@ pub fn parse_ent_props(
 
         //println!("INX: {}  e{}", inx, prop.name);
         // if prop is not wanted then dont create propdata from it
+        if sv_cls.dt == "DT_AI_BaseNPC" {
+            println!("entid: {} tick:{}", ent.entity_id, tick)
+        }
+
         if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
             continue;
         }
@@ -198,12 +214,14 @@ pub fn parse_ent_props(
                 let endings = ["_X", "_Y"];
                 for inx in 0..2 {
                     let data = PropData::F32(v[inx]);
+
                     let name = prop.name.to_owned() + endings[inx];
                     let atom = PropAtom {
                         prop_name: name,
                         data: data,
                         tick: tick,
                     };
+
                     ent.props.insert(atom.prop_name.to_owned(), atom);
                 }
             }

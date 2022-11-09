@@ -129,7 +129,6 @@ fn insert_weapon_name(
                                 None => &full_name,
                             },
                         };
-
                         ticks_props
                             .entry(prop_name.to_string())
                             .or_insert_with(|| create_default(4, playback_frames))

@@ -1,20 +1,19 @@
 mod parsing;
 use crate::parsing::game_events::GameEvent;
 use crate::parsing::game_events::NameDataPair;
+use ahash::RandomState;
 use arrow::ffi;
 use flate2::read::GzDecoder;
 use fxhash::FxHashMap;
-use memmap::MmapOptions;
 use parsing::entities::Entity;
 use parsing::game_events::KeyData;
 use parsing::header::Header;
 use parsing::parser::Demo;
 use parsing::stringtables::UserInfo;
-use parsing::variants::PropAtom;
+//use parsing::tick_cache::gather_props_backwards;
 use parsing::variants::PropData;
 use parsing::variants::VarVec;
 use phf::phf_map;
-use polars::export::ahash::RandomState;
 use polars::prelude::ArrowField;
 use polars::prelude::NamedFrom;
 use polars::series::Series;
@@ -23,8 +22,6 @@ use polars_arrow::prelude::ArrayRef;
 use protobuf::Message;
 use pyo3::exceptions::PyFileNotFoundError;
 use pyo3::exceptions::PyKeyError;
-use pyo3::exceptions::PyTypeError;
-use pyo3::exceptions::PyValueError;
 use pyo3::ffi::Py_uintptr_t;
 use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
@@ -32,10 +29,8 @@ use pyo3::types::PyDict;
 use pyo3::{PyAny, PyObject, PyResult};
 use pyo3::{PyErr, Python};
 use std::collections::HashMap;
-use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use std::time::Instant;
 use std::vec;
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
@@ -438,13 +433,13 @@ impl DemoParser {
             true,
             vec![],
             vec![],
-            real_props,
-            event_name,
+            real_props.clone(),
+            "player_death".to_string(),
             false,
             false,
             false,
             9999999,
-            wanted_props,
+            wanted_props.clone(),
         );
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err(format!(
@@ -456,75 +451,21 @@ impl DemoParser {
 
                 let (_, mut tc) = parser.start_parsing(&vec!["m_iMVPs".to_owned()]);
                 let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
-                let mut cur_tick = 0;
-                let kill_ticks = get_event_md(&parser.game_events, &parser.sid_entid_map);
 
-                let mut tot = 0;
-                let mut ge_inx = 0;
-                for event_md in kill_ticks {
-                    cur_tick = event_md.tick - 1;
-                    if cur_tick < 10000 {
-                        ge_inx += 1;
-                        continue;
-                    }
-                    match tc.get_prop_at_tick(cur_tick, "asdf".to_string(), 5) {
-                        Some(v) => {
-                            println!("DELTA FOUND IN CACHE AT TICK {} with val {:?}", cur_tick, v)
-                        }
-                        None => 'outer: loop {
-                            tot += 1;
-                            match tc.get_tick_inxes(cur_tick as usize) {
-                                Some(inxes) => {
-                                    let bs = &parser.bytes[inxes.0..inxes.1];
-                                    let msg = Message::parse_from_bytes(bs).unwrap();
-                                    let d = tc.parse_packet_ents_simple(
-                                        msg,
-                                        &parser.entities,
-                                        &parser.serverclass_map,
-                                    );
-                                    tc.insert_cache_multiple(cur_tick.try_into().unwrap(), &d);
-                                    match d.get(&event_md.player) {
-                                        Some(x) => {
-                                            for i in x {
-                                                if i.0 == "m_vecOrigin_X" {
-                                                    println!(
-                                                        "Delta found at tick: {} start: {} val: {:?} ent:{:?}",
-                                                        cur_tick,event_md.tick, i.1, &event_md.player
-                                                    );
-                                                    let ge = &mut parser.game_events[ge_inx];
-
-                                                    let new_filed = NameDataPair {
-                                                        name: "oompaloompa".to_string(),
-                                                        data: Some(KeyData::from_pdata(&i.1)),
-                                                    };
-
-                                                    ge.fields.push(new_filed);
-                                                    break 'outer;
-                                                }
-                                            }
-                                        }
-                                        None => {}
-                                    }
-                                }
-                                None => {}
-                            }
-                            cur_tick -= 1;
-                            if cur_tick <= 10000 {
-                                ge_inx += 1;
-                                break;
-                            }
-                        },
-                    }
-                    ge_inx += 1;
-                }
-                println!("Total ticks parsed: {}", tot);
-
+                tc.gather_eventprops_backwards(
+                    &mut parser.game_events,
+                    real_props.clone(),
+                    &parser.bytes,
+                    &parser.baselines,
+                    &parser.serverclass_map,
+                    &parser.userid_sid_map,
+                    &parser.uid_eid_map,
+                );
                 // Create Hashmap with <string, pyobject> to be able to convert to python dict
                 for ge in parser.game_events {
                     let mut hm: FxHashMap<String, PyObject> = FxHashMap::default();
                     let tuples = ge.to_py_tuples(py);
                     for (k, v) in tuples {
-                        //println!("K {} V {}", k, v);
                         hm.insert(k, v);
                     }
                     game_evs.push(hm);
@@ -534,58 +475,6 @@ impl DemoParser {
             }
         }
     }
-}
-#[derive(Debug, Clone)]
-pub struct EventMd {
-    pub tick: i32,
-    pub player: u32,
-    pub attacker: Option<u32>,
-}
-
-pub fn get_event_md(game_events: &Vec<GameEvent>, sid_eid_map: &HashMap<u64, u32>) -> Vec<EventMd> {
-    let mut md = vec![];
-    for event in game_events {
-        if event.name == "player_death" {
-            let mut player = 420000000;
-            let mut attacker = Default::default();
-            let mut tick = -10000;
-
-            for f in &event.fields {
-                if f.name == "tick" {
-                    match f.data.as_ref().unwrap() {
-                        KeyData::Long(x) => {
-                            tick = *x;
-                        }
-                        _ => {}
-                    }
-                }
-                if f.name == "player_steamid" {
-                    match f.data.as_ref().unwrap() {
-                        KeyData::Uint64(x) => match sid_eid_map.get(x) {
-                            Some(eid) => player = *eid,
-                            None => panic!("no ent found for sid"),
-                        },
-                        _ => {}
-                    }
-                }
-                if f.name == "attacker_steamid" {
-                    match f.data.as_ref().unwrap() {
-                        KeyData::Uint64(x) => match sid_eid_map.get(x) {
-                            Some(eid) => attacker = Some(*eid),
-                            None => panic!("no ent found for sid"),
-                        },
-                        _ => {}
-                    }
-                }
-            }
-            md.push(EventMd {
-                tick,
-                player,
-                attacker,
-            })
-        }
-    }
-    md
 }
 
 pub fn get_player_team(ent: &Entity) -> i32 {
@@ -642,7 +531,6 @@ pub fn check_validity_props(names: &Vec<String>) -> Vec<String> {
     }
     unkown_props
 }
-
 pub fn rank_id_to_name(id: i32) -> String {
     match id {
         1 => "Silver 1".to_string(),

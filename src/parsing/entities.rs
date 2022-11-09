@@ -68,20 +68,12 @@ impl Parser {
 
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var()? as i32);
-            /*
-            Disabled for now
-            if entity_id > highest_wanted_entid {
-                break;
-            }
-            */
             if b.read_boolie()? {
                 b.read_boolie();
             } else if b.read_boolie()? {
                 // IF ENTITY DOES NOT EXIST
                 let cls_id = b.read_nbits(9)?;
                 let _ = b.read_nbits(10);
-                //println!("CLS BITS {}", cls_bits);
-
                 let mut e = Entity {
                     class_id: cls_id,
                     entity_id: entity_id as u32,

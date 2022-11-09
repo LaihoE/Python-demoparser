@@ -87,7 +87,7 @@ impl Parser {
             playback_frames: i32::from_le_bytes(self.bytes[1064..1068].try_into().unwrap()),
             signon_length: i32::from_le_bytes(self.bytes[1068..1072].try_into().unwrap()),
         };
-        self.fp += 1072_usize;
+        self.state.fp += 1072_usize;
         h
     }
 }

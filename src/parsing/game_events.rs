@@ -313,13 +313,13 @@ impl Parser {
                         let name_data_pairs = gen_name_val_pairs(
                             &game_event,
                             event_desc,
-                            &self.tick,
+                            &self.state.tick,
                             &self.maps.userid_sid_map,
                             &self.maps.players,
-                            self.round,
-                            &self.entities,
+                            self.state.round,
+                            &self.state.entities,
                             &self.settings.wanted_props,
-                            &self.friendly_p_names,
+                            &self.settings.og_names,
                             //&self.uid_eid_map,
                         );
 
@@ -335,13 +335,13 @@ impl Parser {
                         let name_data_pairs = gen_name_val_pairs(
                             &game_event,
                             event_desc,
-                            &self.tick,
+                            &self.state.tick,
                             &self.maps.userid_sid_map,
                             &self.maps.players,
-                            self.round,
-                            &self.entities,
+                            self.state.round,
+                            &self.state.entities,
                             &self.settings.wanted_props,
-                            &self.friendly_p_names,
+                            &self.settings.og_names,
                             //&self.uid_eid_map,
                         );
                         game_events.push({

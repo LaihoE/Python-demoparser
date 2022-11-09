@@ -11,8 +11,8 @@ impl Parser {
             if count >= 5 {
                 return result as u32;
             }
-            b = self.bytes[self.fp].try_into().unwrap();
-            self.fp += 1;
+            b = self.bytes[self.state.fp].try_into().unwrap();
+            self.state.fp += 1;
             result |= (b & 127) << (7 * count);
             count += 1;
             if b & 0x80 == 0 {
@@ -23,8 +23,12 @@ impl Parser {
     }
     #[inline]
     pub fn read_short(&mut self) -> u16 {
-        let s = u16::from_le_bytes(self.bytes[self.fp..self.fp + 2].try_into().unwrap());
-        self.fp += 2;
+        let s = u16::from_le_bytes(
+            self.bytes[self.state.fp..self.state.fp + 2]
+                .try_into()
+                .unwrap(),
+        );
+        self.state.fp += 2;
         s
     }
     #[inline]
@@ -43,24 +47,28 @@ impl Parser {
     }
     #[inline]
     pub fn read_i32(&mut self) -> i32 {
-        let i = i32::from_le_bytes(self.bytes[self.fp..self.fp + 4].try_into().unwrap());
-        self.fp += 4;
+        let i = i32::from_le_bytes(
+            self.bytes[self.state.fp..self.state.fp + 4]
+                .try_into()
+                .unwrap(),
+        );
+        self.state.fp += 4;
         i
     }
     #[inline]
     pub fn read_byte(&mut self) -> u8 {
-        let b = self.bytes[self.fp];
-        self.fp += 1;
+        let b = self.bytes[self.state.fp];
+        self.state.fp += 1;
         b
     }
     #[inline]
     pub fn skip_n_bytes(&mut self, n: u32) {
-        self.fp += n as usize;
+        self.state.fp += n as usize;
     }
     #[inline]
     pub fn read_n_bytes(&mut self, n: u32) -> &[u8] {
-        let s = &self.bytes[self.fp..self.fp + n as usize];
-        self.fp += n as usize;
+        let s = &self.bytes[self.state.fp..self.state.fp + n as usize];
+        self.state.fp += n as usize;
         s
     }
     #[inline(always)]

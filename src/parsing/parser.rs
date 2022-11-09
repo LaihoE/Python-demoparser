@@ -28,16 +28,19 @@ static GLOBAL: MiMalloc = MiMalloc;
 pub struct Parser {
     pub maps: Maps,
     pub settings: ParserSettings,
+    pub state: ParserState,
+    pub bytes: BytesVariant,
+    // General purpose int vec, for perf reasons
+    pub workhorse: Vec<i32>,
+}
+
+pub struct ParserState {
     pub fp: usize,
     pub tick: i32,
-    pub bytes: BytesVariant,
     pub round: i32,
     pub entities: Vec<(u32, Entity)>,
     pub stringtables: Vec<StringTable>,
     pub game_events: Vec<GameEvent>,
-    // Optimization
-    pub workhorse: Vec<i32>,
-    pub friendly_p_names: Vec<String>,
 }
 
 pub struct Maps {
@@ -49,10 +52,10 @@ pub struct Maps {
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable, RandomState>>,
     pub players: HashMap<u64, UserInfo, RandomState>,
     pub userid_sid_map: HashMap<u32, Vec<(u64, i32)>, RandomState>,
+    pub sid_entid_map: HashMap<u64, Vec<(u32, i32)>>,
     pub uid_eid_map: HashMap<u32, Vec<(u32, i32)>, RandomState>,
     pub baselines: HashMap<u32, HashMap<String, PropData>>,
     pub baseline_no_cls: HashMap<u32, Vec<u8>>,
-    pub sid_entid_map: HashMap<u64, Vec<(u32, i32)>>,
 }
 
 pub struct ParserSettings {
@@ -66,6 +69,7 @@ pub struct ParserSettings {
     pub wanted_ticks: HashSet<i32, RandomState>,
     pub wanted_players: Vec<u64>,
     pub playback_frames: usize,
+    pub og_names: Vec<String>,
 }
 
 impl Parser {
@@ -123,20 +127,23 @@ impl Parser {
                     wanted_ticks: HashSet::from_iter(wanted_ticks.iter().cloned()),
                     wanted_players: wanted_players,
                     playback_frames: 0,
+                    og_names: og_names,
+                };
+                let state = ParserState {
+                    fp: 0,
+                    round: 0,
+                    tick: 0,
+                    entities: vec![],
+                    game_events: vec![],
+                    stringtables: vec![],
                 };
 
                 Ok(Self {
                     maps: maps,
                     settings: settings,
                     bytes: data,
-                    fp: 0,
-                    tick: 0,
-                    round: 0,
-                    entities: vec![],
-                    stringtables: Vec::new(),
-                    game_events: Vec::new(),
-                    workhorse: Vec::new(),
-                    friendly_p_names: og_names,
+                    state: state,
+                    workhorse: vec![],
                 })
             }
         }
@@ -151,7 +158,7 @@ impl Parser {
         let mut ticks_props: HashMap<String, PropColumn, RandomState> = HashMap::default();
         let mut tc = TickCache::new();
         for _ in 0..10000 {
-            self.entities.push((
+            self.state.entities.push((
                 1111111,
                 Entity {
                     class_id: 0,
@@ -164,12 +171,12 @@ impl Parser {
             self.workhorse.push(i);
         }
 
-        while self.fp < self.bytes.get_len() as usize {
+        while self.state.fp < self.bytes.get_len() as usize {
             let (cmd, tick) = self.read_frame();
             if tick > self.settings.early_exit_tick {
                 break;
             }
-            self.tick = tick;
+            self.state.tick = tick;
             // EARLY EXIT
             if self.settings.only_header {
                 break;
@@ -206,18 +213,18 @@ impl Parser {
 
     #[inline(always)]
     pub fn parse_packet(&mut self, tc: &mut TickCache) {
-        check_round_change(&self.entities, &mut self.round);
-        self.fp += 160;
+        check_round_change(&self.state.entities, &mut self.state.round);
+        self.state.fp += 160;
         let packet_len = self.read_i32();
-        let goal_inx = self.fp + packet_len as usize;
+        let goal_inx = self.state.fp + packet_len as usize;
         let parse_props = self.settings.parse_props;
         let mut is_con_tick = false;
         let no_gameevents = self.settings.no_gameevents;
-        let t = self.tick;
-        while self.fp < goal_inx {
+        let t = self.state.tick;
+        while self.state.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();
-            let before_inx = self.fp.clone();
+            let before_inx = self.state.fp.clone();
             let data = self.read_n_bytes(size);
             if msg == 26 {
                 tc.insert_tick(t, before_inx, before_inx + size as usize);
@@ -232,11 +239,11 @@ impl Parser {
                                 let game_event = ge;
                                 let (game_events, con_tick) = self.parse_game_events(game_event);
                                 is_con_tick = con_tick;
-                                self.game_events.extend(game_events);
+                                self.state.game_events.extend(game_events);
                             }
                             Err(e) => panic!(
                                 "Failed to parse game event at tick {}. Error: {e}",
-                                self.tick
+                                self.state.tick
                             ),
                         }
                     }
@@ -252,36 +259,34 @@ impl Parser {
                             }
                             Err(e) => panic!(
                                 "Failed to parse game event LIST at tick {}. Error: {e}",
-                                self.tick
+                                self.state.tick
                             ),
                         }
                     }
                 }
                 // Packet entites
                 26 => {
-                    if t < -5555555 {
-                        if parse_props {
-                            let pack_ents = Message::parse_from_bytes(data);
-                            match pack_ents {
-                                Ok(pe) => {
-                                    let pack_ents = pe;
-                                    Parser::parse_packet_entities(
-                                        &mut self.maps.serverclass_map,
-                                        self.tick,
-                                        pack_ents,
-                                        &mut self.entities,
-                                        &self.settings.wanted_props,
-                                        &mut self.workhorse,
-                                        self.fp as i32,
-                                        &mut self.round,
-                                        &self.maps.baselines,
-                                    );
-                                }
-                                Err(e) => panic!(
-                                    "Failed to parse Packet entities at tick {}. Error: {e}",
-                                    self.tick
-                                ),
+                    if parse_props {
+                        let pack_ents = Message::parse_from_bytes(data);
+                        match pack_ents {
+                            Ok(pe) => {
+                                let pack_ents = pe;
+                                Parser::parse_packet_entities(
+                                    &mut self.maps.serverclass_map,
+                                    self.state.tick,
+                                    pack_ents,
+                                    &mut self.state.entities,
+                                    &self.settings.wanted_props,
+                                    &mut self.workhorse,
+                                    self.state.fp as i32,
+                                    &mut self.state.round,
+                                    &self.maps.baselines,
+                                );
                             }
+                            Err(e) => panic!(
+                                "Failed to parse Packet entities at tick {}. Error: {e}",
+                                self.state.tick
+                            ),
                         }
                     }
                 }
@@ -295,7 +300,7 @@ impl Parser {
                         }
                         Err(e) => panic!(
                             "Failed to parse String table at tick {}. Error: {e}",
-                            self.tick
+                            self.state.tick
                         ),
                     }
                 }
@@ -309,7 +314,7 @@ impl Parser {
                         }
                         Err(e) => panic!(
                             "Failed to parse String table at tick {}. Error: {e}",
-                            self.tick
+                            self.state.tick
                         ),
                     }
                 }

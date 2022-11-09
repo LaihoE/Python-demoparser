@@ -187,7 +187,7 @@ impl DemoParser {
                 let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
 
                 // Create Hashmap with <string, pyobject> to be able to convert to python dict
-                for ge in parser.game_events {
+                for ge in parser.state.game_events {
                     let mut hm: FxHashMap<String, PyObject> = FxHashMap::default();
                     let tuples = ge.to_py_tuples(py);
                     for (k, v) in tuples {
@@ -345,9 +345,9 @@ impl DemoParser {
                 let _ = parser.start_parsing(&vec![]);
                 let players = parser.maps.players;
                 let mut py_players = vec![];
-                let ent_manager = &parser.entities[70 as usize].1;
+                let ent_manager = &parser.state.entities[70 as usize].1;
                 for (_, player) in players {
-                    let team = get_player_team(&parser.entities[player.entity_id as usize].1);
+                    let team = get_player_team(&parser.state.entities[player.entity_id as usize].1);
                     let mut hm = player.to_hashmap(py);
                     let team = match team {
                         2 => "T",
@@ -430,7 +430,7 @@ impl DemoParser {
         let parse_props = !wanted_props.is_empty() || rounds;
         let parser = Parser::new(
             self.path.clone(),
-            true,
+            false,
             vec![],
             vec![],
             real_props.clone(),
@@ -452,7 +452,7 @@ impl DemoParser {
                 let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
 
                 tc.gather_eventprops_backwards(
-                    &mut parser.game_events,
+                    &mut parser.state.game_events,
                     real_props.clone(),
                     &parser.bytes,
                     &parser.maps.baselines,
@@ -461,7 +461,7 @@ impl DemoParser {
                     &parser.maps.uid_eid_map,
                 );
                 // Create Hashmap with <string, pyobject> to be able to convert to python dict
-                for ge in parser.game_events {
+                for ge in parser.state.game_events {
                     let mut hm: FxHashMap<String, PyObject> = FxHashMap::default();
                     let tuples = ge.to_py_tuples(py);
                     for (k, v) in tuples {

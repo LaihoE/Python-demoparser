@@ -172,18 +172,18 @@ impl Parser {
                         .userid_sid_map
                         .entry(ui.user_id)
                         .or_insert(Vec::new())
-                        .push((ui.xuid.clone(), self.tick));
+                        .push((ui.xuid.clone(), self.state.tick));
 
                     self.maps
                         .uid_eid_map
                         .entry(ui.user_id)
                         .or_insert(Vec::new())
-                        .push((ui.entity_id, self.tick));
+                        .push((ui.entity_id, self.state.tick));
                     self.maps
                         .sid_entid_map
                         .entry(ui.xuid.clone())
                         .or_insert(Vec::new())
-                        .push((ui.entity_id, self.tick));
+                        .push((ui.entity_id, self.state.tick));
 
                     self.maps.players.insert(ui.xuid.clone(), ui);
                 }
@@ -224,12 +224,16 @@ impl Parser {
                 data.user_data_fixed_size(),
             )?;
         }
-        self.stringtables.push(st.clone());
+        self.state.stringtables.push(st.clone());
         Some(true)
     }
 
     pub fn update_string_table_msg(&mut self, data: CSVCMsg_UpdateStringTable) -> Option<bool> {
-        let st = self.stringtables.get_mut(data.table_id() as usize).unwrap();
+        let st = self
+            .state
+            .stringtables
+            .get_mut(data.table_id() as usize)
+            .unwrap();
         let mut buf = MyBitreader::new(data.string_data());
         let entry_bits = (st.max_entries as f32).log2() as i32;
         let mut index = 0;
@@ -302,19 +306,19 @@ impl Parser {
                         .userid_sid_map
                         .entry(ui.user_id)
                         .or_insert(Vec::new())
-                        .push((ui.xuid.clone(), self.tick));
+                        .push((ui.xuid.clone(), self.state.tick));
 
                     self.maps
                         .uid_eid_map
                         .entry(ui.user_id)
                         .or_insert(Vec::new())
-                        .push((ui.entity_id, self.tick));
+                        .push((ui.entity_id, self.state.tick));
 
                     self.maps
                         .sid_entid_map
                         .entry(ui.xuid.clone())
                         .or_insert(Vec::new())
-                        .push((ui.entity_id, self.tick));
+                        .push((ui.entity_id, self.state.tick));
 
                     self.maps.players.insert(ui.xuid.clone(), ui);
                 }

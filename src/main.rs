@@ -73,8 +73,8 @@ fn main() {
         let mut event_names: Vec<String> = Vec::new();
         let (data, mut tc) = parser.start_parsing(&props_names);
 
-        let kill_ticks = get_event_md(&parser.game_events, &parser.maps.sid_entid_map);
-        let m = max_skip_tick(&parser.game_events);
+        let kill_ticks = get_event_md(&parser.state.game_events, &parser.maps.sid_entid_map);
+        let m = max_skip_tick(&parser.state.game_events);
         //println!("{}", m);
         if m > 20000 {
             println!("BREAK");
@@ -100,7 +100,7 @@ fn main() {
                         let msg = Message::parse_from_bytes(bs).unwrap();
                         let d = tc.parse_packet_ents_simple(
                             msg,
-                            &mut parser.entities,
+                            &mut parser.state.entities,
                             &parser.maps.serverclass_map,
                             &parser.maps.baselines,
                             489,

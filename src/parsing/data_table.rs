@@ -42,7 +42,7 @@ impl Parser {
                 Err(e) => {
                     panic!(
                         "Failed to parse datatable at tick {}. Error: {}",
-                        self.tick, e
+                        self.state.tick, e
                     )
                 }
             }

@@ -9,7 +9,7 @@ use memmap::Mmap;
 use memmap::MmapOptions;
 use parsing::game_events::KeyData;
 use parsing::header::Header;
-use parsing::parser::Demo;
+use parsing::parser::Parser;
 use phf::phf_map;
 use protobuf;
 use protobuf::reflect::MessageDescriptor;
@@ -48,7 +48,7 @@ fn main() {
         let props_names = vec!["m_vecOrigin".to_string()];
         let dp = "/home/laiho/Documents/demos/mygames/aa.dem".to_string();
         println!("{:?}", demo_path.as_ref().unwrap().path());
-        let mut parser = Demo::new(
+        let mut parser = Parser::new(
             demo_path
                 .as_ref()
                 .unwrap()

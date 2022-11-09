@@ -1,6 +1,6 @@
 use crate::parsing::entities::parse_baselines;
 use crate::parsing::entities::Prop;
-use crate::Demo;
+use crate::parsing::parser::Parser;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf;
@@ -15,7 +15,7 @@ pub struct ServerClass {
     pub props: Vec<Prop>,
 }
 
-impl Demo {
+impl Parser {
     pub fn parse_datatable(&mut self) {
         /*
         Parse datatables. These are the tables that entities refer to for values. If this fails then gg?
@@ -49,7 +49,7 @@ impl Demo {
         }
 
         let class_count = self.read_short();
-        self.class_bits = (class_count as f32 + 1.).log2().ceil() as u32;
+        //_ = (class_count as f32 + 1.).log2().ceil() as u32;
         for _ in 0..class_count {
             let id = self.read_short();
             let _ = self.read_string();

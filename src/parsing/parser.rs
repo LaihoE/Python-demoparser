@@ -25,46 +25,19 @@ use std::u8;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-pub fn decompress_gz(demo_path: String) -> Result<BytesVariant, std::io::Error> {
-    match File::open(demo_path.clone()) {
-        Err(e) => Err(e),
-        Ok(_) => match std::fs::read(demo_path) {
-            Err(e) => Err(e),
-            Ok(bytes) => {
-                let mut gz = GzDecoder::new(&bytes[..]);
-                let mut out: Vec<u8> = vec![];
-                gz.read_to_end(&mut out).unwrap();
-                Ok(BytesVariant::Vec(out))
-            }
-        },
-    }
-}
-pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
-    match File::open(demo_path) {
-        Err(e) => Err(e),
-        Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
-            Err(e) => Err(e),
-            Ok(m) => Ok(BytesVariant::Mmap(m)),
-        },
-    }
-}
-
-pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
-    let extension = Path::new(&demo_path).extension().unwrap();
-    match extension.to_str().unwrap() {
-        "gz" => match decompress_gz(demo_path) {
-            Err(e) => Err(e),
-            Ok(bytes) => Ok(bytes),
-        },
-        ".info" => {
-            panic!("you passed an .info file, these are not demos")
-        }
-        // All other formats, .dem is the "correct" but let others work too
-        _ => match create_mmap(demo_path) {
-            Err(e) => Err(e),
-            Ok(map) => Ok(map),
-        },
-    }
+pub struct Parser {
+    pub maps: Maps,
+    pub settings: ParserSettings,
+    pub fp: usize,
+    pub tick: i32,
+    pub bytes: BytesVariant,
+    pub round: i32,
+    pub entities: Vec<(u32, Entity)>,
+    pub stringtables: Vec<StringTable>,
+    pub game_events: Vec<GameEvent>,
+    // Optimization
+    pub workhorse: Vec<i32>,
+    pub friendly_p_names: Vec<String>,
 }
 
 pub struct Maps {
@@ -82,37 +55,20 @@ pub struct Maps {
     pub sid_entid_map: HashMap<u64, Vec<(u32, i32)>>,
 }
 
-pub struct Demo {
-    pub maps: Maps,
-    pub fp: usize,
-    pub tick: i32,
-    pub cmd: u8,
-    pub bytes: BytesVariant,
-    pub class_bits: u32,
-    pub entities: Vec<(u32, Entity)>,
-    pub stringtables: Vec<StringTable>,
+pub struct ParserSettings {
+    pub only_players: bool,
+    pub only_header: bool,
     pub parse_props: bool,
-    pub game_events: Vec<GameEvent>,
     pub event_name: String,
+    pub no_gameevents: bool,
+    pub early_exit_tick: i32,
     pub wanted_props: Vec<String>,
     pub wanted_ticks: HashSet<i32, RandomState>,
     pub wanted_players: Vec<u64>,
-    pub round: i32,
-    pub players_connected: i32,
-    pub only_players: bool,
-    pub only_header: bool,
     pub playback_frames: usize,
-    pub frames_parsed: i32,
-    pub workhorse: Vec<i32>,
-    pub entids_not_connected: HashSet<u32>,
-    pub highest_wanted_entid: i32,
-    pub all_wanted_connected: bool,
-    pub manager_id: Option<u32>,
-    pub no_gameevents: bool,
-    pub early_exit_tick: i32,
-    pub friendly_p_names: Vec<String>,
 }
-impl Demo {
+
+impl Parser {
     pub fn new(
         demo_path: String,
         parse_props: bool,
@@ -156,35 +112,30 @@ impl Demo {
                     sid_entid_map: HashMap::default(),
                     uid_eid_map: HashMap::default(),
                 };
+                let settings = ParserSettings {
+                    only_players: only_players,
+                    only_header: only_header,
+                    parse_props: parse_props,
+                    event_name: event_name,
+                    no_gameevents: no_gameevents,
+                    early_exit_tick: early_exit_tick,
+                    wanted_props: wanted_props,
+                    wanted_ticks: HashSet::from_iter(wanted_ticks.iter().cloned()),
+                    wanted_players: wanted_players,
+                    playback_frames: 0,
+                };
 
                 Ok(Self {
                     maps: maps,
+                    settings: settings,
                     bytes: data,
                     fp: 0,
-                    cmd: 0,
                     tick: 0,
                     round: 0,
-                    class_bits: 0,
-                    parse_props: parse_props,
-                    event_name: event_name,
                     entities: vec![],
                     stringtables: Vec::new(),
-                    wanted_props: wanted_props,
                     game_events: Vec::new(),
-                    wanted_players: wanted_players,
-                    wanted_ticks: HashSet::from_iter(wanted_ticks),
-                    players_connected: 0,
-                    only_header: only_header,
-                    only_players: only_players,
-                    playback_frames: 0,
-                    frames_parsed: 0,
                     workhorse: Vec::new(),
-                    entids_not_connected: HashSet::new(),
-                    highest_wanted_entid: 9999999,
-                    all_wanted_connected: false,
-                    manager_id: None,
-                    no_gameevents: no_gameevents,
-                    early_exit_tick: early_exit_tick,
                     friendly_p_names: og_names,
                 })
             }
@@ -192,7 +143,7 @@ impl Demo {
     }
 }
 
-impl Demo {
+impl Parser {
     pub fn start_parsing(
         &mut self,
         props_names: &Vec<String>,
@@ -212,19 +163,15 @@ impl Demo {
         for i in 0..20000 {
             self.workhorse.push(i);
         }
-        for i in 1..11 {
-            self.entids_not_connected.insert(i);
-        }
 
         while self.fp < self.bytes.get_len() as usize {
-            self.frames_parsed += 1;
             let (cmd, tick) = self.read_frame();
-            if tick > self.early_exit_tick {
+            if tick > self.settings.early_exit_tick {
                 break;
             }
             self.tick = tick;
             // EARLY EXIT
-            if self.only_header {
+            if self.settings.only_header {
                 break;
             }
             /*
@@ -263,9 +210,9 @@ impl Demo {
         self.fp += 160;
         let packet_len = self.read_i32();
         let goal_inx = self.fp + packet_len as usize;
-        let parse_props = self.parse_props;
+        let parse_props = self.settings.parse_props;
         let mut is_con_tick = false;
-        let no_gameevents = self.no_gameevents;
+        let no_gameevents = self.settings.no_gameevents;
         let t = self.tick;
         while self.fp < goal_inx {
             let msg = self.read_varint();
@@ -318,17 +265,14 @@ impl Demo {
                             match pack_ents {
                                 Ok(pe) => {
                                     let pack_ents = pe;
-                                    let res = Demo::parse_packet_entities(
+                                    Parser::parse_packet_entities(
                                         &mut self.maps.serverclass_map,
                                         self.tick,
-                                        self.class_bits as usize,
                                         pack_ents,
                                         &mut self.entities,
-                                        &self.wanted_props,
+                                        &self.settings.wanted_props,
                                         &mut self.workhorse,
                                         self.fp as i32,
-                                        self.highest_wanted_entid,
-                                        &mut self.manager_id,
                                         &mut self.round,
                                         &self.maps.baselines,
                                     );
@@ -385,6 +329,47 @@ pub fn check_round_change(entities: &[(u32, Entity)], round: &mut i32) {
             None => {}
         },
         None => {}
+    }
+}
+pub fn decompress_gz(demo_path: String) -> Result<BytesVariant, std::io::Error> {
+    match File::open(demo_path.clone()) {
+        Err(e) => Err(e),
+        Ok(_) => match std::fs::read(demo_path) {
+            Err(e) => Err(e),
+            Ok(bytes) => {
+                let mut gz = GzDecoder::new(&bytes[..]);
+                let mut out: Vec<u8> = vec![];
+                gz.read_to_end(&mut out).unwrap();
+                Ok(BytesVariant::Vec(out))
+            }
+        },
+    }
+}
+pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
+    match File::open(demo_path) {
+        Err(e) => Err(e),
+        Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
+            Err(e) => Err(e),
+            Ok(m) => Ok(BytesVariant::Mmap(m)),
+        },
+    }
+}
+
+pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
+    let extension = Path::new(&demo_path).extension().unwrap();
+    match extension.to_str().unwrap() {
+        "gz" => match decompress_gz(demo_path) {
+            Err(e) => Err(e),
+            Ok(bytes) => Ok(bytes),
+        },
+        ".info" => {
+            panic!("you passed an .info file, these are not demos")
+        }
+        // All other formats, .dem is the "correct" but let others work too
+        _ => match create_mmap(demo_path) {
+            Err(e) => Err(e),
+            Ok(map) => Ok(map),
+        },
     }
 }
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {

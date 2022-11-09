@@ -1,3 +1,4 @@
+use crate::parsing::parser::Parser;
 use memmap::Mmap;
 
 // Some of these could be combined

@@ -1,7 +1,7 @@
 use super::stringtables::UserInfo;
 use crate::parsing::entities::Entity;
+use crate::parsing::parser::Parser;
 use crate::parsing::variants::*;
-use crate::Demo;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event::Key_t;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
@@ -300,7 +300,7 @@ pub fn match_data_to_game_event(event_name: &str, wanted: &String) -> bool {
     event_name.contains(wanted)
 }
 
-impl Demo {
+impl Parser {
     pub fn parse_game_events(&mut self, game_event: CSVCMsg_GameEvent) -> (Vec<GameEvent>, bool) {
         let mut game_events: Vec<GameEvent> = Vec::new();
         let connect_tick = false;
@@ -308,8 +308,8 @@ impl Demo {
             Some(ev_desc_map) => {
                 let event_desc = &ev_desc_map[&game_event.eventid()];
 
-                if !self.event_name.is_empty() {
-                    if match_data_to_game_event(event_desc.name(), &self.event_name) {
+                if !self.settings.event_name.is_empty() {
+                    if match_data_to_game_event(event_desc.name(), &self.settings.event_name) {
                         let name_data_pairs = gen_name_val_pairs(
                             &game_event,
                             event_desc,
@@ -318,7 +318,7 @@ impl Demo {
                             &self.maps.players,
                             self.round,
                             &self.entities,
-                            &self.wanted_props,
+                            &self.settings.wanted_props,
                             &self.friendly_p_names,
                             //&self.uid_eid_map,
                         );
@@ -340,7 +340,7 @@ impl Demo {
                             &self.maps.players,
                             self.round,
                             &self.entities,
-                            &self.wanted_props,
+                            &self.settings.wanted_props,
                             &self.friendly_p_names,
                             //&self.uid_eid_map,
                         );

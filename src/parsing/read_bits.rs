@@ -1,4 +1,5 @@
 use crate::parsing::entities::Prop;
+use crate::parsing::parser::Parser;
 use crate::parsing::variants::PropData;
 use bitter::BitReader;
 use bitter::LittleEndianReader;

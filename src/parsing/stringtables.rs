@@ -2,7 +2,7 @@ use crate::parsing::entities::update_entity;
 //use crate::parsing::read_bits_old::BitReader;
 use super::read_bits::MyBitreader;
 use crate::parsing::entities::parse_baselines;
-use crate::Demo;
+use crate::parsing::parser::Parser;
 use bitter::BitReader;
 use core::num;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
@@ -71,7 +71,7 @@ impl UserInfo {
     }
 }
 
-impl Demo {
+impl Parser {
     pub fn parse_userinfo(userdata: Vec<u8>) -> UserInfo {
         let ui = UserInfo {
             version: u64::from_be_bytes(userdata[0..8].try_into().unwrap()),
@@ -161,11 +161,8 @@ impl Demo {
                     history.push(entry.to_string());
                 }
                 if st.userinfo {
-                    let mut ui = Demo::parse_userinfo(user_data);
+                    let mut ui = Parser::parse_userinfo(user_data);
                     ui.entity_id = entry_index as u32 + 1;
-                    if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
-                        self.players_connected += 1;
-                    }
                     //println!("CREATE: {} {} {}", ui.xuid, ui.entity_id, self.tick);
 
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
@@ -296,15 +293,10 @@ impl Demo {
                     }
                 }
                 if st.userinfo {
-                    let mut ui = Demo::parse_userinfo(user_data.clone());
+                    let mut ui = Parser::parse_userinfo(user_data.clone());
                     ui.entity_id = index as u32 + 1;
-                    if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
-                        self.players_connected += 1;
-                    }
-                    //println!("UPD: {} {} {}", ui.xuid, ui.entity_id, self.tick);
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
-                    //println!("{} {}", ui.name, ui.xuid);
 
                     self.maps
                         .userid_sid_map

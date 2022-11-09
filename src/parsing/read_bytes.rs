@@ -1,6 +1,6 @@
-use crate::Demo;
+use crate::parsing::parser::Parser;
 
-impl Demo {
+impl Parser {
     #[inline]
     pub fn read_varint(&mut self) -> u32 {
         let mut result: u32 = 0;

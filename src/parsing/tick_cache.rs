@@ -17,6 +17,7 @@ pub struct TickCache {
     pub ents: HashMap<u32, HashMap<String, VarVec>>,
 }
 use crate::parsing::game_events::NameDataPair;
+use crate::parsing::parser::Parser;
 use crate::parsing::variants::BytesVariant;
 use crate::GameEvent;
 use crate::KeyData;

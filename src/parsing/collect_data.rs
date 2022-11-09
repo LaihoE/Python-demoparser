@@ -1,11 +1,11 @@
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
+use crate::parsing::parser::Parser;
 use crate::parsing::stringtables::UserInfo;
 use crate::parsing::variants;
 use crate::parsing::variants::PropColumn;
 use crate::parsing::variants::PropData::I32;
 use crate::parsing::variants::VarVec;
-use crate::Demo;
 use ahash::RandomState;
 use phf::phf_map;
 use std::collections::HashMap;
@@ -207,7 +207,7 @@ fn weap_id_from_ent(ent: &Entity) -> Option<u32> {
         },
     }
 }
-impl Demo {
+impl Parser {
     #[inline(always)]
     pub fn collect_player_data(
         players: &HashMap<u64, UserInfo, RandomState>,

@@ -1,8 +1,8 @@
 use crate::parsing::data_table::ServerClass;
+use crate::parsing::parser::Parser;
 use crate::parsing::read_bits::MyBitreader;
 use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
-use crate::Demo;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
@@ -49,18 +49,15 @@ fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
     false
 }
 
-impl Demo {
+impl Parser {
     pub fn parse_packet_entities(
         cls_map: &mut HashMap<u16, ServerClass, RandomState>,
         tick: i32,
-        cls_bits: usize,
         pack_ents: CSVCMsg_PacketEntities,
         entities: &mut Vec<(u32, Entity)>,
         wanted_props: &Vec<String>,
         workhorse: &mut Vec<i32>,
         fp: i32,
-        _highest_wanted_entid: i32,
-        manager_id: &mut Option<u32>,
         round: &mut i32,
         baselines: &HashMap<u32, HashMap<String, PropData>>,
     ) -> Option<Vec<u32>> {
@@ -81,7 +78,7 @@ impl Demo {
                 b.read_boolie();
             } else if b.read_boolie()? {
                 // IF ENTITY DOES NOT EXIST
-                let cls_id = b.read_nbits(cls_bits.try_into().unwrap())?;
+                let cls_id = b.read_nbits(9)?;
                 let _ = b.read_nbits(10);
                 //println!("CLS BITS {}", cls_bits);
 
@@ -127,10 +124,7 @@ impl Demo {
                                 println!("RULES ID: {}", entity_id);
                             }
                             if cls_id == 41 {
-                                *manager_id = Some(entity_id as u32);
-                                for p in &mut x.props {
-                                    p.name = p.table.clone() + &p.name;
-                                }
+                                println!("Manager ID: {}", entity_id);
                             }
                         }
                         None => {}

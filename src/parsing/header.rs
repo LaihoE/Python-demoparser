@@ -1,4 +1,4 @@
-use crate::Demo;
+use crate::parsing::parser::Parser;
 use pyo3::Py;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -53,7 +53,7 @@ impl Header {
     }
 }
 
-impl Demo {
+impl Parser {
     pub fn parse_demo_header(&mut self) -> Header {
         let h = Header {
             header_magic: str::from_utf8(&self.bytes[..8])

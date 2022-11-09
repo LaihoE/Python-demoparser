@@ -8,7 +8,7 @@ use fxhash::FxHashMap;
 use parsing::entities::Entity;
 use parsing::game_events::KeyData;
 use parsing::header::Header;
-use parsing::parser::Demo;
+use parsing::parser::Parser;
 use parsing::stringtables::UserInfo;
 //use parsing::tick_cache::gather_props_backwards;
 use parsing::variants::PropData;
@@ -162,7 +162,7 @@ impl DemoParser {
             )));
         }
         let parse_props = !wanted_props.is_empty() || rounds;
-        let parser = Demo::new(
+        let parser = Parser::new(
             self.path.clone(),
             parse_props,
             vec![],
@@ -224,7 +224,7 @@ impl DemoParser {
             &99999999
         };
 
-        let parser = Demo::new(
+        let parser = Parser::new(
             self.path.clone(),
             true,
             wanted_ticks.clone(),
@@ -246,7 +246,7 @@ impl DemoParser {
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
 
-                parser.playback_frames = if wanted_ticks_len == 0 {
+                parser.settings.playback_frames = if wanted_ticks_len == 0 {
                     h.playback_frames as usize
                 } else {
                     wanted_ticks_len
@@ -322,7 +322,7 @@ impl DemoParser {
     }
 
     pub fn parse_players(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let parser = Demo::new(
+        let parser = Parser::new(
             self.path.clone(),
             true,
             vec![],
@@ -345,7 +345,7 @@ impl DemoParser {
                 let _ = parser.start_parsing(&vec![]);
                 let players = parser.maps.players;
                 let mut py_players = vec![];
-                let ent_manager = &parser.entities[parser.manager_id.unwrap() as usize].1;
+                let ent_manager = &parser.entities[70 as usize].1;
                 for (_, player) in players {
                     let team = get_player_team(&parser.entities[player.entity_id as usize].1);
                     let mut hm = player.to_hashmap(py);
@@ -386,7 +386,7 @@ impl DemoParser {
     }
 
     pub fn parse_header(&self) -> PyResult<Py<PyAny>> {
-        let parser = Demo::new(
+        let parser = Parser::new(
             self.path.clone(),
             false,
             vec![],
@@ -428,7 +428,7 @@ impl DemoParser {
             )));
         }
         let parse_props = !wanted_props.is_empty() || rounds;
-        let parser = Demo::new(
+        let parser = Parser::new(
             self.path.clone(),
             true,
             vec![],
@@ -448,7 +448,6 @@ impl DemoParser {
             ))),
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
-
                 let (_, mut tc) = parser.start_parsing(&vec!["m_iMVPs".to_owned()]);
                 let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
 

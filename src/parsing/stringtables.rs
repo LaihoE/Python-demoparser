@@ -1,4 +1,3 @@
-use crate::parsing::entities::update_entity;
 //use crate::parsing::read_bits_old::BitReader;
 use super::read_bits::MyBitreader;
 use crate::parsing::entities::parse_baselines;

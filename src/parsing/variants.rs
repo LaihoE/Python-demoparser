@@ -1,5 +1,5 @@
 use crate::parsing::parser::Parser;
-use memmap::Mmap;
+use memmap2::Mmap;
 
 // Some of these could be combined
 #[derive(Debug, Clone)]

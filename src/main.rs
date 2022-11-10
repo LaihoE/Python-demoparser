@@ -36,7 +36,6 @@ pub fn max_skip_tick(game_events: &Vec<GameEvent>) -> i32 {
             }
         }
     }
-    //println!("Biggest needed {}", biggest_needed_tick);
     biggest_needed_tick
 }
 

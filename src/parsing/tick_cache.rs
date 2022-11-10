@@ -319,40 +319,68 @@ impl TickCache {
             ));
         }
         for event_md in &event_mds {
-            let mut wanted_props = wanted_props.clone();
+            let mut wanted_props_player = wanted_props.clone();
+            // If event has attacker then add props
+            // loop brakes on player.empty() && attacker.empty
+            let mut wanted_props_attacker: Vec<String> = if event_md.attacker_eid.is_some() {
+                wanted_props.clone()
+            } else {
+                vec![]
+            };
+
             ge_inx += 1;
             cur_tick = event_md.tick - 1;
-
             loop {
+                if wanted_props_player.is_empty() && wanted_props_attacker.is_empty() {
+                    break;
+                }
                 if cur_tick < -50 {
+                    println!("out");
                     break;
                 }
                 match self.get_tick_inxes(cur_tick as usize) {
                     Some(inxes) => {
                         let msg = Message::parse_from_bytes(&bytes[inxes.0..inxes.1]).unwrap();
-                        let d = self.parse_packet_ents_simple(
+                        let this_tick_deltas = self.parse_packet_ents_simple(
                             msg,
                             &mut entities,
                             serverclass_map,
                             baselines,
                             cur_tick,
                         );
-                        match d.get(&event_md.player_eid) {
+                        // Props for player
+                        match this_tick_deltas.get(&event_md.player_eid) {
                             Some(x) => {
                                 for i in x {
                                     if wanted_props.contains(&i.0) {
-                                        wanted_props.retain(|x| *x != i.0);
+                                        wanted_props_player.retain(|x| *x != i.0);
                                         game_events[ge_inx as usize].fields.push(NameDataPair {
-                                            name: i.0.to_string() + "lol",
+                                            name: "player_".to_string() + &i.0,
                                             data: Some(KeyData::from_pdata(&i.1)),
                                         });
                                     }
                                 }
-                                if wanted_props.is_empty() {
-                                    break;
-                                }
                             }
                             None => {}
+                        }
+
+                        if event_md.attacker_eid.is_some() {
+                            match this_tick_deltas.get(&event_md.attacker_eid.unwrap()) {
+                                Some(x) => {
+                                    for i in x {
+                                        if wanted_props.contains(&i.0) {
+                                            wanted_props_attacker.retain(|x| *x != i.0);
+                                            game_events[ge_inx as usize].fields.push(
+                                                NameDataPair {
+                                                    name: "attacker_".to_string() + &i.0,
+                                                    data: Some(KeyData::from_pdata(&i.1)),
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+                                None => {}
+                            }
                         }
                     }
                     None => {}
@@ -422,56 +450,54 @@ pub fn get_event_md(
 ) -> Vec<EventMd> {
     let mut md = vec![];
     for event in game_events {
-        if event.name == "player_death" {
-            //println!("{:?}", event);
-            let mut player = 420000000;
-            let mut attacker = Default::default();
-            let mut tick = -10000;
+        //println!("{:?}", event);
+        let mut player = 420000000;
+        let mut attacker = Default::default();
+        let mut tick = -10000;
 
-            for f in &event.fields {
-                if f.name == "tick" {
-                    match f.data.as_ref().unwrap() {
-                        KeyData::Long(x) => {
-                            tick = *x;
-                        }
-                        _ => {}
+        for f in &event.fields {
+            if f.name == "tick" {
+                match f.data.as_ref().unwrap() {
+                    KeyData::Long(x) => {
+                        tick = *x;
                     }
-                }
-                if f.name == "player_uid" {
-                    match f.data.as_ref().unwrap() {
-                        KeyData::Uint64(x) => player = *x,
-                        _ => {}
-                    }
-                }
-                if f.name == "attacker_uid" {
-                    match f.data.as_ref().unwrap() {
-                        KeyData::Uint64(x) => attacker = Some(x),
-                        _ => {}
-                    }
+                    _ => {}
                 }
             }
-            let attacker_eid = match attacker {
-                Some(sid) => Some(get_current_entid(&tick, sid, uid_eid_map)),
-                None => None,
-            };
-            let player_eid = get_current_entid(&tick, &player, uid_eid_map);
-
-            let attacker_sid = match attacker {
-                Some(sid) => Some(get_current_steamid(&tick, sid, userid_sid_map)),
-                None => None,
-            };
-            let player_sid = get_current_steamid(&tick, &player, userid_sid_map);
-
-            md.push(EventMd {
-                tick,
-                player_eid: player_eid.0,
-                player_sid: player_sid,
-                attacker_eid: Some(attacker_eid.unwrap().0),
-                attacker_sid: attacker_sid,
-                player_min_tick: player_eid.1,
-                attacker_min_tick: attacker_eid.unwrap().1,
-            });
+            if f.name == "player_uid" {
+                match f.data.as_ref().unwrap() {
+                    KeyData::Uint64(x) => player = *x,
+                    _ => {}
+                }
+            }
+            if f.name == "attacker_uid" {
+                match f.data.as_ref().unwrap() {
+                    KeyData::Uint64(x) => attacker = Some(x),
+                    _ => {}
+                }
+            }
         }
+        let attacker_eid = match attacker {
+            Some(sid) => Some(get_current_entid(&tick, sid, uid_eid_map)),
+            None => None,
+        };
+        let player_eid = get_current_entid(&tick, &player, uid_eid_map);
+
+        let attacker_sid = match attacker {
+            Some(sid) => Some(get_current_steamid(&tick, sid, userid_sid_map)),
+            None => None,
+        };
+        let player_sid = get_current_steamid(&tick, &player, userid_sid_map);
+
+        md.push(EventMd {
+            tick,
+            player_eid: player_eid.0,
+            player_sid: player_sid,
+            attacker_eid: Some(attacker_eid.unwrap().0),
+            attacker_sid: attacker_sid,
+            player_min_tick: player_eid.1,
+            attacker_min_tick: attacker_eid.unwrap().1,
+        });
     }
     md
 }

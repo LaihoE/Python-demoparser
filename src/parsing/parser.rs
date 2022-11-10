@@ -11,7 +11,8 @@ use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::*;
 use flate2::read::GzDecoder;
-use memmap::MmapOptions;
+use memmap2::Mmap;
+use memmap2::MmapOptions;
 use mimalloc::MiMalloc;
 use phf::phf_map;
 use protobuf;
@@ -22,6 +23,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::u8;
+
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -218,7 +220,6 @@ impl Parser {
         let packet_len = self.read_i32();
         let goal_inx = self.state.fp + packet_len as usize;
         let parse_props = self.settings.parse_props;
-        let mut is_con_tick = false;
         let no_gameevents = self.settings.no_gameevents;
         let t = self.state.tick;
         while self.state.fp < goal_inx {
@@ -238,7 +239,6 @@ impl Parser {
                             Ok(ge) => {
                                 let game_event = ge;
                                 let (game_events, con_tick) = self.parse_game_events(game_event);
-                                is_con_tick = con_tick;
                                 self.state.game_events.extend(game_events);
                             }
                             Err(e) => panic!(
@@ -272,15 +272,11 @@ impl Parser {
                             Ok(pe) => {
                                 let pack_ents = pe;
                                 Parser::parse_packet_entities(
-                                    &mut self.maps.serverclass_map,
-                                    self.state.tick,
                                     pack_ents,
-                                    &mut self.state.entities,
-                                    &self.settings.wanted_props,
+                                    &mut self.maps,
+                                    &mut self.state,
+                                    &self.settings,
                                     &mut self.workhorse,
-                                    self.state.fp as i32,
-                                    &mut self.state.round,
-                                    &self.maps.baselines,
                                 );
                             }
                             Err(e) => panic!(
@@ -324,7 +320,7 @@ impl Parser {
     }
 }
 pub fn check_round_change(entities: &[(u32, Entity)], round: &mut i32) {
-    match entities.get(70) {
+    match entities.get(71) {
         Some(e) => match e.1.props.get("m_totalRoundsPlayed") {
             Some(r) => {
                 if let PropData::I32(p) = r.data {
@@ -353,9 +349,12 @@ pub fn decompress_gz(demo_path: String) -> Result<BytesVariant, std::io::Error> 
 pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
     match File::open(demo_path) {
         Err(e) => Err(e),
-        Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
-            Err(e) => Err(e),
-            Ok(m) => Ok(BytesVariant::Mmap(m)),
+        Ok(f) => unsafe {
+            let mmap = unsafe { Mmap::map(&f).unwrap() };
+            // Don't think these help at all
+            mmap.advise(memmap2::Advice::Sequential).unwrap();
+            mmap.advise(memmap2::Advice::HugePage).unwrap();
+            return Ok(BytesVariant::Mmap(mmap));
         },
     }
 }

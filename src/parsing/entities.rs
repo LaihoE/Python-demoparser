@@ -10,6 +10,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
 
+use super::parser::Maps;
+use super::parser::ParserSettings;
+use super::parser::ParserState;
 use super::stringtables::UserInfo;
 
 #[derive(Debug, Clone)]
@@ -48,18 +51,23 @@ fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
     }
     false
 }
+/*
+pack_ents,
+&mut self.maps
+&mut self.state,
+&self.settings,
+&mut self.workhorse,
+*/
 
 impl Parser {
     pub fn parse_packet_entities(
-        cls_map: &mut HashMap<u16, ServerClass, RandomState>,
-        tick: i32,
+        //cls_map: &mut HashMap<u16, ServerClass, RandomState>,
+        //tick: i32,
         pack_ents: CSVCMsg_PacketEntities,
-        entities: &mut Vec<(u32, Entity)>,
-        wanted_props: &Vec<String>,
+        maps: &mut Maps,
+        state: &mut ParserState,
+        settings: &ParserSettings,
         workhorse: &mut Vec<i32>,
-        fp: i32,
-        round: &mut i32,
-        baselines: &HashMap<u32, HashMap<String, PropData>>,
     ) -> Option<Vec<u32>> {
         let n_upd_ents = pack_ents.updated_entries();
         let mut b = MyBitreader::new(pack_ents.entity_data());
@@ -80,25 +88,15 @@ impl Parser {
                     props: HashMap::default(),
                 };
 
-                if entity_id < 50 {
-                    println!("{} {}", cls_id, entity_id);
-                }
-
-                match baselines.get(&cls_id) {
+                match maps.baselines.get(&cls_id) {
                     Some(baseline) => {
                         for (k, v) in baseline {
-                            if wanted_props.contains(k) {
+                            if settings.wanted_props.contains(k) {
                                 let atom = PropAtom {
                                     prop_name: k.to_string(),
                                     data: v.clone(),
                                     tick: -69420,
                                 };
-
-                                /*
-                                if cls_id == 40 || cls_id == 0 {
-                                    println!("{} {:?}", k, v.clone());
-                                }
-                                */
                                 e.props.insert(k.to_string(), atom);
                             }
                         }
@@ -106,46 +104,19 @@ impl Parser {
                     None => {}
                 }
 
-                if entity_id < 10000 {
-                    match cls_map.get_mut(&(cls_id as u16)) {
-                        Some(x) => {
-                            if x.dt == "DT_CSPlayer" {
-                                player_ents.push(entity_id as u32);
-                            }
-                            if cls_id == 39 {
-                                println!("RULES ID: {}", entity_id);
-                            }
-                            if cls_id == 41 {
-                                println!("Manager ID: {}", entity_id);
-                            }
+                match maps.serverclass_map.get_mut(&(cls_id as u16)) {
+                    Some(svc) => {
+                        if svc.dt == "DT_CSPlayer" {
+                            player_ents.push(entity_id as u32);
                         }
-                        None => {}
+                        state.entities[entity_id as usize] = (entity_id as u32, e);
+                        parse_ent_props(entity_id, &mut b, workhorse, state, settings, maps);
                     }
+                    None => {}
                 }
-                update_entity(
-                    &mut e,
-                    &mut b,
-                    cls_map,
-                    wanted_props,
-                    tick,
-                    workhorse,
-                    fp,
-                    round,
-                );
-                entities[entity_id as usize] = (entity_id as u32, e);
             } else {
                 // IF ENTITY DOES EXIST
-                let ent = &mut entities[entity_id as usize];
-                update_entity(
-                    &mut ent.1,
-                    &mut b,
-                    cls_map,
-                    wanted_props,
-                    tick,
-                    workhorse,
-                    fp,
-                    round,
-                );
+                parse_ent_props(entity_id, &mut b, workhorse, state, settings, maps);
             }
         }
         if player_ents.len() > 0 {
@@ -157,18 +128,19 @@ impl Parser {
 }
 #[inline(always)]
 pub fn parse_ent_props(
-    ent: &mut Entity,
-    sv_cls: &ServerClass,
+    ent_id: i32,
     b: &mut MyBitreader,
-    wanted_props: &Vec<String>,
-    tick: i32,
     workhorse: &mut Vec<i32>,
-    _fp: i32,
-    round: &mut i32,
+    state: &mut ParserState,
+    settings: &ParserSettings,
+    maps: &Maps,
 ) -> Option<i32> {
     let mut val = -1;
     let new_way = b.read_boolie()?;
     let mut upd = 0;
+    let ent = &mut state.entities[ent_id as usize].1;
+    let cls_id = ent.class_id;
+    let sv_cls = maps.serverclass_map.get(&(cls_id as u16)).unwrap();
     loop {
         val = b.read_inx(val, new_way)?;
 
@@ -187,10 +159,11 @@ pub fn parse_ent_props(
         //println!("INX: {}  e{}", inx, prop.name);
         // if prop is not wanted then dont create propdata from it
         if sv_cls.dt == "DT_AI_BaseNPC" {
-            println!("entid: {} tick:{}", ent.entity_id, tick)
+            println!("entid: {} tick:{}", ent.entity_id, state.tick)
         }
 
-        if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
+        if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &settings.wanted_props)
+        {
             continue;
         }
 
@@ -204,7 +177,7 @@ pub fn parse_ent_props(
                     let atom = PropAtom {
                         prop_name: name,
                         data: data,
-                        tick: tick,
+                        tick: state.tick,
                     };
 
                     ent.props.insert(atom.prop_name.to_owned(), atom);
@@ -218,7 +191,7 @@ pub fn parse_ent_props(
                     let atom = PropAtom {
                         prop_name: name,
                         data: data,
-                        tick: tick,
+                        tick: state.tick,
                     };
                     ent.props.insert(atom.prop_name.to_owned(), atom);
                 }
@@ -227,12 +200,12 @@ pub fn parse_ent_props(
                 let atom = PropAtom {
                     prop_name: prop.name.to_string(),
                     data: pdata,
-                    tick: tick,
+                    tick: state.tick,
                 };
 
                 if atom.prop_name == "m_totalRoundsPlayed" {
                     if let PropData::I32(r) = atom.data {
-                        *round = r;
+                        state.round = r;
                     }
                 }
 
@@ -265,20 +238,6 @@ pub fn parse_ent_props(
     }
     // number of updated entries
     Some(upd.try_into().unwrap())
-}
-#[inline(always)]
-pub fn update_entity(
-    ent: &mut Entity,
-    b: &mut MyBitreader,
-    cls_map: &HashMap<u16, ServerClass, RandomState>,
-    wanted_props: &Vec<String>,
-    tick: i32,
-    workhorse: &mut Vec<i32>,
-    fp: i32,
-    round: &mut i32,
-) {
-    let sv_cls = &cls_map[&(ent.class_id.try_into().unwrap())];
-    parse_ent_props(ent, sv_cls, b, wanted_props, tick, workhorse, fp, round);
 }
 
 #[inline(always)]

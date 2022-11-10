@@ -434,7 +434,7 @@ impl DemoParser {
             vec![],
             vec![],
             real_props.clone(),
-            "player_death".to_string(),
+            event_name,
             false,
             false,
             false,

@@ -374,9 +374,9 @@ impl DemoParser {
                     hm.insert("comp_wins".to_string(), comp_wins.to_object(py));
 
                     let dict = pyo3::Python::with_gil(|py| hm.to_object(py));
-                    //if player.xuid > 76500000000000000 && player.xuid < 76600000000000000 {
-                    py_players.push(dict);
-                    //}
+                    if player.xuid > 76500000000000000 && player.xuid < 76600000000000000 {
+                        py_players.push(dict);
+                    }
                 }
                 let dict = pyo3::Python::with_gil(|py| py_players.to_object(py));
                 Ok(dict)
@@ -518,7 +518,6 @@ pub fn get_manager_str_prop(manager: &Entity, player: &UserInfo, prop_name: &str
         None => "".to_string(),
     }
 }
-
 pub fn check_validity_props(names: &Vec<String>) -> Vec<String> {
     let mut unkown_props = vec![];
     for name in names {

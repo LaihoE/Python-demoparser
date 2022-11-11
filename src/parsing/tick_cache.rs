@@ -158,45 +158,33 @@ impl TickCache {
         for event_md in &event_mds {
             let mut wanted_props_player = wanted_props.clone();
             // If event has attacker then add props
-            // loop brakes on player.empty() && attacker.empty
             let mut wanted_props_attacker: Vec<String> = if event_md.attacker_eid.is_some() {
                 wanted_props.clone()
             } else {
                 vec![]
             };
-            let mut subtot = 0;
             ge_inx += 1;
             cur_tick = event_md.tick - 1;
             loop {
-                subtot += 1;
+                // Everyting went fine, found all values
                 if wanted_props_player.is_empty() && wanted_props_attacker.is_empty() {
-                    //println!("{}", subtot);
                     break;
                 }
-
+                // Attacker is not a player and victim found all props. For example bomb explosion.
                 if event_md.attacker_sid.is_some() {
-                    if event_md.attacker_sid.unwrap() == 0 {
+                    if event_md.attacker_sid.unwrap() == 0 && wanted_props_player.is_empty() {
                         break;
                     }
                 }
-
+                // Went backward trough entire file
                 if cur_tick < -50 {
-                    /*
-                    println!(
-                        "out: {} player:{}, attacker:{:?} {:?} {:?}",
-                        event_md.tick,
-                        event_md.player_eid,
-                        event_md.attacker_eid,
-                        event_md.attacker_sid,
-                        event_md.player_sid
-                    );
-                    */
                     break;
                 }
+                // Get byte indexes for this tick
                 match self.get_tick_inxes(cur_tick as usize) {
                     Some(inxes) => {
-                        tot += 1;
                         let msg = Message::parse_from_bytes(&bytes[inxes.0..inxes.1]).unwrap();
+                        // Parse this tick. Returns hashmap with all changes during this tick
                         let this_tick_deltas = self.parse_packet_ents_simple(
                             msg,
                             &mut entities,
@@ -205,12 +193,15 @@ impl TickCache {
                             cur_tick,
                         );
                         // Props for player
-
+                        // Check if our wanted player had changes
                         match this_tick_deltas.get(&event_md.player_eid) {
                             Some(x) => {
+                                // Iterate trough all changed values and look for wanted props
                                 for i in x {
                                     if wanted_props.contains(&i.0) {
+                                        // remove this wanted prop from our vec of all wanted
                                         wanted_props_player.retain(|x| *x != i.0);
+                                        // Insert new record into game event
                                         game_events[ge_inx as usize].fields.push(NameDataPair {
                                             name: "player_".to_string() + &i.0,
                                             data: Some(KeyData::from_pdata(&i.1)),
@@ -220,7 +211,9 @@ impl TickCache {
                             }
                             None => {}
                         }
-
+                        // Props for attacker
+                        // This is more or less the same as above, just checks for
+                        // if we want an attacker. Code repetition... maybe fix sometime
                         if event_md.attacker_eid.is_some() {
                             match this_tick_deltas.get(&event_md.attacker_eid.unwrap()) {
                                 Some(x) => {
@@ -245,9 +238,9 @@ impl TickCache {
                 cur_tick -= 1;
             }
         }
-        //println!("{}", tot);
     }
     // Stripped down version of the "real" parse packet ents
+    // Could also possibly be combined into real, quite a lot of repetition
     pub fn parse_packet_ents_simple(
         &mut self,
         pack_ents: CSVCMsg_PacketEntities,
@@ -356,25 +349,7 @@ impl TickCache {
                     }
                 };
                 let ent = &entities[entity_id as usize];
-                /*
-                let sv_cls = if entity_id <= 10 {
-                    &serverclass_map[&(40 as u16)]
-                } else {
-                    &serverclass_map[&(1 as u16)]
-                };
-                */
                 let sv_cls = &serverclass_map[&(ent.1.class_id as u16)];
-                /*
-                if sv_cls.dt != "DT_CSPlayer" {
-                    println!(
-                        "BOT SPOTTED eid {}, dt:{} !!!! Tick:{}",
-                        entity_id, sv_cls.dt, tick
-                    );
-                    //println!("XXX {}", sv_cls.id);
-                    //println!("NOT PLAYER: {}, TYPE: {}", entity_id, sv_cls.dt);
-                    //break;
-                }
-                */
                 let mut val = -1;
                 let new_way = b.read_boolie().unwrap();
                 let mut v = vec![];
@@ -522,3 +497,27 @@ pub fn get_event_md(
     }
     md
 }
+/*
+pub fn convert_uid_ges_sid(game_events: &Vec<GameEvent>, userid_sid_map: &HashMap<u32, Vec<(u64, i32)>, RandomState>) -> Vec<GameEvent> {
+    // Convert userids in game events to steamids,
+    // Userids are of no use to end users
+    let new_events = vec![];
+    for event in game_events {
+        for field in event.fields {
+            match field.name.as_str() {
+                "player_uid" => {
+                    field.data
+                    match userid_sid_map.get() {
+
+                    }
+                    //userid_sid_map.get(field.data)
+                }
+            }
+            if field.name == "player_uid" {
+
+            }
+        }
+    }
+    new_events
+}
+*/

@@ -23,10 +23,20 @@ fn parse_key(key: &Key_t) -> Option<KeyData> {
     }
 }
 
-fn parse_key_steamid(key: &Key_t, players: &HashMap<u64, UserInfo, RandomState>) -> KeyData {
+fn parse_key_uid(key: &Key_t) -> KeyData {
     return KeyData::Uint64(key.val_short() as u64);
 }
-
+fn parse_key_steamid(key: &Key_t, players: &HashMap<u64, UserInfo, RandomState>) -> KeyData {
+    let uid = key.val_short();
+    for player in players.values() {
+        if &player.user_id == &(uid as u32) {
+            if key.type_() == 4 {
+                return KeyData::Uint64(player.xuid);
+            }
+        }
+    }
+    return KeyData::Uint64(69);
+}
 fn parse_key_steam_name(key: &Key_t, players: &HashMap<u64, UserInfo, RandomState>) -> KeyData {
     let uid = key.val_short();
     for player in players.values() {
@@ -220,9 +230,14 @@ pub fn gen_name_val_pairs(
 
         match desc.name() {
             "userid" => {
-                let steamid = parse_key_steamid(ge, players);
+                let uid = parse_key_uid(ge);
                 kv_pairs.push(NameDataPair {
                     name: "player_uid".to_string(),
+                    data: Some(uid),
+                });
+                let steamid = parse_key_steamid(ge, players);
+                kv_pairs.push(NameDataPair {
+                    name: "player_steamid".to_string(),
                     data: Some(steamid),
                 });
                 let steam_name = parse_key_steam_name(ge, players);
@@ -230,18 +245,16 @@ pub fn gen_name_val_pairs(
                     name: "player_name".to_string(),
                     data: Some(steam_name),
                 });
-                /*
-                let props =
-                    parse_props(ge, entities, wanted_props, og_names, "player_".to_string());
-                for p in props {
-                    kv_pairs.push(p);
-                }
-                */
             }
             "attacker" => {
-                let steamid = parse_key_steamid(ge, players);
+                let uid = parse_key_uid(ge);
                 kv_pairs.push(NameDataPair {
                     name: "attacker_uid".to_string(),
+                    data: Some(uid),
+                });
+                let steamid = parse_key_steamid(ge, players);
+                kv_pairs.push(NameDataPair {
+                    name: "attacker_steamid".to_string(),
                     data: Some(steamid),
                 });
                 let steam_name = parse_key_steam_name(ge, players);
@@ -249,18 +262,6 @@ pub fn gen_name_val_pairs(
                     name: "attacker_name".to_string(),
                     data: Some(steam_name),
                 });
-                /*
-                let props = parse_props(
-                    ge,
-                    entities,
-                    wanted_props,
-                    og_names,
-                    "attacker_".to_string(),
-                );
-                for p in props {
-                    kv_pairs.push(p);
-                }
-                */
             }
             _ => {
                 let val = parse_key(ge);

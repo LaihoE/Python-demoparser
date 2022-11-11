@@ -183,22 +183,22 @@ impl Parser {
             if self.settings.only_header {
                 break;
             }
-            /*
-            if self.parse_props {
-                Demo::collect_player_data(
-                    &self.players,
-                    &self.tick,
-                    &self.wanted_ticks,
-                    &self.wanted_players,
-                    &mut self.entities,
+
+            if self.settings.parse_props {
+                Parser::collect_player_data(
+                    &self.maps.players,
+                    &self.state.tick,
+                    &self.settings.wanted_ticks,
+                    &self.settings.wanted_players,
+                    &mut self.state.entities,
                     props_names,
                     &mut ticks_props,
-                    self.playback_frames,
-                    &self.manager_id,
-                    &self.serverclass_map,
+                    self.settings.playback_frames,
+                    &Some(70),
+                    &self.maps.serverclass_map,
                 );
             }
-            */
+
             self.parse_cmd(cmd, &mut tc);
         }
         (ticks_props, tc)
@@ -575,6 +575,5 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_nActiveCoinRank"=> 0,
     "m_nPersonaDataPublicLevel"=> 0,
     "m_iClip1" => 0,
-    "m_iPing" => 0,
     "weapon_name" => 99,
 };

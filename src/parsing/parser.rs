@@ -352,8 +352,8 @@ pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
         Ok(f) => unsafe {
             let mmap = unsafe { Mmap::map(&f).unwrap() };
             // Don't think these help at all
-            mmap.advise(memmap2::Advice::Sequential).unwrap();
-            mmap.advise(memmap2::Advice::HugePage).unwrap();
+            //mmap.advise(memmap2::Advice::Sequential).unwrap();
+            //mmap.advise(memmap2::Advice::HugePage).unwrap();
             return Ok(BytesVariant::Mmap(mmap));
         },
     }
@@ -534,6 +534,7 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_bSilencerOn" => 0,
     "m_bReloadVisuallyComplete" => 1,
     "m_iClip1" => 0,
+    "m_iPing" => 0,
     "weapon_name" => 99,
 
 };

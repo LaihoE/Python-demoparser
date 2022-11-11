@@ -12,7 +12,7 @@ import (
 
 
 func main() {
-	f, err := os.Open("/home/laiho/Documents/demos/mygames/match730_003564210687548850263_1135999279_184.dem")
+	f, err := os.Open("/home/laiho/Documents/demos/faceits/cu/1-2ece7f36-87b9-4723-9c61-ca90c85c02a7_76561197992979809.dem")
 	//f, err := os.Open("/home/laiho/Documents/demos/mygames/1.dem")
 	if err != nil {
 		log.Panic("failed to open demo file: ", err)

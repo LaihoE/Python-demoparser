@@ -44,6 +44,7 @@ impl TickCache {
             ents: HashMap::default(),
         }
     }
+
     pub fn get_prop_at_tick(&self, tick: i32, prop_inx: String, ent_id: u32) -> Option<PropData> {
         match self.ents.get(&ent_id) {
             Some(u) => match u.get(&prop_inx) {
@@ -78,7 +79,6 @@ impl TickCache {
     }
     pub fn insert_tick(&mut self, tick: i32, left: usize, right: usize) {
         // Tick indicies in bytes. Could also be ref to bytes
-
         self.ticks[tick as usize] = (left, right);
     }
     pub fn insert_cache(&mut self, tick: i32, prop_inx: String, prop: PropData, ent_id: u32) {
@@ -125,6 +125,128 @@ impl TickCache {
         }
     }
 
+    pub fn gather_eventprops_backwards(
+        &mut self,
+        game_events: &mut Vec<GameEvent>,
+        wanted_props: Vec<String>,
+        bytes: &BytesVariant,
+        baselines: &HashMap<u32, HashMap<String, PropData>>,
+        serverclass_map: &HashMap<u16, ServerClass, RandomState>,
+        userid_sid_map: &HashMap<u32, Vec<(u64, i32)>, RandomState>,
+        uid_eid_map: &HashMap<u32, Vec<(u32, i32)>, RandomState>,
+    ) {
+        /*
+        Function for gathering props at given events.
+        Does this by starting from wanted tick and going
+        backwards until it finds the latest "delta".
+        */
+        let mut ge_inx = -1;
+        let mut cur_tick = 0;
+        let mut entities = vec![];
+        let event_mds = get_event_md(game_events, userid_sid_map, uid_eid_map);
+        let mut tot = 0;
+        for i in 0..100 {
+            entities.push((
+                1111111,
+                Entity {
+                    class_id: 40,
+                    entity_id: 1111111,
+                    props: HashMap::default(),
+                },
+            ));
+        }
+        for event_md in &event_mds {
+            let mut wanted_props_player = wanted_props.clone();
+            // If event has attacker then add props
+            // loop brakes on player.empty() && attacker.empty
+            let mut wanted_props_attacker: Vec<String> = if event_md.attacker_eid.is_some() {
+                wanted_props.clone()
+            } else {
+                vec![]
+            };
+            let mut subtot = 0;
+            ge_inx += 1;
+            cur_tick = event_md.tick - 1;
+            loop {
+                subtot += 1;
+                if wanted_props_player.is_empty() && wanted_props_attacker.is_empty() {
+                    //println!("{}", subtot);
+                    break;
+                }
+
+                if event_md.attacker_sid.is_some() {
+                    if event_md.attacker_sid.unwrap() == 0 {
+                        break;
+                    }
+                }
+
+                if cur_tick < -50 {
+                    /*
+                    println!(
+                        "out: {} player:{}, attacker:{:?} {:?} {:?}",
+                        event_md.tick,
+                        event_md.player_eid,
+                        event_md.attacker_eid,
+                        event_md.attacker_sid,
+                        event_md.player_sid
+                    );
+                    */
+                    break;
+                }
+                match self.get_tick_inxes(cur_tick as usize) {
+                    Some(inxes) => {
+                        tot += 1;
+                        let msg = Message::parse_from_bytes(&bytes[inxes.0..inxes.1]).unwrap();
+                        let this_tick_deltas = self.parse_packet_ents_simple(
+                            msg,
+                            &mut entities,
+                            serverclass_map,
+                            baselines,
+                            cur_tick,
+                        );
+                        // Props for player
+
+                        match this_tick_deltas.get(&event_md.player_eid) {
+                            Some(x) => {
+                                for i in x {
+                                    if wanted_props.contains(&i.0) {
+                                        wanted_props_player.retain(|x| *x != i.0);
+                                        game_events[ge_inx as usize].fields.push(NameDataPair {
+                                            name: "player_".to_string() + &i.0,
+                                            data: Some(KeyData::from_pdata(&i.1)),
+                                        });
+                                    }
+                                }
+                            }
+                            None => {}
+                        }
+
+                        if event_md.attacker_eid.is_some() {
+                            match this_tick_deltas.get(&event_md.attacker_eid.unwrap()) {
+                                Some(x) => {
+                                    for i in x {
+                                        if wanted_props.contains(&i.0) {
+                                            wanted_props_attacker.retain(|x| *x != i.0);
+                                            game_events[ge_inx as usize].fields.push(
+                                                NameDataPair {
+                                                    name: "attacker_".to_string() + &i.0,
+                                                    data: Some(KeyData::from_pdata(&i.1)),
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+                                None => {}
+                            }
+                        }
+                    }
+                    None => {}
+                }
+                cur_tick -= 1;
+            }
+        }
+        //println!("{}", tot);
+    }
     // Stripped down version of the "real" parse packet ents
     pub fn parse_packet_ents_simple(
         &mut self,
@@ -242,7 +364,7 @@ impl TickCache {
                 };
                 */
                 let sv_cls = &serverclass_map[&(ent.1.class_id as u16)];
-
+                /*
                 if sv_cls.dt != "DT_CSPlayer" {
                     println!(
                         "BOT SPOTTED eid {}, dt:{} !!!! Tick:{}",
@@ -252,7 +374,7 @@ impl TickCache {
                     //println!("NOT PLAYER: {}, TYPE: {}", entity_id, sv_cls.dt);
                     //break;
                 }
-
+                */
                 let mut val = -1;
                 let new_way = b.read_boolie().unwrap();
                 let mut v = vec![];
@@ -287,107 +409,6 @@ impl TickCache {
             }
         }
         updated_vals
-    }
-    pub fn gather_eventprops_backwards(
-        &mut self,
-        game_events: &mut Vec<GameEvent>,
-        wanted_props: Vec<String>,
-        bytes: &BytesVariant,
-        baselines: &HashMap<u32, HashMap<String, PropData>>,
-        serverclass_map: &HashMap<u16, ServerClass, RandomState>,
-        userid_sid_map: &HashMap<u32, Vec<(u64, i32)>, RandomState>,
-        uid_eid_map: &HashMap<u32, Vec<(u32, i32)>, RandomState>,
-    ) {
-        /*
-        Function for gathering props at given events.
-        Does this by starting from wanted tick and going
-        backwards until it finds the latest "delta".
-        */
-        let mut ge_inx = -1;
-        let mut cur_tick = 0;
-        let mut entities = vec![];
-        let event_mds = get_event_md(game_events, userid_sid_map, uid_eid_map);
-
-        for i in 0..100 {
-            entities.push((
-                1111111,
-                Entity {
-                    class_id: 40,
-                    entity_id: 1111111,
-                    props: HashMap::default(),
-                },
-            ));
-        }
-        for event_md in &event_mds {
-            let mut wanted_props_player = wanted_props.clone();
-            // If event has attacker then add props
-            // loop brakes on player.empty() && attacker.empty
-            let mut wanted_props_attacker: Vec<String> = if event_md.attacker_eid.is_some() {
-                wanted_props.clone()
-            } else {
-                vec![]
-            };
-
-            ge_inx += 1;
-            cur_tick = event_md.tick - 1;
-            loop {
-                if wanted_props_player.is_empty() && wanted_props_attacker.is_empty() {
-                    break;
-                }
-                if cur_tick < -50 {
-                    println!("out");
-                    break;
-                }
-                match self.get_tick_inxes(cur_tick as usize) {
-                    Some(inxes) => {
-                        let msg = Message::parse_from_bytes(&bytes[inxes.0..inxes.1]).unwrap();
-                        let this_tick_deltas = self.parse_packet_ents_simple(
-                            msg,
-                            &mut entities,
-                            serverclass_map,
-                            baselines,
-                            cur_tick,
-                        );
-                        // Props for player
-                        match this_tick_deltas.get(&event_md.player_eid) {
-                            Some(x) => {
-                                for i in x {
-                                    if wanted_props.contains(&i.0) {
-                                        wanted_props_player.retain(|x| *x != i.0);
-                                        game_events[ge_inx as usize].fields.push(NameDataPair {
-                                            name: "player_".to_string() + &i.0,
-                                            data: Some(KeyData::from_pdata(&i.1)),
-                                        });
-                                    }
-                                }
-                            }
-                            None => {}
-                        }
-
-                        if event_md.attacker_eid.is_some() {
-                            match this_tick_deltas.get(&event_md.attacker_eid.unwrap()) {
-                                Some(x) => {
-                                    for i in x {
-                                        if wanted_props.contains(&i.0) {
-                                            wanted_props_attacker.retain(|x| *x != i.0);
-                                            game_events[ge_inx as usize].fields.push(
-                                                NameDataPair {
-                                                    name: "attacker_".to_string() + &i.0,
-                                                    data: Some(KeyData::from_pdata(&i.1)),
-                                                },
-                                            );
-                                        }
-                                    }
-                                }
-                                None => {}
-                            }
-                        }
-                    }
-                    None => {}
-                }
-                cur_tick -= 1;
-            }
-        }
     }
 }
 

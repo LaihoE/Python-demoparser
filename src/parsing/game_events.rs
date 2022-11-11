@@ -148,15 +148,6 @@ impl Default for KeyData {
         KeyData::Bool(false)
     }
 }
-/*
-1 => Some(KeyData::Str(key.val_string().to_owned())),
-2 => Some(KeyData::Float(key.val_float())),
-3 => Some(KeyData::Long(key.val_long())),
-4 => Some(KeyData::Short(key.val_short().try_into().unwrap())),
-5 => Some(KeyData::Byte(key.val_byte().try_into().unwrap())),
-6 => Some(KeyData::Bool(key.val_bool())),
-7 => Some(KeyData::Uint64(key.val_uint64())),
-*/
 
 impl KeyData {
     pub fn from_pdata(pdata: &PropData) -> Self {

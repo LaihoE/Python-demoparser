@@ -162,8 +162,6 @@ impl Parser {
                 if st.userinfo {
                     let mut ui = Parser::parse_userinfo(user_data);
                     ui.entity_id = entry_index as u32 + 1;
-                    //println!("CREATE: {} {} {}", ui.xuid, ui.entity_id, self.tick);
-
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
 
@@ -305,7 +303,7 @@ impl Parser {
                         .userid_sid_map
                         .entry(ui.user_id)
                         .or_insert(Vec::new())
-                        .push((ui.xuid.clone(), self.state.tick));
+                        .push((ui.xuid, self.state.tick));
 
                     self.maps
                         .uid_eid_map
@@ -315,11 +313,11 @@ impl Parser {
 
                     self.maps
                         .sid_entid_map
-                        .entry(ui.xuid.clone())
+                        .entry(ui.xuid)
                         .or_insert(Vec::new())
                         .push((ui.entity_id, self.state.tick));
 
-                    self.maps.players.insert(ui.xuid.clone(), ui);
+                    self.maps.players.insert(ui.xuid, ui);
                 }
             }
             history.push(entry.to_string());

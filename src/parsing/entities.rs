@@ -51,13 +51,6 @@ fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
     }
     false
 }
-/*
-pack_ents,
-&mut self.maps
-&mut self.state,
-&self.settings,
-&mut self.workhorse,
-*/
 
 impl Parser {
     pub fn parse_packet_entities(
@@ -103,7 +96,6 @@ impl Parser {
                     }
                     None => {}
                 }
-
                 match maps.serverclass_map.get_mut(&(cls_id as u16)) {
                     Some(svc) => {
                         if svc.dt == "DT_CSPlayer" {
@@ -156,12 +148,16 @@ pub fn parse_ent_props(
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop)?;
 
-        //println!("INX: {}  e{}", inx, prop.name);
+        // println!("INX: {}  e{}", inx, prop.name);
         // if prop is not wanted then dont create propdata from it
-        if sv_cls.dt == "DT_AI_BaseNPC" {
-            println!("entid: {} tick:{}", ent.entity_id, state.tick)
+        /*
+        if ent.entity_id < 75 && sv_cls.dt != "DT_CSPlayer" {
+            println!(
+                "cls, {} entid: {} tick:{} name: {:?} data: {:?}",
+                sv_cls.dt, ent.entity_id, state.tick, prop.name, pdata
+            )
         }
-
+        */
         if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &settings.wanted_props)
         {
             continue;

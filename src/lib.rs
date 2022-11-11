@@ -182,7 +182,6 @@ impl DemoParser {
             ))),
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
-
                 let _ = parser.start_parsing(&vec!["m_iMVPs".to_owned()]);
                 let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
 
@@ -375,9 +374,9 @@ impl DemoParser {
                     hm.insert("comp_wins".to_string(), comp_wins.to_object(py));
 
                     let dict = pyo3::Python::with_gil(|py| hm.to_object(py));
-                    if player.xuid > 76500000000000000 && player.xuid < 76600000000000000 {
-                        py_players.push(dict);
-                    }
+                    //if player.xuid > 76500000000000000 && player.xuid < 76600000000000000 {
+                    py_players.push(dict);
+                    //}
                 }
                 let dict = pyo3::Python::with_gil(|py| py_players.to_object(py));
                 Ok(dict)

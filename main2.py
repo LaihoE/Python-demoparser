@@ -15,18 +15,14 @@ def coordinates(file):
     before = time.time()
     df = pd.DataFrame(parser.parse_events(
         "player_death", props=["X", "Y", "velocity_X", "velocity_Y"]))
-
-    correct = pd.read_csv(
-        f"/home/laiho/Documents/programming/python/demoparser/outputs/{os.path.basename(file)}.csv")
-
-    for i in range(len(df)):
-        print(correct.iloc[i]["player_Y"], df.iloc[i]["player_m_vecOrigin_Y"])
+    print(time.time() - before)
     return df
 
 
 if __name__ == "__main__":
     from collections import Counter
-    files = glob.glob("/home/laiho/Documents/demos/mygames/*")  # [:100]
+    files = glob.glob(
+        "/home/laiho/Documents/demos/faceits/average/*")  # [:100]
 
     with mp.Pool(processes=1) as pool:
         results = list(pool.map(coordinates, files))

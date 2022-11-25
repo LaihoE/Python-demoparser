@@ -208,6 +208,19 @@ fn weap_id_from_ent(ent: &Entity) -> Option<u32> {
         },
     }
 }
+
+fn insert_round(
+    ticks_props: &mut HashMap<String, PropColumn, RandomState>,
+    playback_frames: usize,
+    round: i32,
+) {
+    ticks_props
+        .entry("round".to_string())
+        .or_insert_with(|| create_default(0, playback_frames))
+        .data
+        .push_propdata(PropData::I32(round.try_into().unwrap()))
+}
+
 impl Demo {
     #[inline(always)]
     pub fn collect_player_data(
@@ -221,6 +234,7 @@ impl Demo {
         playback_frames: usize,
         manager_id: &Option<u32>,
         cls_map: &HashMap<u16, ServerClass, RandomState>,
+        round: i32,
     ) {
         // Collect wanted props from players
         for player in players.values() {
@@ -266,6 +280,8 @@ impl Demo {
                                     0,
                                     weapon_ent,
                                 ),
+                                69 => insert_round(ticks_props, playback_frames, round),
+
                                 99 => insert_weapon_name(
                                     cls_map,
                                     ticks_props,
@@ -632,4 +648,5 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_nPersonaDataPublicLevel"=> 0,
     "m_iClip1" => 20,
     "weapon_name" => 99,
+    "round" => 69,
 };

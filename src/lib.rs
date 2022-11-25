@@ -827,6 +827,7 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_nPersonaDataPublicLevel"=> 0,
     "m_iClip1" => 0,
     "weapon_name" => 99,
+    "round" => 69,
 };
 
 #[pymodule]

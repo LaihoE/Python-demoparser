@@ -166,8 +166,8 @@ impl Demo {
                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                         self.players_connected += 1;
                     }
-                    ui.friends_name = ui.friends_name.trim_end_matches('0').to_string();
-                    ui.name = ui.name.trim_end_matches('0').to_string();
+                    ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
+                    ui.name = ui.name.trim_end_matches("\x00").to_string();
                     self.uid_eid_map
                         .insert(ui.user_id, ui.entity_id.try_into().unwrap());
                     self.userid_sid_map.insert(ui.user_id, ui.xuid);
@@ -285,8 +285,8 @@ impl Demo {
                     if ui.xuid > 76500000000000000 && ui.xuid < 76600000000000000 {
                         self.players_connected += 1;
                     }
-                    ui.friends_name = ui.friends_name.trim_end_matches('0').to_string();
-                    ui.name = ui.name.trim_end_matches('0').to_string();
+                    ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
+                    ui.name = ui.name.trim_end_matches("\x00").to_string();
                     self.userid_sid_map.insert(ui.user_id, ui.xuid);
                     self.uid_eid_map
                         .insert(ui.user_id, ui.entity_id.try_into().unwrap());

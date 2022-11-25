@@ -5,7 +5,7 @@ import pandas as pd
 import tqdm
 
 
-def coordinates(file):
+def round_stats(file):
 
     wanted_player = 76561197991348083
     parser = DemoParser(file)
@@ -17,12 +17,11 @@ def coordinates(file):
 
 
 if __name__ == "__main__":
-    files = glob.glob(
-        "/home/laiho/Documents/demos/mygames/*")
+    files = glob.glob("/path/to/dir/with/demos/*")
 
     with mp.Pool(processes=8) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(
-            coordinates, files), total=len(files)))
+            round_stats, files), total=len(files)))
     df = pd.concat(results)
     
     print(df)

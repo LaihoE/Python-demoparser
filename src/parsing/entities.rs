@@ -80,10 +80,6 @@ impl Parser {
                     props: HashMap::default(),
                 };
 
-                if entity_id < 50 {
-                    println!("{} {}", cls_id, entity_id);
-                }
-
                 match baselines.get(&cls_id) {
                     Some(baseline) => {
                         for (k, v) in baseline {
@@ -93,12 +89,6 @@ impl Parser {
                                     data: v.clone(),
                                     tick: -69420,
                                 };
-
-                                /*
-                                if cls_id == 40 || cls_id == 0 {
-                                    println!("{} {:?}", k, v.clone());
-                                }
-                                */
                                 e.props.insert(k.to_string(), atom);
                             }
                         }
@@ -111,12 +101,6 @@ impl Parser {
                         Some(x) => {
                             if x.dt == "DT_CSPlayer" {
                                 player_ents.push(entity_id as u32);
-                            }
-                            if cls_id == 39 {
-                                println!("RULES ID: {}", entity_id);
-                            }
-                            if cls_id == 41 {
-                                println!("Manager ID: {}", entity_id);
                             }
                         }
                         None => {}
@@ -183,12 +167,6 @@ pub fn parse_ent_props(
         let inx = workhorse[i];
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop)?;
-
-        //println!("INX: {}  e{}", inx, prop.name);
-        // if prop is not wanted then dont create propdata from it
-        if sv_cls.dt == "DT_AI_BaseNPC" {
-            println!("entid: {} tick:{}", ent.entity_id, tick)
-        }
 
         if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
             continue;

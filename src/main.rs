@@ -71,7 +71,7 @@ fn main() {
 
         let h: Header = parser.parse_demo_header();
         let mut event_names: Vec<String> = Vec::new();
-        let (data, mut tc) = parser.start_parsing(&props_names);
+        let data = parser.start_parsing(&props_names);
 
         let kill_ticks = get_event_md(&parser.state.game_events, &parser.maps.sid_entid_map);
         let m = max_skip_tick(&parser.state.game_events);
@@ -81,56 +81,6 @@ fn main() {
             continue;
         }
 
-        let mut cur_tick = 0;
-        for event_md in kill_ticks {
-            let mut total = 0;
-            cur_tick = event_md.tick;
-            if cur_tick <= m {
-                continue;
-            }
-            'outer: loop {
-                total += 1;
-                if total > 1000 {
-                    //println!("tot tick backward: {} {:?}", cur_tick, event_md);
-                    break;
-                }
-                match tc.get_tick_inxes(cur_tick as usize) {
-                    Some(inxes) => {
-                        let bs = &parser.bytes[inxes.0..inxes.1];
-                        let msg = Message::parse_from_bytes(bs).unwrap();
-                        let d = tc.parse_packet_ents_simple(
-                            msg,
-                            &mut parser.state.entities,
-                            &parser.maps.serverclass_map,
-                            &parser.maps.baselines,
-                            489,
-                        );
-                        match d.get(&event_md.player) {
-                            Some(x) => {
-                                for i in x {
-                                    if i.0 == "m_vecOrigin_X" {
-                                        /*
-                                        println!(
-                                            "Delta found at tick: {} start: {} val: {:?} ent:{:?}",
-                                            cur_tick, event_md.tick, i.1, &event_md.player
-                                        );
-                                        */
-                                        break 'outer;
-                                    }
-                                }
-                            }
-                            None => {}
-                        }
-                    }
-                    None => {}
-                }
-                cur_tick -= 1;
-                if cur_tick <= m {
-                    //panic!("tick {}", cur_tick);
-                    break;
-                }
-            }
-        }
         //println!("{:?}", parser.sid_entid_map);
         //let elapsed = println!("tick {}", parser2.tick);
         //println!("Total ticks parsed: {}", total);

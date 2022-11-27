@@ -251,7 +251,7 @@ impl DemoParser {
                 } else {
                     wanted_ticks_len
                 };
-                let (data, _) = parser.start_parsing(&real_props);
+                let data = parser.start_parsing(&real_props);
                 real_props.push("tick".to_string());
                 real_props.push("steamid".to_string());
                 real_props.push("name".to_string());
@@ -407,69 +407,6 @@ impl DemoParser {
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
                 let dict = h.to_py_hashmap();
-                Ok(dict)
-            }
-        }
-    }
-    #[args(py_kwargs = "**")]
-    pub fn parse_events_fast(
-        &self,
-        py: Python<'_>,
-        event_name: String,
-        py_kwargs: Option<&PyDict>,
-    ) -> PyResult<Py<PyAny>> {
-        let (rounds, wanted_props) = parse_kwargs_event(py_kwargs);
-        let real_props = rm_user_friendly_names(&wanted_props);
-        let unk_props = check_validity_props(&real_props);
-        if !unk_props.is_empty() {
-            return Err(PyKeyError::new_err(format!(
-                "Unknown fields: {:?}",
-                unk_props
-            )));
-        }
-        let parse_props = !wanted_props.is_empty() || rounds;
-        let parser = Parser::new(
-            self.path.clone(),
-            false,
-            vec![],
-            vec![],
-            real_props.clone(),
-            "player_death".to_string(),
-            false,
-            false,
-            false,
-            9999999,
-            wanted_props.clone(),
-        );
-        match parser {
-            Err(e) => Err(PyFileNotFoundError::new_err(format!(
-                "Couldnt read demo file. Error: {}",
-                e
-            ))),
-            Ok(mut parser) => {
-                let _: Header = parser.parse_demo_header();
-                let (_, mut tc) = parser.start_parsing(&vec!["m_iMVPs".to_owned()]);
-                let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
-
-                tc.gather_eventprops_backwards(
-                    &mut parser.state.game_events,
-                    real_props.clone(),
-                    &parser.bytes,
-                    &parser.maps.baselines,
-                    &parser.maps.serverclass_map,
-                    &parser.maps.userid_sid_map,
-                    &parser.maps.uid_eid_map,
-                );
-                // Create Hashmap with <string, pyobject> to be able to convert to python dict
-                for ge in parser.state.game_events {
-                    let mut hm: FxHashMap<String, PyObject> = FxHashMap::default();
-                    let tuples = ge.to_py_tuples(py);
-                    for (k, v) in tuples {
-                        hm.insert(k, v);
-                    }
-                    game_evs.push(hm);
-                }
-                let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
                 Ok(dict)
             }
         }

@@ -1,11 +1,9 @@
 use super::game_events::GameEvent;
-use super::tick_cache;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
 use crate::parsing::game_events::KeyData;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
-use crate::parsing::tick_cache::TickCache;
 pub use crate::parsing::variants::*;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
@@ -154,9 +152,8 @@ impl Parser {
     pub fn start_parsing(
         &mut self,
         props_names: &Vec<String>,
-    ) -> (HashMap<String, PropColumn, RandomState>, TickCache) {
+    ) -> (HashMap<String, PropColumn, RandomState>) {
         let mut ticks_props: HashMap<String, PropColumn, RandomState> = HashMap::default();
-        let mut tc = TickCache::new();
         for _ in 0..10000 {
             self.state.entities.push((
                 1111111,
@@ -181,38 +178,38 @@ impl Parser {
             if self.settings.only_header {
                 break;
             }
-            /*
-            if self.parse_props {
-                Demo::collect_player_data(
-                    &self.players,
-                    &self.tick,
-                    &self.wanted_ticks,
-                    &self.wanted_players,
-                    &mut self.entities,
+
+            if self.settings.parse_props {
+                Parser::collect_player_data(
+                    &self.maps.players,
+                    &self.state.tick,
+                    &self.settings.wanted_ticks,
+                    &self.settings.wanted_players,
+                    &mut self.state.entities,
                     props_names,
                     &mut ticks_props,
-                    self.playback_frames,
-                    &self.manager_id,
-                    &self.serverclass_map,
+                    self.settings.playback_frames,
+                    &Some(70),
+                    &self.maps.serverclass_map,
                 );
             }
-            */
-            self.parse_cmd(cmd, &mut tc);
+
+            self.parse_cmd(cmd);
         }
-        (ticks_props, tc)
+        (ticks_props)
     }
     #[inline(always)]
-    pub fn parse_cmd(&mut self, cmd: u8, tc: &mut TickCache) {
+    pub fn parse_cmd(&mut self, cmd: u8) {
         match cmd {
-            1 => self.parse_packet(tc),
-            2 => self.parse_packet(tc),
+            1 => self.parse_packet(),
+            2 => self.parse_packet(),
             6 => self.parse_datatable(),
             _ => {}
         }
     }
 
     #[inline(always)]
-    pub fn parse_packet(&mut self, tc: &mut TickCache) {
+    pub fn parse_packet(&mut self) {
         check_round_change(&self.state.entities, &mut self.state.round);
         self.state.fp += 160;
         let packet_len = self.read_i32();
@@ -226,9 +223,7 @@ impl Parser {
             let size = self.read_varint();
             let before_inx = self.state.fp.clone();
             let data = self.read_n_bytes(size);
-            if msg == 26 {
-                tc.insert_tick(t, before_inx, before_inx + size as usize);
-            }
+
             match msg as i32 {
                 // Game event
                 25 => {

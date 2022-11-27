@@ -12,6 +12,7 @@ def round_stats(file):
 
     df = parser.parse_ticks(["total_damage", "mvps", "round"])
     df = df[df["steamid"] == wanted_player]
+    df = df.loc[:, ["total_damage", "mvps", "round"]]
     df = df.drop_duplicates()
     return df
 

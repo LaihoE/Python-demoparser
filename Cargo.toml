@@ -27,6 +27,8 @@ ahash = "0.8.0"
 smallvec = "1.10.0"
 bitter = "0.6.0"
 memmap2 = "0.5.7"
+rayon = "1.6.0"
+threadpool = "1.8.1"
 
 [dependencies.csgoproto]
 path = "src/parsing/csgoproto"

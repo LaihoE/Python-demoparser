@@ -10,7 +10,13 @@ use memmap::MmapOptions;
 use parsing::game_events::KeyData;
 use parsing::header::Header;
 use parsing::parser::Parser;
+use parsing::variants::VarVec;
 use phf::phf_map;
+use polars::prelude::ArrowField;
+use polars::prelude::NamedFrom;
+use polars::series::Series;
+use polars_arrow::export::arrow;
+use polars_arrow::prelude::ArrayRef;
 use protobuf;
 use protobuf::reflect::MessageDescriptor;
 use protobuf::Message;
@@ -72,111 +78,26 @@ fn main() {
         let h: Header = parser.parse_demo_header();
         let mut event_names: Vec<String> = Vec::new();
         let data = parser.start_parsing(&props_names);
-
-        let kill_ticks = get_event_md(&parser.state.game_events, &parser.maps.sid_entid_map);
-        let m = max_skip_tick(&parser.state.game_events);
-        //println!("{}", m);
-        if m > 20000 {
-            println!("BREAK");
-            continue;
+        /*
+        for (k, v) in data {
+            for (kk, vv) in v {
+                match vv {
+                    VarVec::F32(v) => {
+                        let s = Series::new("oogla", v);
+                        for x in &s.0 {
+                            println!("{}", x);
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
-
-        //println!("{:?}", parser.sid_entid_map);
-        //let elapsed = println!("tick {}", parser2.tick);
-        //println!("Total ticks parsed: {}", total);
+        */
+        //let x = data.read().unwrap();
+        //println!("{:?}", x);
         let elapsed = now.elapsed();
-        //println!("Elapsed: {:.2?} (avg: {:.2?})");
         println!("Elapsed: {:.2?}", elapsed);
-        //break;
     }
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 1000);
-}
-
-#[derive(Debug, Clone)]
-pub struct EventMd {
-    pub tick: i32,
-    pub player: u32,
-    pub attacker: Option<u32>,
-}
-
-pub fn get_current_entid(
-    tick: &i32,
-    sid: &u64,
-    sid_eid_map: &HashMap<u64, Vec<(u32, i32)>>,
-) -> u32 {
-    match sid_eid_map.get(&sid) {
-        None => {
-            //panic!("No entid for steamid")
-            return 0;
-        }
-        Some(tups) => {
-            if tups.len() == 1 {
-                return tups[0].0;
-            }
-            //println!(">1: {:?}", tups);
-            for t in 0..tups.len() - 1 {
-                if tups[t + 1].1 > *tick && tups[t].1 < *tick {
-                    //println!("tick: {} returned: {}", tick, tups[t].0);
-                    return tups[t].0;
-                }
-            }
-            if tups[tups.len() - 1].1 < *tick {
-                //println!("tick: {} returned: {}", tick, tups[tups.len() - 1].0);
-                return tups[tups.len() - 1].0;
-            }
-            return tups[0].0;
-        }
-    };
-}
-
-pub fn get_event_md(
-    game_events: &Vec<GameEvent>,
-    sid_eid_map: &HashMap<u64, Vec<(u32, i32)>>,
-) -> Vec<EventMd> {
-    let mut md = vec![];
-    for event in game_events {
-        if event.name == "player_death" {
-            //println!("{:?}", event);
-            let mut player = 420000000;
-            let mut attacker = Default::default();
-            let mut tick = -10000;
-
-            for f in &event.fields {
-                if f.name == "tick" {
-                    match f.data.as_ref().unwrap() {
-                        KeyData::Long(x) => {
-                            tick = *x;
-                        }
-                        _ => {}
-                    }
-                }
-                if f.name == "player_steamid" {
-                    //println!("player: {:?}", f.data);
-                    match f.data.as_ref().unwrap() {
-                        KeyData::Uint64(x) => player = *x,
-                        _ => {}
-                    }
-                }
-                if f.name == "attacker_steamid" {
-                    //println!("attacker: {:?}", f.data);
-                    match f.data.as_ref().unwrap() {
-                        KeyData::Uint64(x) => attacker = Some(x),
-                        _ => {}
-                    }
-                }
-            }
-            let attacker_id = match attacker {
-                Some(sid) => Some(get_current_entid(&tick, sid, sid_eid_map)),
-                None => None,
-            };
-            let player_id = get_current_entid(&tick, &player, sid_eid_map);
-            md.push(EventMd {
-                tick,
-                player: player_id,
-                attacker: attacker_id,
-            })
-        }
-    }
-    md
 }

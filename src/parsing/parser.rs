@@ -19,7 +19,10 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::u8;
+use threadpool::ThreadPool;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -29,7 +32,7 @@ pub struct Parser {
     pub state: ParserState,
     pub bytes: BytesVariant,
     // General purpose int vec, for perf reasons
-    pub workhorse: Vec<i32>,
+    pub pool: ThreadPool,
 }
 
 pub struct ParserState {
@@ -45,7 +48,7 @@ pub struct Maps {
     /*
     Different lookup maps used during parsing
     */
-    pub serverclass_map: HashMap<u16, ServerClass, RandomState>,
+    pub serverclass_map: Arc<RwLock<HashMap<u16, ServerClass, RandomState>>>,
     pub event_map: Option<HashMap<i32, Descriptor_t, RandomState>>,
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable, RandomState>>,
     pub players: HashMap<u64, UserInfo, RandomState>,
@@ -104,7 +107,7 @@ impl Parser {
             Err(e) => Err(e),
             Ok(data) => {
                 let maps = Maps {
-                    serverclass_map: HashMap::default(),
+                    serverclass_map: Arc::new(RwLock::new(HashMap::default())),
                     event_map: Some(HashMap::default()),
                     dt_map: Some(HashMap::default()),
                     players: HashMap::default(),
@@ -135,13 +138,12 @@ impl Parser {
                     game_events: vec![],
                     stringtables: vec![],
                 };
-
                 Ok(Self {
                     maps: maps,
                     settings: settings,
                     bytes: data,
                     state: state,
-                    workhorse: vec![],
+                    pool: ThreadPool::new(24),
                 })
             }
         }
@@ -152,8 +154,11 @@ impl Parser {
     pub fn start_parsing(
         &mut self,
         props_names: &Vec<String>,
-    ) -> (HashMap<String, PropColumn, RandomState>) {
+    ) -> (Arc<RwLock<HashMap<String, HashMap<u32, VarVec>>>>) {
         let mut ticks_props: HashMap<String, PropColumn, RandomState> = HashMap::default();
+        let mut data: Arc<RwLock<HashMap<String, HashMap<u32, VarVec>>>> =
+            Arc::new(RwLock::new(HashMap::default()));
+
         for _ in 0..10000 {
             self.state.entities.push((
                 1111111,
@@ -163,9 +168,6 @@ impl Parser {
                     props: HashMap::default(),
                 },
             ));
-        }
-        for i in 0..20000 {
-            self.workhorse.push(i);
         }
 
         while self.state.fp < self.bytes.get_len() as usize {
@@ -178,7 +180,7 @@ impl Parser {
             if self.settings.only_header {
                 break;
             }
-
+            /*
             if self.settings.parse_props {
                 Parser::collect_player_data(
                     &self.maps.players,
@@ -193,23 +195,25 @@ impl Parser {
                     &self.maps.serverclass_map,
                 );
             }
-
-            self.parse_cmd(cmd);
+            */
+            self.parse_cmd(cmd, data.clone());
         }
-        (ticks_props)
+        //self.pool.j(data)
+        self.pool.join();
+        (data)
     }
     #[inline(always)]
-    pub fn parse_cmd(&mut self, cmd: u8) {
+    pub fn parse_cmd(&mut self, cmd: u8, data: Arc<RwLock<HashMap<String, HashMap<u32, VarVec>>>>) {
         match cmd {
-            1 => self.parse_packet(),
-            2 => self.parse_packet(),
+            1 => self.parse_packet(data),
+            2 => self.parse_packet(data),
             6 => self.parse_datatable(),
             _ => {}
         }
     }
 
     #[inline(always)]
-    pub fn parse_packet(&mut self) {
+    pub fn parse_packet(&mut self, out_data: Arc<RwLock<HashMap<String, HashMap<u32, VarVec>>>>) {
         check_round_change(&self.state.entities, &mut self.state.round);
         self.state.fp += 160;
         let packet_len = self.read_i32();
@@ -217,7 +221,7 @@ impl Parser {
         let parse_props = self.settings.parse_props;
         let mut is_con_tick = false;
         let no_gameevents = self.settings.no_gameevents;
-        let t = self.state.tick;
+        let tick = self.state.tick;
         while self.state.fp < goal_inx {
             let msg = self.read_varint();
             let size = self.read_varint();
@@ -266,17 +270,18 @@ impl Parser {
                         match pack_ents {
                             Ok(pe) => {
                                 let pack_ents = pe;
-                                Parser::parse_packet_entities(
-                                    &mut self.maps.serverclass_map,
-                                    self.state.tick,
-                                    pack_ents,
-                                    &mut self.state.entities,
-                                    &self.settings.wanted_props,
-                                    &mut self.workhorse,
-                                    self.state.fp as i32,
-                                    &mut self.state.round,
-                                    &self.maps.baselines,
-                                );
+
+                                let svc_clone = self.maps.serverclass_map.clone();
+                                let out_clone = out_data.clone();
+
+                                self.pool.execute(move || {
+                                    Parser::parse_packet_entities(
+                                        pack_ents,
+                                        svc_clone,
+                                        out_clone,
+                                        tick.clone(),
+                                    );
+                                });
                             }
                             Err(e) => panic!(
                                 "Failed to parse Packet entities at tick {}. Error: {e}",
@@ -531,5 +536,6 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_bReloadVisuallyComplete" => 1,
     "m_iClip1" => 0,
     "weapon_name" => 99,
+    "m_bAlive" => 10,
 
 };

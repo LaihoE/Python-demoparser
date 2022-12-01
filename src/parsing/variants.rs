@@ -34,7 +34,7 @@ pub struct PropAtom {
 }
 
 #[inline(always)]
-pub fn create_default_from_pdata(pdata: PropData, playback_frames: usize) -> VarVec {
+pub fn create_default_from_pdata(pdata: &PropData, playback_frames: usize) -> VarVec {
     match pdata {
         PropData::I32(_) => VarVec::I32(vec![None; playback_frames]),
         PropData::I64(_) => VarVec::I32(vec![None; playback_frames]),
@@ -127,7 +127,7 @@ impl VarVec {
         match self {
             VarVec::I32(v) => match pdata {
                 PropData::I32(i) => v[inx] = Some(i),
-                _ => panic!("varvec didnt match propdata"),
+                _ => panic!("I32 varvec didnt match propdata: {:?}", pdata),
             },
             VarVec::F32(v) => match pdata {
                 PropData::F32(f) => v[inx] = Some(f),

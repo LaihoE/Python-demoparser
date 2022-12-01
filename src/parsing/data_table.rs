@@ -68,7 +68,11 @@ impl Parser {
                 }
                 None => {}
             }
-            self.maps.serverclass_map.insert(id, server_class);
+            self.maps
+                .serverclass_map
+                .write()
+                .unwrap()
+                .insert(id, server_class);
         }
     }
     pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 32]> {

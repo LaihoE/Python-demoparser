@@ -1,3 +1,4 @@
+/*
 mod parsing;
 use crate::parsing::game_events::GameEvent;
 use crate::parsing::game_events::NameDataPair;
@@ -808,6 +809,7 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_iMatchStats_Objective_Total"=> 10,
     "m_iMatchStats_CashEarned_Total"=> 10,
     "m_iMatchStats_EnemiesFlashed_Total"=> 10,
+    "m_bAlive" => 10,
     "m_bInDuckJump"=> 0,
     "m_nDuckJumpTimeMsecs"=> 0,
     "m_nJumpTimeMsecs"=> 0,
@@ -831,3 +833,4 @@ fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<DemoParser>()?;
     Ok(())
 }
+*/

@@ -1,5 +1,5 @@
 use crate::parsing::parser::Parser;
-use memmap::Mmap;
+use memmap2::Mmap;
 
 // Some of these could be combined
 #[derive(Debug, Clone)]
@@ -150,7 +150,7 @@ impl VarVec {
 }
 
 pub enum BytesVariant {
-    Mmap(Mmap),
+    Mmap3(Mmap),
     Vec(Vec<u8>),
 }
 
@@ -162,7 +162,7 @@ where
     #[inline(always)]
     fn index(&self, i: Idx) -> &Self::Output {
         match self {
-            Self::Mmap(m) => &m[i],
+            Self::Mmap3(m) => &m[i],
             Self::Vec(v) => &v[i],
         }
     }
@@ -170,7 +170,7 @@ where
 impl BytesVariant {
     pub fn get_len(&self) -> usize {
         match self {
-            Self::Mmap(m) => m.len(),
+            Self::Mmap3(m) => m.len(),
             Self::Vec(v) => v.len(),
         }
     }

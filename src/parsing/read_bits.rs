@@ -63,8 +63,7 @@ impl<'a> MyBitreader<'a> {
                     index = (index & !96) | (self.read_nbits(4)? << 5);
                 }
                 96 => {
-                    let t = self.read_nbits(7)? << 5;
-                    index = (index & !96) | (t);
+                    index = (index & !96) | (self.read_nbits(7)? << 5);
                 }
                 _ => {}
             }

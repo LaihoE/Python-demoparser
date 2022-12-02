@@ -1,3 +1,4 @@
+use super::parser::MsgBluePrint;
 use super::stringtables::UserInfo;
 use crate::parsing::entities::Entity;
 use crate::parsing::parser::Parser;
@@ -7,6 +8,7 @@ use csgoproto::netmessages::csvcmsg_game_event::Key_t;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
+use protobuf::Message;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
@@ -299,7 +301,23 @@ pub fn gen_name_val_pairs(
 pub fn match_data_to_game_event(event_name: &str, wanted: &String) -> bool {
     event_name.contains(wanted)
 }
-
+/*
+pub fn parse_game_events(msg_blueprint: MsgBluePrint) {
+    let game_event = Message::parse_from_bytes(data);
+    match game_event {
+        Ok(ge) => {
+            let game_event = ge;
+            let (game_events, con_tick) = self.parse_game_events(game_event);
+            is_con_tick = con_tick;
+            self.state.game_events.extend(game_events);
+        }
+        Err(e) => panic!(
+            "Failed to parse game event at tick {}. Error: {e}",
+            self.state.tick
+        ),
+    }
+}
+*/
 impl Parser {
     pub fn parse_game_events(&mut self, game_event: CSVCMsg_GameEvent) -> (Vec<GameEvent>, bool) {
         let mut game_events: Vec<GameEvent> = Vec::new();

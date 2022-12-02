@@ -21,7 +21,6 @@ polars = "0.24.3"
 polars-arrow = "0.24.3"
 csv = "1.1"
 phf = { version = "0.11", features = ["macros"] }
-memmap = "0.7.0"
 mimalloc = { version = "*", default-features = false }
 ahash = "0.8.0"
 smallvec = "1.10.0"
@@ -29,6 +28,7 @@ bitter = "0.6.0"
 memmap2 = "0.5.7"
 rayon = "1.6.0"
 threadpool = "1.8.1"
+dashmap = "5.4.0"
 
 [dependencies.csgoproto]
 path = "src/parsing/csgoproto"

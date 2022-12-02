@@ -1,4 +1,5 @@
 use super::parser::Maps;
+use super::parser::MsgBluePrint;
 use super::parser::ParserSettings;
 use super::parser::ParserState;
 use super::stringtables::UserInfo;
@@ -12,11 +13,15 @@ use crate::VarVec;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
+use dashmap::DashMap;
+use memmap2::Mmap;
+use protobuf::Message;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::sync::Arc;
 use std::sync::RwLock;
+
 #[derive(Debug, Clone)]
 pub struct Entity {
     pub class_id: u32,
@@ -40,25 +45,22 @@ pub struct Prop {
     pub p_type: i32,
 }
 
-#[inline(always)]
-fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
-    for prop in wanted_props {
-        if prop == &this_prop.name
-            || this_prop.name == "m_hActiveWeapon"
-            || this_prop.name == "m_iClip1"
-            || this_prop.name == "m_iItemDefinitionIndex"
-        {
-            return true;
-        }
-    }
-    false
+pub fn parse_packet_entities(
+    blueprint: MsgBluePrint,
+    mmap: Arc<Mmap>,
+    sv_cls_map: Arc<RwLock<HashMap<u16, ServerClass, RandomState>>>,
+    data: Arc<DashMap<String, HashMap<u32, VarVec>>>,
+) {
+    let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_inx];
+    let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
+    Parser::_parse_packet_entities(msg, sv_cls_map, data, blueprint.tick);
 }
 
 impl Parser {
-    pub fn parse_packet_entities(
+    pub fn _parse_packet_entities(
         pack_ents: CSVCMsg_PacketEntities,
         sv_cls_map: Arc<RwLock<HashMap<u16, ServerClass, RandomState>>>,
-        data: Arc<RwLock<HashMap<String, HashMap<u32, VarVec>>>>,
+        data: Arc<DashMap<String, HashMap<u32, VarVec>>>,
         tick: i32,
     ) -> Option<Vec<u32>> {
         let n_upd_ents = pack_ents.updated_entries();
@@ -83,7 +85,6 @@ impl Parser {
                     entity_id: entity_id as u32,
                     props: HashMap::default(),
                 };
-                //state.entities[entity_id as usize] = (entity_id as u32, e);
                 parse_ent_props(entity_id, &mut b, sv_cls_map.clone(), data.clone(), tick);
             } else {
                 // IF ENTITY DOES EXIST
@@ -111,7 +112,7 @@ pub fn parse_ent_props(
     entity_id: i32,
     b: &mut MyBitreader,
     sv_cls_map: Arc<RwLock<HashMap<u16, ServerClass, RandomState>>>,
-    data: Arc<RwLock<HashMap<String, HashMap<u32, VarVec>>>>,
+    data: Arc<DashMap<String, HashMap<u32, VarVec>>>,
     tick: i32,
 ) -> Option<i32> {
     let mut val = -1;
@@ -130,13 +131,19 @@ pub fn parse_ent_props(
         }
         indicies.push(val);
     }
+    let mut props = vec![];
     for idx in indicies {
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
-        let wanted_props = vec!["m_iHealth".to_string()];
-        if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
+        //let wanted_props = vec!["m_iHealth".to_string()];
+
+        if prop.name != "m_iHealth" {
             continue;
         }
+        //if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
+        //continue;
+        //}
+        //println!("{}", prop.name);
         match pdata {
             PropData::VecXY(v) => {
                 let endings = ["_X", "_Y"];
@@ -167,31 +174,32 @@ pub fn parse_ent_props(
             }
             _ => {
                 if prop.name.len() > 4 {
-                    let mut data_unlocked = data.write().unwrap();
-
-                    match data_unlocked.get_mut(&prop.name) {
-                        Some(inner) => match inner.get_mut(&(entity_id as u32)) {
-                            Some(vv) => vv.insert_propdata((tick / 2) as usize, pdata),
-                            None => {
-                                inner.insert(
-                                    entity_id as u32,
-                                    create_default_from_pdata(&pdata, 250000),
-                                );
-                                inner
-                                    .get_mut(&(entity_id as u32))
-                                    .unwrap()
-                                    .insert_propdata((tick / 2) as usize, pdata);
-                            }
-                        },
-                        None => {
-                            data_unlocked.insert(prop.name.clone(), HashMap::default());
-                        }
-                    }
+                    props.push((prop.name.to_owned(), pdata));
                 }
-                continue;
             }
         }
     }
+    /*
+    for prop in props {
+        match data.get_mut(&prop.0) {
+            Some(mut inner) => match inner.get_mut(&(entity_id as u32)) {
+                Some(vv) => {
+                    vv.insert_propdata((tick / 2) as usize, prop.1);
+                }
+                None => {
+                    inner.insert(entity_id as u32, create_default_from_pdata(&prop.1, 200000));
+                    inner
+                        .get_mut(&(entity_id as u32))
+                        .unwrap()
+                        .insert_propdata((tick / 2) as usize, prop.1);
+                }
+            },
+            None => {
+                data.insert(prop.0.clone(), HashMap::default());
+            }
+        }
+    }
+    */
     // number of updated entries
     Some(upd.try_into().unwrap())
 }
@@ -251,4 +259,18 @@ pub fn parse_baselines(
         baseline.insert(prop.name.to_owned(), pdata);
     }
     baselines.insert(sv_cls.id.try_into().unwrap(), baseline);
+}
+
+#[inline(always)]
+fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
+    for prop in wanted_props {
+        if prop == &this_prop.name
+            || this_prop.name == "m_hActiveWeapon"
+            || this_prop.name == "m_iClip1"
+            || this_prop.name == "m_iItemDefinitionIndex"
+        {
+            return true;
+        }
+    }
+    false
 }

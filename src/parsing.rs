@@ -7,4 +7,5 @@ pub mod parser;
 pub mod read_bits;
 pub mod read_bytes;
 pub mod stringtables;
+pub mod utils;
 pub mod variants;

@@ -8,6 +8,8 @@ use protobuf::Message;
 use smallvec::{smallvec, SmallVec};
 use std::collections::HashSet;
 use std::vec;
+
+use super::read_bytes::ByteReader;
 #[derive(Debug)]
 pub struct ServerClass {
     pub id: u16,
@@ -16,20 +18,20 @@ pub struct ServerClass {
 }
 
 impl Parser {
-    pub fn parse_datatable(&mut self) {
+    pub fn parse_datatable(&mut self, byte_reader: &mut ByteReader) {
         /*
         Parse datatables. These are the tables that entities refer to for values. If this fails then gg?
         */
-        let _ = self.read_i32();
-        loop {
-            let _ = self.read_varint();
-            let size = self.read_varint();
-            let data = self.read_n_bytes(size);
+        let _ = byte_reader.read_i32();
 
-            let table = Message::parse_from_bytes(data);
+        loop {
+            let _ = byte_reader.read_varint();
+            let size = byte_reader.read_varint();
+            let data = byte_reader.read_n_bytes(size);
+
+            let table: Result<CSVCMsg_SendTable, protobuf::Error> = Message::parse_from_bytes(data);
             match table {
-                Ok(t) => {
-                    let table: CSVCMsg_SendTable = t;
+                Ok(table) => {
                     if table.is_end() {
                         break;
                     }
@@ -48,31 +50,27 @@ impl Parser {
             }
         }
 
-        let class_count = self.read_short();
-        //_ = (class_count as f32 + 1.).log2().ceil() as u32;
+        let class_count = byte_reader.read_short();
         for _ in 0..class_count {
-            let id = self.read_short();
-            let _ = self.read_string();
-            let dt = self.read_string();
-
-            let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
-            let server_class = ServerClass { id, dt, props };
-            // Set baselines parsed earlier in stringtables.
-            // Happens when stringtable, with instancebaseline, comes
-            // before this event. Seems oddly complicated
-            match self.maps.baseline_no_cls.get(&(id as u32)) {
-                Some(user_data) => {
-                    parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
-                    // Remove after being parsed
-                    self.maps.baseline_no_cls.remove(&(id as u32));
+            let id = byte_reader.read_short();
+            let _ = byte_reader.read_string();
+            let dt = byte_reader.read_string();
+            if id == 275 || id == 40 {
+                let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
+                let server_class = ServerClass { id, dt, props };
+                // Set baselines parsed earlier in stringtables.
+                // Happens when stringtable, with instancebaseline, comes
+                // before this event. Seems oddly complicated
+                match self.maps.baseline_no_cls.get(&(id as u32)) {
+                    Some(user_data) => {
+                        parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
+                        // Remove after being parsed
+                        self.maps.baseline_no_cls.remove(&(id as u32));
+                    }
+                    None => {}
                 }
-                None => {}
+                self.maps.serverclass_map.insert(id, server_class);
             }
-            self.maps
-                .serverclass_map
-                .write()
-                .unwrap()
-                .insert(id, server_class);
         }
     }
     pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 32]> {

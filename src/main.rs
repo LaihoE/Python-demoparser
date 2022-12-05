@@ -7,6 +7,7 @@ use csgoproto::netmessages::*;
 use csv::Writer;
 use memmap2::Mmap;
 use memmap2::MmapOptions;
+use mimalloc::MiMalloc;
 use parsing::game_events::KeyData;
 use parsing::header::Header;
 use parsing::parser::Parser;
@@ -25,6 +26,9 @@ use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::time::Instant;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 pub fn max_skip_tick(game_events: &Vec<GameEvent>) -> i32 {
     let mut biggest_needed_tick = 0;
@@ -49,10 +53,10 @@ pub fn max_skip_tick(game_events: &Vec<GameEvent>) -> i32 {
 fn main() {
     let now = Instant::now();
     let paths = fs::read_dir("/home/laiho/Documents/demos/benchmark/").unwrap();
+
     for demo_path in paths {
         let now = Instant::now();
         let props_names = vec!["m_vecOrigin".to_string()];
-        let dp = "/home/laiho/Documents/demos/mygames/aa.dem".to_string();
         println!("{:?}", demo_path.as_ref().unwrap().path());
         let mut parser = Parser::new(
             demo_path
@@ -63,7 +67,7 @@ fn main() {
                 .unwrap()
                 .to_string(),
             true,
-            (50..70000).collect(),
+            vec![],
             vec![],
             vec!["m_angEyeAngles[0]".to_string()],
             "player_death".to_string(),
@@ -78,27 +82,6 @@ fn main() {
         let h: Header = parser.parse_demo_header();
         let mut event_names: Vec<String> = Vec::new();
         let data_a = parser.start_parsing(&props_names);
-        //let data = data_a.read().unwrap();
-        //let data = data.clone();
-        //println!("{:?}", data);
-        /*
-                for (k, v) in data {
-                    for (kk, vv) in v {
-                        match vv {
-                            VarVec::I32(v) => {
-                                let s = Series::new("oogla", v);
-                                println!("{}", s);
-                                for x in &s.0 {
-                                    println!("{}", x);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-        */
-        //let x = data.read().unwrap();
-        //println!("{:?}", x);
         //break;
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?}", elapsed);

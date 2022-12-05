@@ -29,6 +29,7 @@ memmap2 = "0.5.7"
 rayon = "1.6.0"
 threadpool = "1.8.1"
 dashmap = "5.4.0"
+varint-simd = "0.3.0"
 
 [dependencies.csgoproto]
 path = "src/parsing/csgoproto"
@@ -42,4 +43,3 @@ opt-level = 3
 #lto = "fat"
 #codegen-units = 1
 panic = "abort"
-debug = true

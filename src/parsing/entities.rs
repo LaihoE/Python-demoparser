@@ -1,7 +1,5 @@
-use super::parser::Maps;
+use super::parser::JobResult;
 use super::parser::MsgBluePrint;
-use super::parser::ParserSettings;
-use super::parser::ParserState;
 use super::stringtables::UserInfo;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::parser::Parser;
@@ -11,16 +9,15 @@ use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
 use crate::VarVec;
 use ahash::RandomState;
+use bitter::BitReader;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
-use dashmap::DashMap;
 use memmap2::Mmap;
 use protobuf::Message;
+use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::sync::Arc;
-use std::sync::RwLock;
 
 #[derive(Debug, Clone)]
 pub struct Entity {
@@ -46,84 +43,76 @@ pub struct Prop {
 }
 
 pub fn parse_packet_entities(
-    blueprint: MsgBluePrint,
-    mmap: Arc<Mmap>,
-    sv_cls_map: Arc<RwLock<HashMap<u16, ServerClass, RandomState>>>,
-    data: Arc<DashMap<String, HashMap<u32, VarVec>>>,
-) {
-    let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_inx];
+    blueprint: &MsgBluePrint,
+    mmap: &Mmap,
+    sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+) -> JobResult {
+    let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
     let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
-    Parser::_parse_packet_entities(msg, sv_cls_map, data, blueprint.tick);
+    JobResult::PacketEntities(Parser::_parse_packet_entities(
+        msg,
+        sv_cls_map,
+        blueprint.tick,
+    ))
 }
 
 impl Parser {
     pub fn _parse_packet_entities(
         pack_ents: CSVCMsg_PacketEntities,
-        sv_cls_map: Arc<RwLock<HashMap<u16, ServerClass, RandomState>>>,
-        data: Arc<DashMap<String, HashMap<u32, VarVec>>>,
+        sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
         tick: i32,
-    ) -> Option<Vec<u32>> {
+    ) -> Option<Vec<SmallVec<[(i32, PropData); 1]>>> {
+        /*
+        Main thing to understand here is that entity ids are
+        sorted so we can break out early. Also first ~70 entids
+        have predictable cls_ids, mainly entid < 64 = player.
+        Higher entity ids are entities for other props etc.
+        that are mostly not interesting.
+        */
         let n_upd_ents = pack_ents.updated_entries();
         let mut b = MyBitreader::new(pack_ents.entity_data());
+        let mut all_props = vec![];
         let mut entity_id: i32 = -1;
-        let mut player_ents = vec![];
-
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var()? as i32);
             if entity_id > 64 {
                 break;
             }
             if b.read_boolie()? {
-                // Checks for if entity should be destroyed, don't see this being useful
+                // Checks if entity should be destroyed, don't see this being useful for parser
                 b.read_boolie();
             } else if b.read_boolie()? {
                 // IF ENTITY DOES NOT EXIST
-                let cls_id = b.read_nbits(9)?;
-                let _ = b.read_nbits(10);
-                let mut e = Entity {
-                    class_id: cls_id,
-                    entity_id: entity_id as u32,
-                    props: HashMap::default(),
-                };
-                parse_ent_props(entity_id, &mut b, sv_cls_map.clone(), data.clone(), tick);
+                // These bits are for creating the ent but we use hack for it so not needed
+                let _ = b.read_nbits(19)?;
+                all_props.extend(parse_ent_props(entity_id, &mut b, sv_cls_map, tick));
             } else {
                 // IF ENTITY DOES EXIST
-                parse_ent_props(entity_id, &mut b, sv_cls_map.clone(), data.clone(), tick);
+                all_props.extend(parse_ent_props(entity_id, &mut b, sv_cls_map, tick));
             }
         }
-        if player_ents.len() > 0 {
-            return Some(player_ents);
-        } else {
-        }
-        None
+        return Some(all_props);
     }
 }
-
+#[inline(always)]
 fn get_cls_id(ent_id: i32) -> u16 {
+    // Returns correct serverclass id based on entityid
+    // This is the key to being able to go parallel across ticks
     assert!(ent_id < 65);
     match ent_id {
         0 => 275,
         _ => 40,
     }
 }
-
 #[inline(always)]
-pub fn parse_ent_props(
-    entity_id: i32,
-    b: &mut MyBitreader,
-    sv_cls_map: Arc<RwLock<HashMap<u16, ServerClass, RandomState>>>,
-    data: Arc<DashMap<String, HashMap<u32, VarVec>>>,
-    tick: i32,
-) -> Option<i32> {
+pub fn get_indicies(b: &mut MyBitreader) -> SmallVec<[i32; 128]> {
+    /*
+    Gets wanted prop indicies. The index maps to a Prop struct.
+    For example Player serverclass (id=40) with index 20 gives m_angEyeAngles[0]
+    */
     let mut val = -1;
-    let new_way = b.read_boolie()?;
-    let mut upd = 0;
-    //let ent = &mut state.entities[ent_id as usize].1;
-    //let cls_id = ent.class_id;
-    let cls_id = get_cls_id(entity_id);
-    let m = sv_cls_map.read().unwrap();
-    let sv_cls = m.get(&cls_id).unwrap();
-    let mut indicies = vec![];
+    let new_way = b.read_boolie().unwrap();
+    let mut indicies: SmallVec<[_; 128]> = SmallVec::<[i32; 128]>::new();
     loop {
         val = b.read_inx(val, new_way).unwrap();
         if val == -1 {
@@ -131,77 +120,31 @@ pub fn parse_ent_props(
         }
         indicies.push(val);
     }
-    let mut props = vec![];
+    indicies
+}
+#[inline(always)]
+pub fn parse_ent_props(
+    entity_id: i32,
+    b: &mut MyBitreader,
+    sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+    tick: i32,
+) -> Option<SmallVec<[(i32, PropData); 1]>> {
+    let cls_id = get_cls_id(entity_id);
+    let m = sv_cls_map;
+    let sv_cls = m.get(&cls_id).unwrap();
+    let indicies = get_indicies(b);
+    let mut props: SmallVec<[(i32, PropData); 1]> = SmallVec::<[(i32, PropData); 1]>::new();
     for idx in indicies {
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
-        //let wanted_props = vec!["m_iHealth".to_string()];
-
-        if prop.name != "m_iHealth" {
+        if prop.name != "m_angEyeAngles[0]" || tick != 6999 {
             continue;
         }
-        //if sv_cls.id != 39 && sv_cls.id != 41 && !is_wanted_prop_name(prop, &wanted_props) {
-        //continue;
-        //}
-        //println!("{}", prop.name);
-        match pdata {
-            PropData::VecXY(v) => {
-                let endings = ["_X", "_Y"];
-                for inx in 0..2 {
-                    let data = PropData::F32(v[inx]);
-
-                    let name = prop.name.to_owned() + endings[inx];
-                    let atom = PropAtom {
-                        prop_name: name,
-                        data: data,
-                        tick: 22, //tick: state.tick,
-                    };
-                    //ent.props.insert(atom.prop_name.to_owned(), atom);
-                }
-            }
-            PropData::VecXYZ(v) => {
-                let endings = ["_X", "_Y", "_Z"];
-                for inx in 0..3 {
-                    let data = PropData::F32(v[inx]);
-                    let name = prop.name.to_owned() + endings[inx];
-                    let atom = PropAtom {
-                        prop_name: name,
-                        data: data,
-                        tick: 22, //tick: state.tick,
-                    };
-                    //ent.props.insert(atom.prop_name.to_owned(), atom);
-                }
-            }
-            _ => {
-                if prop.name.len() > 4 {
-                    props.push((prop.name.to_owned(), pdata));
-                }
-            }
+        if prop.name.len() > 4 {
+            props.push((idx, pdata));
         }
     }
-    /*
-    for prop in props {
-        match data.get_mut(&prop.0) {
-            Some(mut inner) => match inner.get_mut(&(entity_id as u32)) {
-                Some(vv) => {
-                    vv.insert_propdata((tick / 2) as usize, prop.1);
-                }
-                None => {
-                    inner.insert(entity_id as u32, create_default_from_pdata(&prop.1, 200000));
-                    inner
-                        .get_mut(&(entity_id as u32))
-                        .unwrap()
-                        .insert_propdata((tick / 2) as usize, prop.1);
-                }
-            },
-            None => {
-                data.insert(prop.0.clone(), HashMap::default());
-            }
-        }
-    }
-    */
-    // number of updated entries
-    Some(upd.try_into().unwrap())
+    Some(props)
 }
 
 #[inline(always)]

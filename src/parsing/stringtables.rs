@@ -1,3 +1,5 @@
+use super::parser::JobResult;
+use super::parser::MsgBluePrint;
 //use crate::parsing::read_bits_old::BitReader;
 use super::read_bits::MyBitreader;
 use crate::parsing::entities::parse_baselines;
@@ -6,6 +8,8 @@ use bitter::BitReader;
 use core::num;
 use csgoproto::netmessages::CSVCMsg_CreateStringTable;
 use csgoproto::netmessages::CSVCMsg_UpdateStringTable;
+use memmap2::Mmap;
+use protobuf::Message;
 use pyo3::ffi::PyObject;
 use pyo3::PyAny;
 use pyo3::ToPyObject;
@@ -33,6 +37,7 @@ pub struct StringTable {
 pub struct StField {
     entry: String,
 }
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserInfo {
     pub version: u64,
@@ -69,7 +74,6 @@ impl UserInfo {
         hm
     }
 }
-
 impl Parser {
     pub fn parse_userinfo(userdata: Vec<u8>) -> UserInfo {
         let ui = UserInfo {
@@ -90,24 +94,54 @@ impl Parser {
         ui
     }
 
+    pub fn create_string_table(&mut self, blueprint: &MsgBluePrint) -> Vec<UserInfo> {
+        let wanted_bytes = &self.bytes[blueprint.start_idx..blueprint.end_idx];
+        let data: CSVCMsg_CreateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
+
+        let mut st = StringTable {
+            name: data.name().to_string(),
+            userinfo: data.name() == "userinfo",
+            max_entries: data.max_entries(),
+            udfs: data.user_data_fixed_size(),
+            uds: data.user_data_size(),
+            data: Vec::new(),
+        };
+        if st.name == "userinfo" || st.name == "instancebaseline" {
+            for _ in 1..50000 {
+                st.data.push(StField {
+                    entry: "".to_string(),
+                })
+            }
+            let new_players = Parser::update_string_table(
+                data.string_data(),
+                &st,
+                data.num_entries(),
+                data.max_entries(),
+                data.user_data_fixed_size(),
+            );
+            self.state.stringtables.push(st);
+            if new_players.is_some() {
+                return new_players.unwrap();
+            }
+        }
+        vec![]
+    }
+
     pub fn update_string_table(
-        &mut self,
         data: &[u8],
-        mut st: StringTable,
-        _userinfo: bool,
+        st: &StringTable,
         num_entries: i32,
         max_entries: i32,
-        _user_data_size: i32,
         user_data_fixsize: bool,
-    ) -> Option<StringTable> {
+    ) -> Option<Vec<UserInfo>> {
         let mut buf = MyBitreader::new(data);
         let entry_bits = (max_entries as f32).log2() as i32;
         let mut entry_index = 0;
         let mut last_inx: i32 = -1;
         let mut history: Vec<String> = Vec::new();
         let mut entry = String::new();
-
-        buf.read_boolie()?;
+        let mut new_userinfo = vec![];
+        buf.read_boolie().unwrap();
 
         for _i in 0..num_entries {
             let mut user_data = vec![];
@@ -129,7 +163,7 @@ impl Parser {
                 } else {
                     entry = buf.read_string(4096)?;
                 }
-                st.data[entry_index as usize].entry = entry.to_string()
+                //st.data[entry_index as usize].entry = entry.to_string()
             }
             if history.len() >= 32 {
                 history.remove(0);
@@ -148,14 +182,14 @@ impl Parser {
                 /*
                 if st.name == "instancebaseline" {
                     let k = entry.parse::<u32>().unwrap_or(999999);
-                    match self.maps.serverclass_map.read().get(&(k as u16)) {
+                    match self.serverclass_map.get(&(k as u16)) {
                         Some(sv_cls) => {
-                            parse_baselines(&user_data, sv_cls, &mut self.maps.baselines);
+                            parse_baselines(&user_data, sv_cls, &mut self.baselines);
                         }
                         None => {
                             // Serverclass_map is not initiated yet, we need to parse this
                             // later. Just why??? :() just seems unnecessarily complicated
-                            self.maps.baseline_no_cls.insert(k, user_data.clone());
+                            self.baseline_no_cls.insert(k, user_data.clone());
                         }
                     }
                     history.push(entry.to_string());
@@ -164,72 +198,57 @@ impl Parser {
                 if st.userinfo {
                     let mut ui = Parser::parse_userinfo(user_data);
                     ui.entity_id = entry_index as u32 + 1;
-                    //println!("CREATE: {} {} {}", ui.xuid, ui.entity_id, self.tick);
-
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
-
-                    self.maps
-                        .userid_sid_map
-                        .entry(ui.user_id)
-                        .or_insert(Vec::new())
-                        .push((ui.xuid.clone(), self.state.tick));
-
-                    self.maps
-                        .uid_eid_map
-                        .entry(ui.user_id)
-                        .or_insert(Vec::new())
-                        .push((ui.entity_id, self.state.tick));
-                    self.maps
-                        .sid_entid_map
-                        .entry(ui.xuid.clone())
-                        .or_insert(Vec::new())
-                        .push((ui.entity_id, self.state.tick));
-
-                    self.maps.players.insert(ui.xuid.clone(), ui);
+                    new_userinfo.push(ui);
                 }
             }
         }
-        Some(st)
-    }
-
-    pub fn create_string_table(&mut self, data: CSVCMsg_CreateStringTable) -> Option<bool> {
-        let mut uinfo = false;
-
-        if data.name() == "userinfo" {
-            uinfo = true;
+        if new_userinfo.len() > 0 {
+            Some(new_userinfo)
+        } else {
+            None
         }
-
-        let mut st = StringTable {
-            name: data.name().to_string(),
-            userinfo: uinfo,
-            max_entries: data.max_entries(),
-            udfs: data.user_data_fixed_size(),
-            uds: data.user_data_size(),
-            data: Vec::new(),
+    }
+    pub fn update_string_table_msg(
+        blueprint: &MsgBluePrint,
+        mmap: &Mmap,
+        stringtables: &Vec<StringTable>,
+    ) -> JobResult {
+        let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
+        let data: CSVCMsg_UpdateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
+        if data.table_id() != 7 {
+            return JobResult::None;
+        }
+        let st = StringTable {
+            userinfo: true,
+            name: "userinfo".to_string(),
+            max_entries: 256,
+            uds: 0,
+            udfs: false,
+            data: vec![],
         };
-        if st.name == "userinfo" || st.name == "instancebaseline" {
-            for _ in 1..50000 {
-                st.data.push(StField {
-                    entry: "".to_string(),
-                })
-            }
-            let ui = st.userinfo;
-            st = self.update_string_table(
-                data.string_data(),
-                st,
-                ui,
-                data.num_entries(),
-                data.max_entries(),
-                data.user_data_size_bits(),
-                data.user_data_fixed_size(),
-            )?;
-        }
-        self.state.stringtables.push(st.clone());
-        Some(true)
-    }
 
-    pub fn update_string_table_msg(&mut self, data: CSVCMsg_UpdateStringTable) -> Option<bool> {
+        //println!("{} {}", st.name, data.table_id());
+        let new_userinfos = Parser::update_string_table(
+            data.string_data(),
+            &st,
+            data.num_changed_entries(),
+            st.max_entries,
+            st.udfs,
+        );
+        match new_userinfos {
+            Some(u) => JobResult::StringTables(u),
+            None => JobResult::None,
+        }
+    }
+}
+
+/*
+    pub fn update_string_table_msg(blueprint: &MsgBluePrint, mmap: &Mmap) -> Option<bool> {
+        let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
+        let data: CSVCMsg_UpdateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
+
         let st = self
             .state
             .stringtables
@@ -248,7 +267,7 @@ impl Parser {
         if !(st.name == "userinfo" || st.name == "instancebaseline") {
             return Some(true);
         }
-
+        println!("{}", st.name);
         for _i in 0..data.num_changed_entries() {
             index = last_inx + 1;
             if !(buf.read_boolie()?) {
@@ -331,3 +350,4 @@ impl Parser {
         Some(true)
     }
 }
+*/

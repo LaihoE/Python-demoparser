@@ -1,6 +1,21 @@
 use crate::parsing::parser::Parser;
+use memmap2::Mmap;
+use std::sync::Arc;
+use varint_simd::{decode, decode_two_unsafe, encode, encode_zigzag};
 
-impl Parser {
+pub struct ByteReader {
+    pub bytes: Arc<Mmap>,
+    pub byte_idx: usize,
+}
+
+impl ByteReader {
+    pub fn new(bytes: Arc<Mmap>) -> Self {
+        ByteReader {
+            bytes: bytes,
+            byte_idx: 1072,
+        }
+    }
+
     #[inline]
     pub fn read_varint(&mut self) -> u32 {
         let mut result: u32 = 0;
@@ -11,8 +26,8 @@ impl Parser {
             if count >= 5 {
                 return result as u32;
             }
-            b = self.bytes[self.state.fp].try_into().unwrap();
-            self.state.fp += 1;
+            b = self.bytes[self.byte_idx].try_into().unwrap();
+            self.byte_idx += 1;
             result |= (b & 127) << (7 * count);
             count += 1;
             if b & 0x80 == 0 {
@@ -24,11 +39,11 @@ impl Parser {
     #[inline]
     pub fn read_short(&mut self) -> u16 {
         let s = u16::from_le_bytes(
-            self.bytes[self.state.fp..self.state.fp + 2]
+            self.bytes[self.byte_idx..self.byte_idx + 2]
                 .try_into()
                 .unwrap(),
         );
-        self.state.fp += 2;
+        self.byte_idx += 2;
         s
     }
     #[inline]
@@ -48,27 +63,27 @@ impl Parser {
     #[inline]
     pub fn read_i32(&mut self) -> i32 {
         let i = i32::from_le_bytes(
-            self.bytes[self.state.fp..self.state.fp + 4]
+            self.bytes[self.byte_idx..self.byte_idx + 4]
                 .try_into()
                 .unwrap(),
         );
-        self.state.fp += 4;
+        self.byte_idx += 4;
         i
     }
     #[inline]
     pub fn read_byte(&mut self) -> u8 {
-        let b = self.bytes[self.state.fp];
-        self.state.fp += 1;
+        let b = self.bytes[self.byte_idx];
+        self.byte_idx += 1;
         b
     }
     #[inline]
     pub fn skip_n_bytes(&mut self, n: u32) {
-        self.state.fp += n as usize;
+        self.byte_idx += n as usize;
     }
     #[inline]
     pub fn read_n_bytes(&mut self, n: u32) -> &[u8] {
-        let s = &self.bytes[self.state.fp..self.state.fp + n as usize];
-        self.state.fp += n as usize;
+        let s = &self.bytes[self.byte_idx..self.byte_idx + n as usize];
+        self.byte_idx += n as usize;
         s
     }
     #[inline(always)]
@@ -77,5 +92,17 @@ impl Parser {
         let tick = self.read_i32();
         self.skip_n_bytes(1);
         (cmd, tick)
+    }
+    #[inline(always)]
+    pub fn read_two_varints(&mut self) -> (u32, u32) {
+        let max_two = self.bytes[self.byte_idx..self.byte_idx + 10].as_ptr();
+        unsafe {
+            {
+                let (a, b, one, two) = decode_two_unsafe(max_two);
+                self.byte_idx += one as usize;
+                self.byte_idx += two as usize;
+                return (a, b);
+            }
+        }
     }
 }

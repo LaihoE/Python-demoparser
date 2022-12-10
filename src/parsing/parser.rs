@@ -10,9 +10,11 @@ use crate::parsing::stringtables::UserInfo;
 pub use crate::parsing::variants::*;
 use ahash::RandomState;
 use core::time::Duration;
-use crossbeam_queue::ArrayQueue;
+use crossbeam_queue::ArrayQueue as SegQueue;
+//use crossbeam_queue::SegQueue;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use memmap2::Mmap;
+use polars::export::regex::internal::Inst;
 use pyo3::pyclass::boolean_struct::False;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -60,18 +62,22 @@ pub struct ParsingMaps {
 
 impl Parser {
     pub fn start_parsing(&mut self, props_names: &Vec<String>) {
-        let q: Arc<ArrayQueue<Vec<Option<CmdResult>>>> = Arc::new(ArrayQueue::new(10000));
+        let before = Instant::now();
+        let q: Arc<SegQueue<MsgBluePrint>> = Arc::new(SegQueue::new(1000000));
+        println!("wat {:2?}", before.elapsed());
+
         let parsing_maps = Arc::new(RwLock::new(ParsingMaps {
             serverclass_map: None,
             event_map: None,
         }));
 
-        let io_threads = 3;
-        let cpu_threads = 4;
+        let io_threads = 8;
+        let cpu_threads = 12;
 
         let mut io_done = Arc::new(AtomicBool::new(false));
 
         let io_handles = self.start_io_threads(q.clone(), parsing_maps.clone(), io_threads);
+
         let parser_handles = self.start_parser_thread_main(
             q.clone(),
             parsing_maps.clone(),
@@ -79,25 +85,27 @@ impl Parser {
             cpu_threads,
         );
         let before = Instant::now();
-        let mut final_data = Vec::with_capacity(500000);
+        //let mut final_data = Vec::with_capacity(500000);
 
         for io_handle in io_handles {
             let t = io_handle.0.join().unwrap();
         }
-        io_done.store(true, Ordering::Relaxed);
+        /*
+               io_done.store(true, Ordering::Relaxed);
 
-        let mut cnt = 0;
-        for parser_handle in parser_handles {
-            let data = parser_handle.join().unwrap();
-            final_data.extend(data);
-            cnt += 1;
-        }
+               let mut cnt = 0;
+               for parser_handle in parser_handles {
+                   let data = parser_handle.join().unwrap();
+                   //final_data.extend(data);
+                   cnt += 1;
+               }
+        */
         //self.get_raw_df(&final_data, parsing_maps.clone());
     }
 
     pub fn start_io_threads(
         &mut self,
-        q: Arc<ArrayQueue<Vec<Option<CmdResult>>>>,
+        q: Arc<SegQueue<MsgBluePrint>>,
         parsing_maps: Arc<RwLock<ParsingMaps>>,
         io_threads: i32,
     ) -> Vec<(thread::JoinHandle<i32>, (usize, usize))> {
@@ -113,6 +121,7 @@ impl Parser {
             let msg_q = q.clone();
             let my_maps = parsing_maps.clone();
             let my_mmap = self.bytes.clone();
+
             let handle =
                 thread::spawn(move || Parser::parse_messages(my_mmap, msg_q, my_maps, start_end));
             handles.push((handle, start_end));
@@ -121,7 +130,7 @@ impl Parser {
     }
     pub fn start_parser_thread_main(
         &mut self,
-        q: Arc<ArrayQueue<Vec<Option<CmdResult>>>>,
+        q: Arc<SegQueue<MsgBluePrint>>,
         parsing_maps: Arc<RwLock<ParsingMaps>>,
         io_done: Arc<AtomicBool>,
         cpu_threads: i32,
@@ -136,14 +145,13 @@ impl Parser {
             let handle = thread::spawn(move || {
                 Parser::start_parser_thread(msg_q, mmap, my_maps, &wanted_props, my_io_done)
             });
-
             handles.push(handle);
         }
         handles
     }
 
     pub fn start_parser_thread(
-        msg_q: Arc<ArrayQueue<Vec<Option<CmdResult>>>>,
+        msg_q: Arc<SegQueue<MsgBluePrint>>,
         mmap: Arc<Mmap>,
         parsing_maps: Arc<RwLock<ParsingMaps>>,
         wanted_props: &Vec<String>,
@@ -151,7 +159,7 @@ impl Parser {
     ) -> Vec<JobResult> {
         let before = Instant::now();
         let serverclass_map = Parser::wait_for_map(parsing_maps.clone());
-        let mut threads_data = Vec::with_capacity(50000);
+        let mut threads_data = Vec::with_capacity(500000);
         loop {
             // println!("{}", msg_q.len());
             if msg_q.len() == 0 && io_done.load(Ordering::Relaxed) == true {
@@ -160,51 +168,35 @@ impl Parser {
 
             let cmd_results = msg_q.pop();
             match cmd_results {
-                Some(cmd_res) => {
-                    for cmd_result in cmd_res {
-                        match cmd_result {
-                            Some(CmdResult::BluePrints(blueprints)) => {
-                                for blueprint in blueprints {
-                                    let data = Parser::msg_handler(
-                                        &blueprint,
-                                        &mmap,
-                                        &serverclass_map,
-                                        wanted_props,
-                                        parsing_maps.clone(),
-                                    );
-                                    threads_data.push(data);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+                Some(blueprint) => {
+                    let data = Parser::msg_handler(
+                        &blueprint,
+                        &mmap,
+                        &serverclass_map,
+                        wanted_props,
+                        parsing_maps.clone(),
+                    );
+                    threads_data.push(data);
                 }
-                None => {}
+                _ => {}
             }
         }
         //println!("{}", threads_data.len());
         return threads_data;
     }
-
+    #[inline(always)]
     pub fn parse_messages(
         mmap: Arc<Mmap>,
-        q: Arc<ArrayQueue<Vec<Option<CmdResult>>>>,
+        q: Arc<SegQueue<MsgBluePrint>>,
         parsing_maps: Arc<RwLock<ParsingMaps>>,
         start_end: (usize, usize),
     ) -> i32 {
         let (start_idx, end_idx) = start_end;
-        let before = Instant::now();
         let mut byte_reader = Parser::find_beginning(mmap, start_idx, end_idx).unwrap();
 
         while byte_reader.byte_idx < byte_reader.max_byte as usize {
-            let mut result: Vec<Option<CmdResult>> = Vec::with_capacity(8192);
-            // || byte_reader.byte_idx > byte_reader.max_byte as usize
-            while result.len() < 8192 && byte_reader.byte_idx < byte_reader.max_byte as usize {
-                let (cmd, tick) = byte_reader.read_frame();
-                let res = Parser::parse_cmd(cmd, &mut byte_reader, tick, parsing_maps.clone());
-                result.push(res);
-            }
-            q.push(result).unwrap();
+            let (cmd, tick) = byte_reader.read_frame();
+            Parser::parse_cmd(cmd, &mut byte_reader, tick, parsing_maps.clone(), q.clone());
         }
         69
     }
@@ -262,30 +254,28 @@ impl Parser {
         byte_reader: &mut ByteReader,
         tick: i32,
         parsing_maps: Arc<RwLock<ParsingMaps>>,
-    ) -> Option<CmdResult> {
+        q: Arc<SegQueue<MsgBluePrint>>,
+    ) {
         match cmd {
-            1 => Some(CmdResult::BluePrints(Parser::parse_packet(
-                byte_reader,
-                tick,
-            ))),
-            2 => Some(CmdResult::BluePrints(Parser::parse_packet(
-                byte_reader,
-                tick,
-            ))),
-            6 => Some(CmdResult::DataTable(Parser::parse_datatable(
-                byte_reader,
-                parsing_maps.clone(),
-            ))),
-            _ => None,
-        }
+            1 => {
+                Parser::parse_packet(byte_reader, tick, q);
+            }
+            2 => {
+                Parser::parse_packet(byte_reader, tick, q);
+            }
+            6 => {
+                Parser::parse_datatable(byte_reader, parsing_maps.clone());
+            }
+            _ => {}
+        };
     }
 
     #[inline(always)]
-    pub fn parse_packet(byte_reader: &mut ByteReader, tick: i32) -> Vec<MsgBluePrint> {
+    pub fn parse_packet(byte_reader: &mut ByteReader, tick: i32, q: Arc<SegQueue<MsgBluePrint>>) {
         byte_reader.byte_idx += 160;
         let packet_len = byte_reader.read_i32();
         let packet_last_byte = byte_reader.byte_idx + packet_len as usize;
-        let mut tasks = vec![];
+
         while byte_reader.byte_idx < packet_last_byte {
             let msg = byte_reader.read_varint();
             let size = byte_reader.read_varint();
@@ -300,9 +290,9 @@ impl Parser {
                 end_idx: after_inx,
                 tick: tick,
             };
-            tasks.push(msg_blueprint)
+            //tasks.push(msg_blueprint)
+            q.push(msg_blueprint);
         }
-        tasks
     }
 
     pub fn msg_handler(

@@ -33,9 +33,9 @@ use std::time::Instant;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn parse_demo(demo_path: String) -> i32 {
-    println!("{}", demo_path);
-    let bytes = fs::read(demo_path);
-    /*
+    //println!("{}", demo_path);
+    //let bytes = fs::read(demo_path);
+
     let now = Instant::now();
     let props_names = vec!["m_angEyeAngles[0]".to_string()];
     let mut parser = Parser::new(
@@ -60,7 +60,7 @@ fn parse_demo(demo_path: String) -> i32 {
     let mut event_names: Vec<String> = Vec::new();
     parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
     parser.start_parsing(&props_names);
-    */
+
     69
 }
 
@@ -72,12 +72,18 @@ fn main() {
         let p = path.as_ref().unwrap().path().to_str().unwrap().to_string();
         paths_v.push(p);
     }
+    /*
     rayon::ThreadPoolBuilder::new()
-        .num_threads(3)
+        .num_threads(69)
         .build_global()
         .unwrap();
-
-    let x: Vec<i32> = paths_v.into_par_iter().map(|f| parse_demo(f)).collect();
+    */
+    let this_p = &paths_v[0];
+    let single = vec![this_p];
+    let x: Vec<i32> = paths_v
+        .into_iter()
+        .map(|f| parse_demo(f.to_owned()))
+        .collect();
     // 145
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 67);

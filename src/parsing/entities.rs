@@ -41,19 +41,34 @@ pub struct Prop {
     pub priority: i32,
     pub p_type: i32,
 }
+#[derive(Debug, Clone)]
+pub struct PacketEntsOutput {
+    pub data: Vec<Vec<SingleEntOutput>>,
+    pub tick: i32,
+}
+#[derive(Debug, Clone)]
+pub struct SingleEntOutput {
+    pub ent_id: i32,
+    pub prop_inx: i32,
+    pub data: PropData,
+}
 
 pub fn parse_packet_entities(
     blueprint: &MsgBluePrint,
     mmap: &Mmap,
     sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+    wanted_props: &Vec<String>,
 ) -> JobResult {
     let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
     let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
-    JobResult::PacketEntities(Parser::_parse_packet_entities(
-        msg,
-        sv_cls_map,
-        blueprint.tick,
-    ))
+    let outputs = Parser::_parse_packet_entities(msg, sv_cls_map, blueprint.tick, wanted_props);
+    match outputs {
+        Some(output) => JobResult::PacketEntities(Some(PacketEntsOutput {
+            data: output,
+            tick: blueprint.tick,
+        })),
+        None => JobResult::None,
+    }
 }
 
 impl Parser {
@@ -61,7 +76,8 @@ impl Parser {
         pack_ents: CSVCMsg_PacketEntities,
         sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
         tick: i32,
-    ) -> Option<Vec<SmallVec<[(i32, PropData); 1]>>> {
+        wanted_props: &Vec<String>,
+    ) -> Option<Vec<Vec<SingleEntOutput>>> {
         /*
         Main thing to understand here is that entity ids are
         sorted so we can break out early. Also first ~70 entids
@@ -85,10 +101,18 @@ impl Parser {
                 // IF ENTITY DOES NOT EXIST
                 // These bits are for creating the ent but we use hack for it so not needed
                 let _ = b.read_nbits(19)?;
-                all_props.extend(parse_ent_props(entity_id, &mut b, sv_cls_map, tick));
+                let this_ent_props =
+                    parse_ent_props(entity_id, &mut b, sv_cls_map, tick, wanted_props);
+                if this_ent_props.as_ref().unwrap().len() > 0 {
+                    all_props.extend(this_ent_props);
+                }
             } else {
                 // IF ENTITY DOES EXIST
-                all_props.extend(parse_ent_props(entity_id, &mut b, sv_cls_map, tick));
+                let this_ent_props =
+                    parse_ent_props(entity_id, &mut b, sv_cls_map, tick, wanted_props);
+                if this_ent_props.as_ref().unwrap().len() > 0 {
+                    all_props.extend(this_ent_props);
+                }
             }
         }
         return Some(all_props);
@@ -128,55 +152,38 @@ pub fn parse_ent_props(
     b: &mut MyBitreader,
     sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
     tick: i32,
-) -> Option<SmallVec<[(i32, PropData); 1]>> {
+    wanted_props: &Vec<String>,
+) -> Option<Vec<SingleEntOutput>> {
     let cls_id = get_cls_id(entity_id);
     let m = sv_cls_map;
     let sv_cls = m.get(&cls_id).unwrap();
     let indicies = get_indicies(b);
-    let mut props: SmallVec<[(i32, PropData); 1]> = SmallVec::<[(i32, PropData); 1]>::new();
-    for idx in indicies {
-        let prop = &sv_cls.props[idx as usize];
-        let pdata = b.decode(prop).unwrap();
-        if prop.name != "m_angEyeAngles[0]" || tick != 6999 {
-            continue;
-        }
-        if prop.name.len() > 4 {
-            props.push((idx, pdata));
-        }
-    }
-    Some(props)
-}
+    let mut props: Vec<SingleEntOutput> = vec![];
+    for idx in &indicies {
+        let prop = &sv_cls.props[*idx as usize];
 
-#[inline(always)]
-pub fn highest_wanted_entid(
-    entids_not_connected: &HashSet<u32>,
-    players: &HashMap<u64, UserInfo, RandomState>,
-    wanted_players: &Vec<u64>,
-) -> i32 {
-    /*
-    Returns highest wanted entity_id to be able to
-    early exit parsing packet entites after all our
-    wanted players are parsed
-    */
-    let mut highest_wanted = 0;
-    for player in players {
-        if wanted_players.contains(&player.0) {
-            let wanted_ent_id = player.1.entity_id;
-            if highest_wanted < wanted_ent_id {
-                highest_wanted = wanted_ent_id;
-            }
-            for eid in 1..wanted_ent_id {
-                if entids_not_connected.contains(&eid) {
-                    return 999999;
-                }
+        let pdata = b.decode(prop).unwrap();
+        if wanted_props.contains(&prop.name) {
+            if prop.name.len() > 4 && tick == 69 {
+                let output = SingleEntOutput {
+                    ent_id: entity_id,
+                    prop_inx: *idx,
+                    data: pdata,
+                };
+                props.push(output);
             }
         }
     }
-    if highest_wanted > 0 {
-        return highest_wanted as i32;
-    } else {
-        return 999999;
-    }
+    let after = b.reader.bits_remaining();
+    /*
+        println!(
+            "bits {} p:{} {:?}",
+            before.unwrap() - after.unwrap(),
+            p,
+            indicies
+        );
+    */
+    Some(props)
 }
 
 pub fn parse_baselines(

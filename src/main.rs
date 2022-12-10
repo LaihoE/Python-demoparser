@@ -21,71 +21,63 @@ use polars_arrow::prelude::ArrayRef;
 use protobuf;
 use protobuf::reflect::MessageDescriptor;
 use protobuf::Message;
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
+use std::fs::DirEntry;
 use std::fs::File;
 use std::time::Instant;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-pub fn max_skip_tick(game_events: &Vec<GameEvent>) -> i32 {
-    let mut biggest_needed_tick = 0;
-    for ge in game_events {
-        if ge.name == "player_connect_full" {
-            for field in &ge.fields {
-                match field.name.as_str() {
-                    "tick" => {
-                        if let Some(KeyData::Long(t)) = field.data {
-                            biggest_needed_tick = t;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    //println!("Biggest needed {}", biggest_needed_tick);
-    biggest_needed_tick
+fn parse_demo(demo_path: String) -> i32 {
+    println!("{}", demo_path);
+    let bytes = fs::read(demo_path);
+    /*
+    let now = Instant::now();
+    let props_names = vec!["m_angEyeAngles[0]".to_string()];
+    let mut parser = Parser::new(
+        demo_path,
+        true,
+        vec![],
+        vec![],
+        vec![
+            "m_angEyeAngles[0]".to_string(),
+            "m_angEyeAngles[1]".to_string(),
+        ],
+        "player_death".to_string(),
+        false,
+        false,
+        false,
+        1000000,
+        props_names.clone(),
+    )
+    .unwrap();
+
+    let h: Header = parser.parse_demo_header();
+    let mut event_names: Vec<String> = Vec::new();
+    parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
+    parser.start_parsing(&props_names);
+    */
+    69
 }
 
 fn main() {
     let now = Instant::now();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/benchmark/").unwrap();
-
-    for demo_path in paths {
-        let now = Instant::now();
-        let props_names = vec!["m_vecOrigin".to_string()];
-        println!("{:?}", demo_path.as_ref().unwrap().path());
-        let mut parser = Parser::new(
-            demo_path
-                .as_ref()
-                .unwrap()
-                .path()
-                .to_str()
-                .unwrap()
-                .to_string(),
-            true,
-            vec![],
-            vec![],
-            vec!["m_angEyeAngles[0]".to_string()],
-            "player_death".to_string(),
-            false,
-            false,
-            false,
-            1000000,
-            props_names.clone(),
-        )
+    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
+    let mut paths_v = vec![];
+    for path in paths {
+        let p = path.as_ref().unwrap().path().to_str().unwrap().to_string();
+        paths_v.push(p);
+    }
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(3)
+        .build_global()
         .unwrap();
 
-        let h: Header = parser.parse_demo_header();
-        let mut event_names: Vec<String> = Vec::new();
-        let data_a = parser.start_parsing(&props_names);
-        //break;
-        let elapsed = now.elapsed();
-        println!("Elapsed: {:.2?}", elapsed);
-    }
+    let x: Vec<i32> = paths_v.into_par_iter().map(|f| parse_demo(f)).collect();
     // 145
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 67);

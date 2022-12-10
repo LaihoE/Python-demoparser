@@ -1,8 +1,12 @@
+use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::Entity;
+use crate::parsing::entities::Prop;
 pub use crate::parsing::variants::*;
+use ahash::RandomState;
 use flate2::read::GzDecoder;
 use memmap2::MmapOptions;
 use phf::phf_map;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -40,7 +44,11 @@ pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
         Err(e) => Err(e),
         Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
             Err(e) => Err(e),
-            Ok(m) => Ok(BytesVariant::Mmap3(m)),
+            Ok(m) => {
+                m.advise(memmap2::Advice::DoFork).unwrap();
+                m.advise(memmap2::Advice::HugePage).unwrap();
+                Ok(BytesVariant::Mmap3(m))
+            }
         },
     }
 }
@@ -62,6 +70,7 @@ pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
         },
     }
 }
+
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_flNextAttack" => 1,
     "m_bDuckOverride" => 0,

@@ -17,7 +17,7 @@ flate2 = "1.0.24"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
 ndarray = "0.15.6"
-polars = "0.24.3"
+polars = { version = "0.24.3", features = ["diagonal_concat"]}
 polars-arrow = "0.24.3"
 csv = "1.1"
 phf = { version = "0.11", features = ["macros"] }
@@ -30,6 +30,8 @@ rayon = "1.6.0"
 threadpool = "1.8.1"
 dashmap = "5.4.0"
 varint-simd = "0.3.0"
+crossbeam = "0.8.2"
+crossbeam-queue = "0.3.8"
 
 [dependencies.csgoproto]
 path = "src/parsing/csgoproto"
@@ -43,3 +45,4 @@ opt-level = 3
 #lto = "fat"
 #codegen-units = 1
 panic = "abort"
+debug = true

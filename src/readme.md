@@ -1,4 +1,4 @@
-## Notes on parsing
+## Notes on DEMO files
 
 
 The parser is very bare bones. All unnecessary parts have been stripped out. 
@@ -35,6 +35,5 @@ Default values of packet entitiy props also pass trough here called "instancebas
 
 
 
-#other
-
+# other
 This means that a value at tick t might have been sent at t-1000. This is a massive save in data, but also makes parsing slightly more complicated. This means that to know what the value should be at tick 50000, we can't just parse the tick 50000, we also need to parse the ticks before. More generally the value at t = value at the latest delta. This means that in theory you could start from tick t and go backwards until you find the delta for that value. 

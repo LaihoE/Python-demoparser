@@ -1,6 +1,6 @@
+use crate::parsing::parser::JobResult;
 use crate::parsing::parser::Parser;
 use memmap2::Mmap;
-
 // Some of these could be combined
 #[derive(Debug, Clone)]
 pub enum VarVec {
@@ -31,6 +31,27 @@ pub struct PropAtom {
     pub prop_name: String,
     pub data: PropData,
     pub tick: i32,
+}
+
+impl JobResult {
+    pub fn is_stringtable(&self) -> bool {
+        match self {
+            JobResult::StringTables(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_packet_ents(&self) -> bool {
+        match self {
+            JobResult::PacketEntities(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_game_event(&self) -> bool {
+        match self {
+            JobResult::GameEvents(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[inline(always)]

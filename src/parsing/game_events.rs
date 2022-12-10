@@ -13,6 +13,8 @@ use memmap2::Mmap;
 use protobuf::Message;
 use pyo3::prelude::*;
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 fn parse_key(key: &Key_t) -> Option<KeyData> {
     match key.type_() {
@@ -141,13 +143,20 @@ impl Parser {
         JobResult::GameEvents(game_events)
     }
 
-    pub fn parse_game_event_map(&mut self, blueprint: &MsgBluePrint) {
-        let wanted_bytes = &self.bytes[blueprint.start_idx..blueprint.end_idx];
+    pub fn parse_game_event_map(
+        mmap: &Mmap,
+        blueprint: &MsgBluePrint,
+        parser_maps: Arc<RwLock<ParsingMaps>>,
+    ) -> JobResult {
+        let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
         let msg: CSVCMsg_GameEventList = Message::parse_from_bytes(wanted_bytes).unwrap();
         let mut hm: HashMap<i32, Descriptor_t, RandomState> = HashMap::default();
         for event_desc in msg.descriptors {
             hm.insert(event_desc.eventid(), event_desc);
         }
-        self.maps.event_map = Some(hm);
+        let mut parser_maps_write = parser_maps.write().unwrap();
+        let event_map = &mut parser_maps_write.event_map;
+        *event_map = Some(hm);
+        JobResult::None
     }
 }

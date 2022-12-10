@@ -1,3 +1,4 @@
+use super::entities::PacketEntsOutput;
 use super::game_events::GameEvent;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::parse_packet_entities;
@@ -6,29 +7,21 @@ use crate::parsing::parser_settings::*;
 use crate::parsing::read_bytes::ByteReader;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
-use crate::parsing::utils::check_round_change;
-use crate::parsing::utils::read_file;
-use crate::parsing::utils::TYPEHM;
-use crate::parsing::variants::BytesVariant::Mmap3;
 pub use crate::parsing::variants::*;
 use ahash::RandomState;
+use core::time::Duration;
+use crossbeam_queue::ArrayQueue;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
-use csgoproto::netmessages::*;
-use dashmap::DashMap;
 use memmap2::Mmap;
-use mimalloc::MiMalloc;
-use protobuf;
-use protobuf::Message;
+use pyo3::pyclass::boolean_struct::False;
 use rayon::prelude::*;
-use smallvec::SmallVec;
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::slice;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::thread;
 use std::time::Instant;
 use std::u8;
-use threadpool::ThreadPool;
 
 pub struct Parser {
     pub maps: Maps,
@@ -37,6 +30,7 @@ pub struct Parser {
     pub bytes: Arc<Mmap>,
     // General purpose int vec, for perf reasons
     pub tasks: Vec<MsgBluePrint>,
+    pub players: Vec<UserInfo>,
 }
 #[derive(Debug, Clone)]
 pub struct MsgBluePrint {
@@ -47,55 +41,252 @@ pub struct MsgBluePrint {
 }
 #[derive(Debug)]
 pub enum JobResult {
-    PacketEntities(Option<Vec<SmallVec<[(i32, PropData); 1]>>>),
+    PacketEntities(Option<PacketEntsOutput>),
     GameEvents(Vec<GameEvent>),
     StringTables(Vec<UserInfo>),
+    DataTable(HashMap<u16, ServerClass, RandomState>),
     None,
 }
-impl JobResult {
-    pub fn is_stringtable(&self) -> bool {
-        match self {
-            JobResult::StringTables(_) => true,
-            _ => false,
-        }
-    }
+#[derive(Debug)]
+pub enum CmdResult {
+    BluePrints(Vec<MsgBluePrint>),
+    DataTable(JobResult),
 }
 
-/*
-FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
-             -> DATATABLE                  --> Game events
-             -> ...(not used)              --> Stringtables
-*/
+pub struct ParsingMaps {
+    pub serverclass_map: Option<HashMap<u16, ServerClass, RandomState>>,
+    pub event_map: Option<HashMap<i32, Descriptor_t, RandomState>>,
+}
 
 impl Parser {
     pub fn start_parsing(&mut self, props_names: &Vec<String>) {
-        let mut byte_reader = ByteReader::new(self.bytes.clone());
+        let q: Arc<ArrayQueue<Vec<Option<CmdResult>>>> = Arc::new(ArrayQueue::new(10000));
+        let parsing_maps = Arc::new(RwLock::new(ParsingMaps {
+            serverclass_map: None,
+            event_map: None,
+        }));
 
-        while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
-            let (cmd, tick) = byte_reader.read_frame();
-            self.state.tick = tick;
-            self.parse_cmd(cmd, &mut byte_reader);
+        let io_threads = 3;
+        let cpu_threads = 4;
+
+        let mut io_done = Arc::new(AtomicBool::new(false));
+
+        let io_handles = self.start_io_threads(q.clone(), parsing_maps.clone(), io_threads);
+        let parser_handles = self.start_parser_thread_main(
+            q.clone(),
+            parsing_maps.clone(),
+            io_done.clone(),
+            cpu_threads,
+        );
+        let before = Instant::now();
+        let mut final_data = Vec::with_capacity(500000);
+
+        for io_handle in io_handles {
+            let t = io_handle.0.join().unwrap();
         }
-        self.compute_jobs();
+        io_done.store(true, Ordering::Relaxed);
+
+        let mut cnt = 0;
+        for parser_handle in parser_handles {
+            let data = parser_handle.join().unwrap();
+            final_data.extend(data);
+            cnt += 1;
+        }
+        //self.get_raw_df(&final_data, parsing_maps.clone());
+    }
+
+    pub fn start_io_threads(
+        &mut self,
+        q: Arc<ArrayQueue<Vec<Option<CmdResult>>>>,
+        parsing_maps: Arc<RwLock<ParsingMaps>>,
+        io_threads: i32,
+    ) -> Vec<(thread::JoinHandle<i32>, (usize, usize))> {
+        // Referred to as IOthreads but actually do some minimal parsing too.
+
+        // Setup byte Readers
+        let starting_bytes = Parser::split_file_evenly(io_threads, self.bytes.clone());
+
+        let mut handles = vec![];
+        for start_end in starting_bytes {
+            let before = Instant::now();
+
+            let msg_q = q.clone();
+            let my_maps = parsing_maps.clone();
+            let my_mmap = self.bytes.clone();
+            let handle =
+                thread::spawn(move || Parser::parse_messages(my_mmap, msg_q, my_maps, start_end));
+            handles.push((handle, start_end));
+        }
+        handles
+    }
+    pub fn start_parser_thread_main(
+        &mut self,
+        q: Arc<ArrayQueue<Vec<Option<CmdResult>>>>,
+        parsing_maps: Arc<RwLock<ParsingMaps>>,
+        io_done: Arc<AtomicBool>,
+        cpu_threads: i32,
+    ) -> Vec<thread::JoinHandle<Vec<JobResult>>> {
+        let mut handles = vec![];
+        for thread in 0..cpu_threads {
+            let mmap = self.bytes.clone();
+            let msg_q = q.clone();
+            let my_maps = parsing_maps.clone();
+            let my_io_done = io_done.clone();
+            let wanted_props = self.settings.wanted_props.clone();
+            let handle = thread::spawn(move || {
+                Parser::start_parser_thread(msg_q, mmap, my_maps, &wanted_props, my_io_done)
+            });
+
+            handles.push(handle);
+        }
+        handles
+    }
+
+    pub fn start_parser_thread(
+        msg_q: Arc<ArrayQueue<Vec<Option<CmdResult>>>>,
+        mmap: Arc<Mmap>,
+        parsing_maps: Arc<RwLock<ParsingMaps>>,
+        wanted_props: &Vec<String>,
+        io_done: Arc<AtomicBool>,
+    ) -> Vec<JobResult> {
+        let before = Instant::now();
+        let serverclass_map = Parser::wait_for_map(parsing_maps.clone());
+        let mut threads_data = Vec::with_capacity(50000);
+        loop {
+            // println!("{}", msg_q.len());
+            if msg_q.len() == 0 && io_done.load(Ordering::Relaxed) == true {
+                break;
+            }
+
+            let cmd_results = msg_q.pop();
+            match cmd_results {
+                Some(cmd_res) => {
+                    for cmd_result in cmd_res {
+                        match cmd_result {
+                            Some(CmdResult::BluePrints(blueprints)) => {
+                                for blueprint in blueprints {
+                                    let data = Parser::msg_handler(
+                                        &blueprint,
+                                        &mmap,
+                                        &serverclass_map,
+                                        wanted_props,
+                                        parsing_maps.clone(),
+                                    );
+                                    threads_data.push(data);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                None => {}
+            }
+        }
+        //println!("{}", threads_data.len());
+        return threads_data;
+    }
+
+    pub fn parse_messages(
+        mmap: Arc<Mmap>,
+        q: Arc<ArrayQueue<Vec<Option<CmdResult>>>>,
+        parsing_maps: Arc<RwLock<ParsingMaps>>,
+        start_end: (usize, usize),
+    ) -> i32 {
+        let (start_idx, end_idx) = start_end;
+        let before = Instant::now();
+        let mut byte_reader = Parser::find_beginning(mmap, start_idx, end_idx).unwrap();
+
+        while byte_reader.byte_idx < byte_reader.max_byte as usize {
+            let mut result: Vec<Option<CmdResult>> = Vec::with_capacity(8192);
+            // || byte_reader.byte_idx > byte_reader.max_byte as usize
+            while result.len() < 8192 && byte_reader.byte_idx < byte_reader.max_byte as usize {
+                let (cmd, tick) = byte_reader.read_frame();
+                let res = Parser::parse_cmd(cmd, &mut byte_reader, tick, parsing_maps.clone());
+                result.push(res);
+            }
+            q.push(result).unwrap();
+        }
+        69
+    }
+    pub fn split_file_evenly(n_threads: i32, mmap: Arc<Mmap>) -> Vec<(usize, usize)> {
+        let max_len = mmap.len();
+        let chunk_size = (max_len / n_threads as usize) as i32;
+        let mut byte_indicies = vec![];
+
+        for i in 1..n_threads {
+            let start_byte = (i * chunk_size) as usize;
+            let mut end_byte = (i * chunk_size + chunk_size) as usize;
+            if end_byte > max_len {
+                end_byte = max_len
+            }
+            byte_indicies.push((start_byte, end_byte));
+        }
+        byte_indicies.push((1072, 150000));
+        // byte_indicies.push((150000, ((chunk_size / 2) as usize)));
+        // byte_indicies.push(((chunk_size / 2) as usize, (chunk_size as usize)));
+        byte_indicies
+    }
+
+    pub fn find_beginning(mmap: Arc<Mmap>, start_idx: usize, end_idx: usize) -> Option<ByteReader> {
+        if start_idx == 1072 {
+            return Some(ByteReader::new(mmap.clone(), 1072, 10346698));
+        }
+        // Jump into middle of the file and figure out where we are in the parsing
+        let mut zeros_in_a_row = 0;
+        let mut zeros_started_at = 0;
+        let mut cur_idx = start_idx;
+        for b in &mmap[start_idx..] {
+            if b == &0 {
+                if zeros_in_a_row == 0 {
+                    zeros_started_at = cur_idx;
+                }
+                zeros_in_a_row += 1;
+            } else {
+                // 😎 no magic tricks here, move on
+                if ((zeros_in_a_row == 154) && (&mmap[cur_idx - 158] == &2))
+                    || (zeros_in_a_row == 156) && (&mmap[cur_idx - 158] == &2)
+                {
+                    //println!("zeroloop: {} ({start_idx}, {cur_idx})", cur_idx - start_idx,);
+                    return Some(ByteReader::new(mmap.clone(), cur_idx - 158, end_idx));
+                }
+                zeros_in_a_row = 0;
+            }
+            cur_idx += 1;
+        }
+        None
     }
 
     #[inline(always)]
-    pub fn parse_cmd(&mut self, cmd: u8, byte_reader: &mut ByteReader) {
+    pub fn parse_cmd(
+        cmd: u8,
+        byte_reader: &mut ByteReader,
+        tick: i32,
+        parsing_maps: Arc<RwLock<ParsingMaps>>,
+    ) -> Option<CmdResult> {
         match cmd {
-            1 => self.parse_packet(byte_reader),
-            2 => self.parse_packet(byte_reader),
-            6 => self.parse_datatable(byte_reader),
-            _ => {}
+            1 => Some(CmdResult::BluePrints(Parser::parse_packet(
+                byte_reader,
+                tick,
+            ))),
+            2 => Some(CmdResult::BluePrints(Parser::parse_packet(
+                byte_reader,
+                tick,
+            ))),
+            6 => Some(CmdResult::DataTable(Parser::parse_datatable(
+                byte_reader,
+                parsing_maps.clone(),
+            ))),
+            _ => None,
         }
     }
 
     #[inline(always)]
-    pub fn parse_packet(&mut self, byte_reader: &mut ByteReader) {
+    pub fn parse_packet(byte_reader: &mut ByteReader, tick: i32) -> Vec<MsgBluePrint> {
         byte_reader.byte_idx += 160;
         let packet_len = byte_reader.read_i32();
-        let goal_inx = byte_reader.byte_idx + packet_len as usize;
-
-        while byte_reader.byte_idx < goal_inx {
+        let packet_last_byte = byte_reader.byte_idx + packet_len as usize;
+        let mut tasks = vec![];
+        while byte_reader.byte_idx < packet_last_byte {
             let msg = byte_reader.read_varint();
             let size = byte_reader.read_varint();
             // Get byte boundaries for this msg
@@ -107,51 +298,44 @@ impl Parser {
                 msg: msg,
                 start_idx: before_inx,
                 end_idx: after_inx,
-                tick: self.state.tick,
+                tick: tick,
             };
-            self.tasks.push(msg_blueprint);
+            tasks.push(msg_blueprint)
         }
+        tasks
     }
-    pub fn compute_jobs(&mut self) {
-        let tasks = self.tasks.clone();
-        // Special msg that is needed for parsing game events.
-        // Event comes one time per demo sometime in the beginning
-        for task in &tasks {
-            if task.msg == 30 {
-                self.parse_game_event_map(task);
-            }
-            if task.msg == 12 {
-                let new_players = self.create_string_table(task);
-            }
-        }
-        let results: Vec<JobResult> = tasks
-            .into_par_iter()
-            .map(|t| {
-                Parser::msg_handler(
-                    &t,
-                    &self.bytes,
-                    &self.maps.serverclass_map,
-                    &self.maps.event_map.as_ref().unwrap(),
-                    &self.state.stringtables,
-                )
-            })
-            .collect();
-        let sts: Vec<JobResult> = results.into_iter().filter(|x| x.is_stringtable()).collect();
-        println!("{:?}", sts);
-    }
+
     pub fn msg_handler(
         blueprint: &MsgBluePrint,
         bytes: &Mmap,
         serverclass_map: &HashMap<u16, ServerClass, RandomState>,
-        game_events_map: &HashMap<i32, Descriptor_t, RandomState>,
-        stringtables: &Vec<StringTable>,
+        //game_events_map: &HashMap<i32, Descriptor_t, RandomState>,
+        wanted_props: &Vec<String>,
+        parser_maps: Arc<RwLock<ParsingMaps>>,
     ) -> JobResult {
         let wanted_event = "player_blind";
         match blueprint.msg {
-            26 => parse_packet_entities(blueprint, bytes, serverclass_map),
-            25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
-            13 => Parser::update_string_table_msg(blueprint, bytes, stringtables),
+            //30 => Parser::parse_game_event_map(bytes, blueprint, parser_maps),
+            26 => parse_packet_entities(blueprint, bytes, serverclass_map, wanted_props),
+            //25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
+            //13 => Parser::update_string_table_msg(blueprint, bytes),
             _ => JobResult::None,
+        }
+    }
+    pub fn wait_for_map(
+        parsing_maps: Arc<RwLock<ParsingMaps>>,
+    ) -> HashMap<u16, ServerClass, RandomState> {
+        loop {
+            let parsing_maps_read = parsing_maps.read().unwrap();
+            if parsing_maps_read.serverclass_map.is_some() {
+                let scr = parsing_maps_read.serverclass_map.as_ref().unwrap();
+                let c = scr.clone();
+                drop(scr);
+                return c;
+            } else {
+                let ten_millis = Duration::from_micros(10);
+                thread::sleep(ten_millis);
+            };
         }
     }
 }

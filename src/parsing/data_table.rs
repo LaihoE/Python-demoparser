@@ -1,16 +1,22 @@
+use super::parser::JobResult;
+use super::parser::ParsingMaps;
+use super::read_bytes::ByteReader;
 use crate::parsing::entities::parse_baselines;
 use crate::parsing::entities::Prop;
 use crate::parsing::parser::Parser;
+use ahash::HashMap;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_SendTable;
 use protobuf;
 use protobuf::Message;
 use smallvec::{smallvec, SmallVec};
 use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::RwLock;
+use std::time::Instant;
 use std::vec;
 
-use super::read_bytes::ByteReader;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ServerClass {
     pub id: u16,
     pub dt: String,
@@ -18,49 +24,53 @@ pub struct ServerClass {
 }
 
 impl Parser {
-    pub fn parse_datatable(&mut self, byte_reader: &mut ByteReader) {
+    pub fn parse_datatable(
+        byte_reader: &mut ByteReader,
+        parsing_maps: Arc<RwLock<ParsingMaps>>,
+    ) -> JobResult {
         /*
         Parse datatables. These are the tables that entities refer to for values. If this fails then gg?
         */
-        let _ = byte_reader.read_i32();
+        let before = Instant::now();
 
+        let mut dt_map: HashMap<String, CSVCMsg_SendTable> = HashMap::default();
+        let skipbytes = byte_reader.read_i32();
+        //byte_reader.skip_n_bytes(skipbytes as u32);
+        //return JobResult::None;
         loop {
             let _ = byte_reader.read_varint();
             let size = byte_reader.read_varint();
             let data = byte_reader.read_n_bytes(size);
-
             let table: Result<CSVCMsg_SendTable, protobuf::Error> = Message::parse_from_bytes(data);
+
             match table {
                 Ok(table) => {
                     if table.is_end() {
                         break;
                     }
-
-                    self.maps.dt_map.as_mut().unwrap().insert(
+                    dt_map.insert(
                         table.net_table_name.as_ref().unwrap().to_string(),
                         table.clone(),
                     );
                 }
                 Err(e) => {
-                    panic!(
-                        "Failed to parse datatable at tick {}. Error: {}",
-                        self.state.tick, e
-                    )
+                    panic!("Failed to parse datatable. Error: {}", e)
                 }
             }
         }
-
+        let mut maps: HashMap<u16, ServerClass> = HashMap::default();
         let class_count = byte_reader.read_short();
         for _ in 0..class_count {
             let id = byte_reader.read_short();
             let _ = byte_reader.read_string();
             let dt = byte_reader.read_string();
             if id == 275 || id == 40 {
-                let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
+                let props = Parser::flatten_dt(&dt_map[&dt], dt.clone(), &dt_map);
                 let server_class = ServerClass { id, dt, props };
                 // Set baselines parsed earlier in stringtables.
                 // Happens when stringtable, with instancebaseline, comes
                 // before this event. Seems oddly complicated
+                /*
                 match self.maps.baseline_no_cls.get(&(id as u32)) {
                     Some(user_data) => {
                         parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
@@ -69,11 +79,21 @@ impl Parser {
                     }
                     None => {}
                 }
-                self.maps.serverclass_map.insert(id, server_class);
+                */
+                maps.insert(id, server_class);
             }
         }
+        let mut parsing_map_write = parsing_maps.write().unwrap();
+        parsing_map_write.serverclass_map = Some(maps.clone());
+        drop(parsing_map_write);
+
+        println!("{:2?}", before.elapsed());
+        JobResult::DataTable(maps)
     }
-    pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 32]> {
+    pub fn get_excl_props(
+        table: &CSVCMsg_SendTable,
+        dt_map: &HashMap<String, CSVCMsg_SendTable>,
+    ) -> SmallVec<[Sendprop_t; 32]> {
         let mut excl: SmallVec<[Sendprop_t; 32]> = smallvec![];
 
         for prop in &table.props {
@@ -82,16 +102,20 @@ impl Parser {
             }
 
             if prop.type_() == 6 {
-                let sub_table = &self.maps.dt_map.as_ref().unwrap()[prop.dt_name()];
-                excl.extend(self.get_excl_props(&sub_table.clone()));
+                let sub_table = &dt_map[prop.dt_name()];
+                excl.extend(Parser::get_excl_props(&sub_table.clone(), dt_map));
             }
         }
         excl
     }
 
-    pub fn flatten_dt(&self, table: &CSVCMsg_SendTable, table_id: String) -> Vec<Prop> {
-        let excl = self.get_excl_props(table);
-        let mut newp = self.get_props(table, table_id, &excl);
+    pub fn flatten_dt(
+        table: &CSVCMsg_SendTable,
+        table_id: String,
+        dt_map: &HashMap<String, CSVCMsg_SendTable>,
+    ) -> Vec<Prop> {
+        let excl = Parser::get_excl_props(table, dt_map);
+        let mut newp = Parser::get_props(table, table_id, &excl, dt_map);
         let mut prios = vec![];
         for p in &newp {
             prios.push(p.priority);
@@ -127,10 +151,10 @@ impl Parser {
 
     #[inline]
     pub fn is_prop_excl(
-        &self,
         excl: &SmallVec<[Sendprop_t; 32]>,
         table: &CSVCMsg_SendTable,
         prop: &Sendprop_t,
+        dt_map: &HashMap<String, CSVCMsg_SendTable>,
     ) -> bool {
         /*
         excl is very short so O(n) probably best/fine
@@ -144,10 +168,10 @@ impl Parser {
     }
 
     pub fn get_props(
-        &self,
         table: &CSVCMsg_SendTable,
         table_name: String,
         excl: &SmallVec<[Sendprop_t; 32]>,
+        dt_map: &HashMap<String, CSVCMsg_SendTable>,
     ) -> Vec<Prop> {
         let mut flat: Vec<Prop> = Vec::new();
         let mut cnt = 0;
@@ -155,13 +179,14 @@ impl Parser {
         for prop in &table.props {
             if (prop.flags() & (1 << 8) != 0)
                 || (prop.flags() & (1 << 6) != 0)
-                || self.is_prop_excl(excl, &table, prop)
+                || Parser::is_prop_excl(excl, &table, prop, dt_map)
             {
                 continue;
             }
             if prop.type_() == 6 {
-                let sub_table = &self.maps.dt_map.as_ref().unwrap()[&prop.dt_name().to_string()];
-                let child_props = self.get_props(sub_table, prop.dt_name().to_string(), excl);
+                let sub_table = &dt_map[&prop.dt_name().to_string()];
+                let child_props =
+                    Parser::get_props(sub_table, prop.dt_name().to_string(), excl, dt_map);
 
                 if (prop.flags() & (1 << 11)) == 0 {
                     for mut p in child_props {

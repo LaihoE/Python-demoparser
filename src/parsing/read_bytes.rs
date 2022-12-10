@@ -2,17 +2,19 @@ use crate::parsing::parser::Parser;
 use memmap2::Mmap;
 use std::sync::Arc;
 use varint_simd::{decode, decode_two_unsafe, encode, encode_zigzag};
-
+#[derive(Debug)]
 pub struct ByteReader {
     pub bytes: Arc<Mmap>,
     pub byte_idx: usize,
+    pub max_byte: usize,
 }
 
 impl ByteReader {
-    pub fn new(bytes: Arc<Mmap>) -> Self {
+    pub fn new(bytes: Arc<Mmap>, start_idx: usize, end_idx: usize) -> Self {
         ByteReader {
             bytes: bytes,
-            byte_idx: 1072,
+            byte_idx: start_idx,
+            max_byte: end_idx,
         }
     }
 
@@ -90,7 +92,8 @@ impl ByteReader {
     pub fn read_frame(&mut self) -> (u8, i32) {
         let cmd = self.read_byte();
         let tick = self.read_i32();
-        self.skip_n_bytes(1);
+        let extra = self.read_byte();
+        //println!("CMD {} TICK {} EXTRA {}", cmd, tick, extra);
         (cmd, tick)
     }
     #[inline(always)]

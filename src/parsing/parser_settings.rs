@@ -125,6 +125,7 @@ impl Parser {
                         bytes: Arc::new(m),
                         state: state,
                         tasks: Vec::with_capacity(100000),
+                        players: vec![],
                     }),
                     BytesVariant::Vec(_) => panic!("vec"),
                 }

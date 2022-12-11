@@ -72,12 +72,12 @@ fn main() {
         let p = path.as_ref().unwrap().path().to_str().unwrap().to_string();
         paths_v.push(p);
     }
-    /*
+
     rayon::ThreadPoolBuilder::new()
-        .num_threads(69)
+        .num_threads(6)
         .build_global()
         .unwrap();
-    */
+
     let this_p = &paths_v[0];
     let single = vec![this_p];
     let x: Vec<i32> = paths_v

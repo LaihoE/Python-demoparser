@@ -59,6 +59,7 @@ pub fn parse_packet_entities(
     sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
     wanted_props: &Vec<String>,
 ) -> JobResult {
+    return JobResult::None;
     let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
     let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
     let outputs = Parser::_parse_packet_entities(msg, sv_cls_map, blueprint.tick, wanted_props);

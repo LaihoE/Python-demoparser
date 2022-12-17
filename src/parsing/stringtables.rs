@@ -96,8 +96,8 @@ impl Parser {
         ui
     }
 
-    pub fn create_string_table(&mut self, blueprint: &MsgBluePrint) -> Vec<UserInfo> {
-        let wanted_bytes = &self.bytes[blueprint.start_idx..blueprint.end_idx];
+    pub fn create_string_table(blueprint: &MsgBluePrint, bytes: &Mmap) -> JobResult {
+        let wanted_bytes = &bytes[blueprint.start_idx..blueprint.end_idx];
         let data: CSVCMsg_CreateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
 
         let mut st = StringTable {
@@ -108,7 +108,17 @@ impl Parser {
             uds: data.user_data_size(),
             data: Vec::new(),
         };
-        if st.name == "userinfo" || st.name == "instancebaseline" {
+        //  || st.name == "instancebaseline"
+        if st.name == "userinfo" {
+            let mut st = StringTable {
+                userinfo: true,
+                name: "userinfo".to_string(),
+                max_entries: 256,
+                uds: 0,
+                udfs: false,
+                data: vec![],
+            };
+
             for _ in 1..50000 {
                 st.data.push(StField {
                     entry: "".to_string(),
@@ -122,13 +132,12 @@ impl Parser {
                 data.user_data_fixed_size(),
                 blueprint.tick,
             );
-            self.state.stringtables.push(st);
             if new_players.is_some() {
                 let new_players = new_players.unwrap();
-                self.players.extend(new_players);
+                return JobResult::StringTables(new_players);
             }
         }
-        vec![]
+        JobResult::None
     }
 
     pub fn update_string_table(

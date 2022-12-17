@@ -29,10 +29,36 @@ Default values of packet entitiy props also pass trough here called "instancebas
 ### DEMO FORMAT
 
 
+### How the parser handles deltas
+Normally what you do is create internal objects for entities and lookup their values each tick, but the parser handles this differently.
 
 
+Parsing the data first creates a dataframe with all wanted ticks and
+inserts all updates that the demo had like so:
 
+| Tick  | X    | Y    |
+| :---: | :--- | :--- |
+|   1   | 44   | 22   |
+|   2   | None | 22   |
+|   3   | None | None |
+|   4   | 58   | None |
+|   5   | 58   | 35   |
+|   6   | 59   | None |
 
+None here means that the value was not updated during that tick (stayed the same).
+
+And after that we fill the none values with the most recent value:
+
+| Tick  | X    | Y    |
+| :---: | :--- | :--- |
+|   1   | 44   | 22   |
+|   2   | 44   | 22   |
+|   3   | 44   | 22   |
+|   4   | 58   | 22   |
+|   5   | 58   | 35   |
+|   6   | 59   | 35   |
+
+This design is way more efficient. Hardware really likes this type of data. 
 
 
 # other

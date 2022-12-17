@@ -129,10 +129,8 @@ impl Parser {
         let msg: CSVCMsg_GameEvent = Message::parse_from_bytes(wanted_bytes).unwrap();
         let mut game_events: Vec<GameEvent> = Vec::new();
         let event_desc = &game_events_map[&msg.eventid()];
-
         if event_desc.name() == wanted_event {
             let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.tick);
-
             game_events.push({
                 GameEvent {
                     name: event_desc.name().to_owned(),

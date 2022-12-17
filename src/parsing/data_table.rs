@@ -11,6 +11,7 @@ use protobuf;
 use protobuf::Message;
 use smallvec::{smallvec, SmallVec};
 use std::collections::HashSet;
+use std::default;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Instant;
@@ -21,6 +22,11 @@ pub struct ServerClass {
     pub id: u16,
     pub dt: String,
     pub props: Vec<Prop>,
+}
+#[derive(Debug, Clone)]
+pub struct ServerClasses {
+    pub player: ServerClass,
+    pub world: ServerClass,
 }
 
 impl Parser {
@@ -58,37 +64,41 @@ impl Parser {
                 }
             }
         }
-        let mut maps: HashMap<u16, ServerClass> = HashMap::default();
         let class_count = byte_reader.read_short();
+        let mut player: Option<ServerClass> = None;
+        let mut world: Option<ServerClass> = None;
+
         for _ in 0..class_count {
             let id = byte_reader.read_short();
             let _ = byte_reader.read_string();
             let dt = byte_reader.read_string();
-            if id == 275 || id == 40 {
-                let props = Parser::flatten_dt(&dt_map[&dt], dt.clone(), &dt_map);
-                let server_class = ServerClass { id, dt, props };
-                // Set baselines parsed earlier in stringtables.
-                // Happens when stringtable, with instancebaseline, comes
-                // before this event. Seems oddly complicated
-                /*
-                match self.maps.baseline_no_cls.get(&(id as u32)) {
-                    Some(user_data) => {
-                        parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
-                        // Remove after being parsed
-                        self.maps.baseline_no_cls.remove(&(id as u32));
-                    }
-                    None => {}
+
+            match id {
+                275 => {
+                    let props = Parser::flatten_dt(&dt_map[&dt], dt.clone(), &dt_map);
+                    let server_class = ServerClass { id, dt, props };
+                    world = Some(server_class);
                 }
-                */
-                maps.insert(id, server_class);
+                40 => {
+                    let props = Parser::flatten_dt(&dt_map[&dt], dt.clone(), &dt_map);
+                    let server_class = ServerClass { id, dt, props };
+                    player = Some(server_class)
+                }
+                _ => {}
             }
         }
-        let mut parsing_map_write = parsing_maps.write().unwrap();
-        parsing_map_write.serverclass_map = Some(maps.clone());
-        drop(parsing_map_write);
-
-        println!("{:2?}", before.elapsed());
-        JobResult::DataTable(maps)
+        if player.is_some() && world.is_some() {
+            let svcs = ServerClasses {
+                player: player.unwrap(),
+                world: world.unwrap(),
+            };
+            let mut parsing_map_write = parsing_maps.write().unwrap();
+            parsing_map_write.serverclass_map = Some(svcs);
+            drop(parsing_map_write);
+            JobResult::None
+        } else {
+            panic!("FAILED TO CREATE SERVERCLASS MAP")
+        }
     }
     pub fn get_excl_props(
         table: &CSVCMsg_SendTable,

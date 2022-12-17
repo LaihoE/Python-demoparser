@@ -1,27 +1,34 @@
+use super::data_table::ServerClasses;
+use super::entities::PacketEntsOutput;
+use super::game_events::GameEvent;
+use super::stringtables::StringTable;
+use super::stringtables::UserInfo;
+use crate::parsing::columnmapper::EntColMapper;
 use crate::parsing::data_table::ServerClass;
+use crate::parsing::game_events;
 use crate::parsing::parser::JobResult;
 use crate::parsing::parser::ParsingMaps;
 pub use crate::parsing::variants::*;
 use crate::Parser;
 use ahash::HashMap;
+use ahash::HashSet;
+use polars::frame::DataFrame;
+use polars::prelude::*;
+use polars::series::Series;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Instant;
 
-use super::entities::PacketEntsOutput;
-
 // Todo entid when disconnected
-fn eid_sid_stack(eid: u32, max_ticks: i32, players: &HashMap<u32, Vec<(u64, i32)>>) -> Vec<u64> {
-    /*
-        let mut eids: HashMap<u32, Vec<(u64, i32)>> = HashMap::default();
-        for player in players {
-            //println!("({} {} {})", player.name, player.entity_id, player.tick);
-            eids.entry(player.entity_id)
-                .or_insert(vec![])
-                .push((player.xuid, player.tick));
-        }
-    */
-    let steamids = match players.get(&eid) {
+fn eid_sid_stack(eid: u32, max_ticks: i32, players: &Vec<&UserInfo>) -> Vec<u64> {
+    let mut eids: HashMap<u32, Vec<(u64, i32)>> = HashMap::default();
+    for player in players {
+        eids.entry(player.entity_id)
+            .or_insert(vec![])
+            .push((player.xuid, player.tick));
+    }
+
+    let steamids = match eids.get(&eid) {
         None => return vec![0; max_ticks as usize],
         Some(steamids) => steamids,
     };
@@ -47,19 +54,34 @@ fn eid_sid_stack(eid: u32, max_ticks: i32, players: &HashMap<u32, Vec<(u64, i32)
     ticks
 }
 
-pub fn filter_entity_messages(jobs: &Vec<JobResult>) -> Vec<&PacketEntsOutput> {
-    let mut data = vec![];
+pub fn filter_jobresults(
+    jobs: &Vec<JobResult>,
+) -> (Vec<&PacketEntsOutput>, Vec<&GameEvent>, Vec<&UserInfo>) {
+    /*
+    Groups jobresults by their type
+    */
+    let before = Instant::now();
+    let mut packet_ents = vec![];
+    let mut game_events = vec![];
+    let mut stringtables = vec![];
 
     for j in jobs {
         match j {
             JobResult::PacketEntities(p) => match p {
-                Some(p) => data.push(p),
+                Some(p) => packet_ents.push(p),
                 None => {}
             },
+            JobResult::GameEvents(ge) => {
+                game_events.extend(ge);
+            }
+            JobResult::StringTables(st) => {
+                stringtables.extend(st);
+            }
             _ => {}
         }
     }
-    data
+    println!("FILTERING TOOK: {:2?}", before.elapsed());
+    (packet_ents, game_events, stringtables)
 }
 
 impl Parser {
@@ -68,25 +90,28 @@ impl Parser {
         packet_ents: Vec<&PacketEntsOutput>,
         max_ticks: usize,
         int_props: &Vec<i32>,
-    ) -> Vec<Vec<Vec<std::option::Option<f32>>>> {
-        // Allocate the BIG outgoing DF
-        let mut df = vec![vec![vec![None; max_ticks]; 3]; 3];
+        df: &mut Vec<Option<f32>>,
+        ecm: &EntColMapper,
+    ) {
         // Map prop idx into its column.
         let col_mapping = create_idx_col_mapping(&int_props);
         // For every packetEnt message during game
         for packet_ent_msg in packet_ents {
             // For every entity in the message
             for single_ent in &packet_ent_msg.data {
-                // For every updated value in the entity
+                // For every updated value for the entity
                 for prop in single_ent {
                     match prop.data {
                         PropData::F32(f) => {
-                            let col_idx = col_mapping[&prop.prop_inx];
-                            df[col_idx][(0 as usize)][packet_ent_msg.tick as usize] = Some(f);
+                            let prop_col = col_mapping[&prop.prop_inx];
+                            let player_col = ecm.get_col(prop.ent_id as u32, packet_ent_msg.tick);
+                            df[prop_col * player_col * (packet_ent_msg.tick / 2) as usize] =
+                                Some(f as f32);
                         }
                         PropData::I32(i) => {
-                            let col_idx = col_mapping[&prop.prop_inx];
-                            df[col_idx][(0 as usize)][packet_ent_msg.tick as usize] =
+                            let prop_col = col_mapping[&prop.prop_inx];
+                            let player_col = ecm.get_col(prop.ent_id as u32, packet_ent_msg.tick);
+                            df[prop_col * player_col * (packet_ent_msg.tick / 2) as usize] =
                                 Some(i as f32);
                         }
                         // Todo string columns
@@ -95,62 +120,68 @@ impl Parser {
                 }
             }
         }
-        df
     }
 
-    pub fn get_raw_df(&mut self, jobs: &Vec<JobResult>, parser_maps: Arc<RwLock<ParsingMaps>>) {
+    pub fn get_raw_df(
+        &mut self,
+        jobs: &Vec<JobResult>,
+        parser_maps: Arc<RwLock<ParsingMaps>>,
+        df: &mut Vec<Option<f32>>,
+        max_ticks: usize,
+    ) -> Vec<Series> {
         let before = Instant::now();
+        // Group jobs by type
+        let (packet_ents, game_events, stringtables) = filter_jobresults(jobs);
 
-        let max_ticks = self.settings.playback_frames;
+        let ecm = EntColMapper::new(&stringtables);
+
+        //let ent_mapping = ent_col_mapping(&stringtables);
+
         let ticks: Vec<i32> = (0..max_ticks).into_iter().map(|t| t as i32).collect();
-
-        //let svc_map = parser_maps.read().unwrap().serverclass_map.unwrap();
-
         let int_props = str_props_to_int_props(&self.settings.wanted_props, parser_maps.clone());
-
         let str_names = col_str_mapping(&int_props, parser_maps.clone());
 
-        let packet_ents = filter_entity_messages(jobs);
-        let mut df = self.insert_props_into_df(packet_ents, max_ticks, &int_props);
+        self.insert_props_into_df(packet_ents, max_ticks, &int_props, df, &ecm);
 
-        use polars::frame::DataFrame;
-        let mut dfs = vec![];
-        for entid in 0..3 {
-            let mut serieses = vec![];
-            let entity_id_vec = vec![entid as i32; max_ticks];
+        let mut series_players = vec![];
+        let mut ticks_col: Vec<i32> = vec![];
+        let mut steamids_col: Vec<u64> = vec![];
 
-            //let sids = eid_sid_stack(entid as u32, max_ticks as i32, &eids);
-            //let s = Series::new("steamid", &sids);
-            //serieses.push(s);
+        for (propcol, prop_name) in str_names.iter().enumerate() {
+            let mut this_prop_col: Vec<Option<f32>> = Vec::with_capacity(10 * max_ticks);
 
-            let s = Series::new("tick", &ticks);
-            serieses.push(s);
-            for (propcol, prop_name) in str_names.iter().enumerate() {
-                fill_none_with_most_recent(&mut df[propcol][entid]);
-                let s = Series::new(&format!("{prop_name}"), &df[propcol][entid]);
-                serieses.push(s);
+            for entid in 0..10 {
+                // Metadata
+                let sids = eid_sid_stack(entid as u32, (max_ticks) as i32, &stringtables);
+                if propcol == 0 {
+                    ticks_col.extend(&ticks);
+                    steamids_col.extend(sids);
+                }
+                // Props
+                fill_none_with_most_recent(&mut df[propcol * entid..propcol * entid + max_ticks]);
+                this_prop_col.extend(&df[propcol * entid..propcol * entid + max_ticks]);
             }
-            let df: DataFrame = DataFrame::new(serieses).unwrap();
-            dfs.push(df);
+            let before = Instant::now();
+            let props = Series::new(prop_name, &this_prop_col);
+            // props[44] = 4;
+            println!("Creating series TOOK {:2?}", before.elapsed());
+
+            series_players.push(props);
         }
+        let steamids = Series::new("steamids", steamids_col);
+        let ticks = Series::new("ticks", ticks_col);
 
-        use polars::prelude::*;
-        let chonker = polars::functions::diag_concat_df(&dfs).unwrap();
-        println!("{:?}", chonker);
-        //polars::functions::diag_concat_df([df1, df2]);
-        use polars::prelude::ArrowField;
-        use polars::prelude::NamedFrom;
-        use polars::series::Series;
-        use polars_arrow::export::arrow;
-        use polars_arrow::prelude::ArrayRef;
+        series_players.push(steamids);
+        series_players.push(ticks);
 
-        // let s = Series::new("viewangle_X", ent_data);
-        // println!("{}", s);
+        println!("{:2?}", before.elapsed());
+
+        series_players
     }
 }
 
 #[inline(always)]
-pub fn fill_none_with_most_recent(v: &mut Vec<Option<f32>>) {
+pub fn fill_none_with_most_recent(v: &mut [std::option::Option<f32>]) {
     /*
     Called ffil in pandas, not sure about polars.
 
@@ -189,7 +220,7 @@ fn col_str_mapping(col_indicies: &Vec<i32>, parser_maps: Arc<RwLock<ParsingMaps>
     let serverclass_map = parser_maps_read.serverclass_map.as_ref().unwrap();
 
     let mut str_names = vec![];
-    let props = &serverclass_map[&40].props;
+    let props = &serverclass_map.player.props;
     for ci in col_indicies {
         let s = &props[*ci as usize];
         str_names.push(s.name.to_owned());
@@ -203,7 +234,6 @@ pub fn str_props_to_int_props(
 ) -> Vec<i32> {
     let parser_maps_read = parser_maps.read().unwrap();
     let serverclass_map = parser_maps_read.serverclass_map.as_ref().unwrap();
-
     let int_props: Vec<i32> = str_props
         .iter()
         .map(|p| str_prop_to_int(p, &serverclass_map))
@@ -211,17 +241,14 @@ pub fn str_props_to_int_props(
     int_props
 }
 
-fn str_prop_to_int(wanted_prop: &str, serverclass_map: &HashMap<u16, ServerClass>) -> i32 {
+fn str_prop_to_int(wanted_prop: &str, serverclass_map: &ServerClasses) -> i32 {
     /*
     Maps string names to their prop index (used in packet ents)
     For example m_angEyeAngles[0] --> 20
     Mainly need to pay attention to manager props comming from different
     serverclass
     */
-    let sv_cls = match serverclass_map.get(&40) {
-        Some(props) => props,
-        None => panic!("no svc"),
-    };
+    let sv_cls = &serverclass_map.player;
 
     match sv_cls.props.iter().position(|x| x.name == wanted_prop) {
         Some(idx) => idx as i32,

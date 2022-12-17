@@ -1,5 +1,4 @@
 use crate::parsing::entities::Prop;
-use crate::parsing::parser::Parser;
 use crate::parsing::variants::PropData;
 use bitter::BitReader;
 use bitter::LittleEndianReader;
@@ -41,40 +40,6 @@ impl<'a> MyBitreader<'a> {
         }
         Some(ret)
     }
-    /*
-        pub fn read_idx_new_way(&mut self, last: i32) -> Option<i32> {
-            if self.read_boolie()? {
-                return Some(last + 1);
-            }
-            if self.read_boolie()? {
-                let index = self.read_nbits(3)?;
-                if index == 0xfff {
-                    return Some(-1);
-                }
-                Some(last + 1 + index as i32)
-            }
-        }
-        pub fn read_idx_old_way() {
-            let mut index = self.read_nbits(7)?;
-            let val = index & (32 | 64);
-            match val {
-                32 => {
-                    index = (index & !96) | (self.read_nbits(2)? << 5);
-                }
-                64 => {
-                    index = (index & !96) | (self.read_nbits(4)? << 5);
-                }
-                96 => {
-                    index = (index & !96) | (self.read_nbits(7)? << 5);
-                }
-                _ => {}
-            }
-            if index == 0xfff {
-                return Some(-1);
-            }
-            Some(last + 1 + index as i32)
-        }
-    */
     #[inline(always)]
     pub fn read_inx(&mut self, last: i32, new_way: bool) -> Option<i32> {
         if new_way && self.read_boolie()? {
@@ -82,6 +47,9 @@ impl<'a> MyBitreader<'a> {
         }
         if new_way && self.read_boolie()? {
             let index = self.read_nbits(3)?;
+            if index == 0xfff {
+                return Some(-1);
+            }
             Some(last + 1 + index as i32)
         } else {
             let mut index = self.read_nbits(7)?;
@@ -186,8 +154,7 @@ impl<'a> MyBitreader<'a> {
             }
             s.push(c);
         }
-        //Some(String::from_utf8(s).unwrap())
-        Some("69".to_string())
+        Some(String::from_utf8(s).unwrap())
     }
     #[inline(always)]
     pub fn read_string_lossy(&mut self, length: i32) -> Option<String> {

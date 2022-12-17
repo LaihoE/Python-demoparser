@@ -36,6 +36,8 @@ fn parse_demo(demo_path: String) -> i32 {
     //println!("{}", demo_path);
     //let bytes = fs::read(demo_path);
 
+    //let hm = HashMap::{}
+
     let now = Instant::now();
     let props_names = vec!["m_angEyeAngles[0]".to_string()];
     let mut parser = Parser::new(
@@ -45,7 +47,7 @@ fn parse_demo(demo_path: String) -> i32 {
         vec![],
         vec![
             "m_angEyeAngles[0]".to_string(),
-            "m_angEyeAngles[1]".to_string(),
+            //"m_angEyeAngles[1]".to_string(),
         ],
         "player_death".to_string(),
         false,
@@ -60,6 +62,8 @@ fn parse_demo(demo_path: String) -> i32 {
     let mut event_names: Vec<String> = Vec::new();
     parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
     parser.start_parsing(&props_names);
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?} ", elapsed);
 
     69
 }
@@ -74,13 +78,13 @@ fn main() {
     }
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(6)
+        .num_threads(4)
         .build_global()
         .unwrap();
 
     let this_p = &paths_v[0];
     let single = vec![this_p];
-    let x: Vec<i32> = paths_v
+    let x: Vec<i32> = single
         .into_iter()
         .map(|f| parse_demo(f.to_owned()))
         .collect();

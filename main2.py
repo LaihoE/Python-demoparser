@@ -1,24 +1,17 @@
-from demoparser import DemoParser
 import pandas as pd
 
-from demoparser import DemoParser
-import glob
-import multiprocessing as mp
-import pandas as pd
-import tqdm
 
+df = pd.read_csv("lol.txt", names=["bits", "idx"])
 
-def coordinates(file):
-    print(file)
-    parser = DemoParser(file)
-    df = pd.DataFrame(parser.parse_ticks(["X", "Y", "Z"]))
-    print(df)
-    return df
+df["bits"] = df["bits"].astype(int)
 
+s = ""
+for i in range(2000):
+    #print(i, df[df["idx"] == i]["bits"].unique())
+    uniq = df[df["idx"] == i]["bits"].unique()
+    if len(uniq) == 1:
+        s += str(uniq[0]) + ","
+    else:
+        s += "0,"
 
-if __name__ == "__main__":
-    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")
-    with mp.Pool(processes=1) as pool:
-        results = list(pool.map(coordinates, files))
-    df = pd.concat(results)
-    print(df)
+print(s)

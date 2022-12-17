@@ -31,6 +31,7 @@ use pyo3::{PyErr, Python};
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::path::Path;
+use std::time::Instant;
 use std::vec;
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
@@ -254,19 +255,18 @@ impl DemoParser {
                 parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
                 let mut ss = vec![];
                 let series_vec = parser.start_parsing(&real_props);
-
                 for s in series_vec {
                     let py_series = rust_series_to_py_series(&s).unwrap();
                     ss.push(py_series);
                 }
                 wanted_props.push("steamid".to_string());
                 wanted_props.push("tick".to_string());
-
                 let polars = py.import("polars")?;
                 //let all_series_py = ss.to_object(py);
                 let df = polars.call_method1("DataFrame", (ss,))?;
                 df.setattr("columns", wanted_props.to_object(py)).unwrap();
                 let pandas_df = df.call_method0("to_pandas").unwrap();
+
                 Ok(pandas_df.to_object(py))
             }
         }

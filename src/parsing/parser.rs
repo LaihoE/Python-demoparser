@@ -9,6 +9,7 @@ use crate::parsing::read_bytes::ByteReader;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
 pub use crate::parsing::variants::*;
+use ahash::HashSet;
 use ahash::RandomState;
 use core::time::Duration;
 use polars::prelude::DataFrame;
@@ -92,10 +93,10 @@ impl Parser {
             cpu_threads,
         );
         // Lets do some allocs in the meantime
-        let max_ticks = self.settings.playback_frames / 2;
+        let max_ticks = self.settings.wanted_ticks.len();
         // let max_ticks = 500000;
         let before = Instant::now();
-        let mut final_data = Vec::with_capacity(500000);
+        let mut final_data = Vec::with_capacity(50000);
 
         let mut df: Vec<Option<f32>> =
             vec![None; max_ticks * 15 * self.settings.wanted_props.len()];
@@ -104,12 +105,10 @@ impl Parser {
             let t = io_handle.0.join().unwrap();
         }
         io_done.store(true, Ordering::Relaxed);
-        let mut cnt = 0;
 
         for parser_handle in parser_handles {
             let data = parser_handle.join().unwrap();
             final_data.extend(data);
-            cnt += 1;
         }
         self.get_raw_df(&final_data, parsing_maps.clone(), &mut df, max_ticks)
     }
@@ -130,9 +129,11 @@ impl Parser {
             let msg_q = q.clone();
             let my_maps = parsing_maps.clone();
             let my_mmap = self.bytes.clone();
+            let my_ticks = self.settings.wanted_ticks.clone();
 
-            let handle =
-                thread::spawn(move || Parser::parse_messages(my_mmap, msg_q, my_maps, start_end));
+            let handle = thread::spawn(move || {
+                Parser::parse_messages(my_mmap, msg_q, my_maps, start_end, my_ticks)
+            });
             handles.push((handle, start_end));
         }
         handles
@@ -200,15 +201,26 @@ impl Parser {
         q: Arc<SegQueue<Vec<MsgBluePrint>>>,
         parsing_maps: Arc<RwLock<ParsingMaps>>,
         start_end: (usize, usize),
+        wanted_ticks: HashSet<i32>,
     ) -> i32 {
         let (start_idx, end_idx) = start_end;
         let mut byte_reader = Parser::find_beginning(mmap, start_idx, end_idx).unwrap();
+        let biggest = *wanted_ticks.iter().max().unwrap();
 
-        while byte_reader.byte_idx < byte_reader.max_byte as usize {
+        'outer: while byte_reader.byte_idx < byte_reader.max_byte as usize {
             let mut v: Vec<MsgBluePrint> = Vec::with_capacity(256);
             while v.len() < 256 && byte_reader.byte_idx < byte_reader.max_byte as usize {
                 let (cmd, tick) = byte_reader.read_frame();
-                let sv = Parser::parse_cmd(cmd, &mut byte_reader, tick, parsing_maps.clone());
+                if tick > biggest {
+                    break 'outer;
+                }
+                let sv = Parser::parse_cmd(
+                    cmd,
+                    &mut byte_reader,
+                    tick,
+                    parsing_maps.clone(),
+                    &wanted_ticks,
+                );
 
                 match sv {
                     Some(svprints) => {
@@ -271,17 +283,20 @@ impl Parser {
         byte_reader: &mut ByteReader,
         tick: i32,
         parsing_maps: Arc<RwLock<ParsingMaps>>,
+        wanted_ticks: &HashSet<i32>,
     ) -> Option<SmallVec<[MsgBluePrint; TASKSIZE]>> {
         match cmd {
             1 => Some(Parser::parse_packet(
                 byte_reader,
                 tick,
                 parsing_maps.clone(),
+                wanted_ticks,
             )),
             2 => Some(Parser::parse_packet(
                 byte_reader,
                 tick,
                 parsing_maps.clone(),
+                wanted_ticks,
             )),
             6 => {
                 Parser::parse_datatable(byte_reader, parsing_maps.clone());
@@ -296,6 +311,7 @@ impl Parser {
         byte_reader: &mut ByteReader,
         tick: i32,
         parsing_maps: Arc<RwLock<ParsingMaps>>,
+        wanted_ticks: &HashSet<i32>,
     ) -> SmallVec<[MsgBluePrint; TASKSIZE]> {
         byte_reader.byte_idx += 160;
         let packet_len = byte_reader.read_i32();
@@ -324,7 +340,9 @@ impl Parser {
                     parsing_maps.clone(),
                 );
             }
-            tasks.push(msg_blueprint)
+            if wanted_ticks.contains(&tick) {
+                tasks.push(msg_blueprint)
+            }
         }
         tasks
     }

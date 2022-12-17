@@ -8,16 +8,16 @@ from pandas.testing import assert_frame_equal
 
 
 def coordinates(file):
-    wanted_props = ["viewangle_yaw"]
+    wanted_props = ["m_angEyeAngles[0]"]
     # This will early exit parsing after just 10k ticks
     parser = DemoParser(file)
     # You can remove optional arguments to get all tick or all players
-    df = parser.parse_ticks(wanted_props)
+    df = parser.parse_ticks(wanted_props, ticks=[x for x in range(1000, 10000)])
     #df = df.dropna()
     #df = df[df["steamid"] != 0]
     #print(df["steamid"].unique())
     print(df)
-    return df
+
 
 
 if __name__ == "__main__":

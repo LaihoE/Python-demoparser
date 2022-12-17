@@ -6,6 +6,7 @@ use ahash::HashSet;
 #[derive(Debug, Clone)]
 pub struct EntColMapper {
     players: HashMap<u32, Vec<EntConnection>>,
+    tick_map: HashMap<i32, usize>,
 }
 #[derive(Debug, Clone)]
 pub struct EntConnection {
@@ -30,7 +31,12 @@ fn ent_col_mapping(players: &Vec<&UserInfo>) -> HashMap<u64, usize> {
 }
 
 impl EntColMapper {
-    pub fn new(userinfos: &Vec<&UserInfo>) -> Self {
+    pub fn new(userinfos: &Vec<&UserInfo>, wanted_ticks: &HashSet<i32>) -> Self {
+        let mut tick_map: HashMap<i32, usize> = HashMap::default();
+        for (idx, t) in wanted_ticks.iter().enumerate() {
+            tick_map.insert((*t).try_into().unwrap(), idx);
+        }
+
         let mut unique_players = HashSet::default();
         for player in userinfos {
             unique_players.insert(player.xuid);
@@ -54,7 +60,10 @@ impl EntColMapper {
         for (k, v) in &mut eids {
             v.sort_by_key(|x| x.tick);
         }
-        EntColMapper { players: eids }
+        EntColMapper {
+            players: eids,
+            tick_map: tick_map,
+        }
     }
     fn get_complicated<'a>(
         &self,
@@ -101,6 +110,13 @@ impl EntColMapper {
         let ent_connection = self.get_complicated(&ent_maps_to_these_ids, entid, tick);
         ent_connection.steamid
     }
+    pub fn get_tick(&self, tick: i32) -> usize {
+        /*
+        Returns idx for tick. Mostly interesting for when user only wants some ticks
+        */
+        println!("{}", tick);
+        return self.tick_map[&tick];
+    }
 }
 
 #[cfg(test)]
@@ -136,7 +152,10 @@ mod tests {
         ];
         eids.insert(3, ethree.to_vec());
 
-        EntColMapper { players: eids }
+        EntColMapper {
+            players: eids,
+            tick_map: HashMap::default(),
+        }
     }
 
     #[test]

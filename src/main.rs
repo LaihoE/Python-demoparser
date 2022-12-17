@@ -35,15 +35,20 @@ static GLOBAL: MiMalloc = MiMalloc;
 fn parse_demo(demo_path: String) -> i32 {
     //println!("{}", demo_path);
     //let bytes = fs::read(demo_path);
-
     //let hm = HashMap::{}
 
     let now = Instant::now();
     let props_names = vec!["m_angEyeAngles[0]".to_string()];
+
+    let mut wanted_ticks = vec![];
+    for i in 1000..10000 {
+        wanted_ticks.push(i);
+    }
+
     let mut parser = Parser::new(
         demo_path,
         true,
-        vec![],
+        wanted_ticks,
         vec![],
         vec![
             "m_angEyeAngles[0]".to_string(),
@@ -84,7 +89,7 @@ fn main() {
 
     let this_p = &paths_v[0];
     let single = vec![this_p];
-    let x: Vec<i32> = single
+    let x: Vec<i32> = paths_v
         .into_iter()
         .map(|f| parse_demo(f.to_owned()))
         .collect();

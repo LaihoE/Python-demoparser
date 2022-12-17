@@ -15,6 +15,8 @@ use ahash::HashSet;
 use polars::frame::DataFrame;
 use polars::prelude::*;
 use polars::series::Series;
+use rayon::prelude::IntoParallelIterator;
+use rayon::prelude::*;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Instant;
@@ -93,9 +95,12 @@ impl Parser {
         df: &mut Vec<Option<f32>>,
         ecm: &EntColMapper,
     ) {
+        let before = Instant::now();
+
         // Map prop idx into its column.
         let col_mapping = create_idx_col_mapping(&int_props);
         // For every packetEnt message during game
+
         for packet_ent_msg in packet_ents {
             // For every entity in the message
             for single_ent in &packet_ent_msg.data {
@@ -105,14 +110,14 @@ impl Parser {
                         PropData::F32(f) => {
                             let prop_col = col_mapping[&prop.prop_inx];
                             let player_col = ecm.get_col(prop.ent_id as u32, packet_ent_msg.tick);
-                            df[prop_col * player_col * (packet_ent_msg.tick / 2) as usize] =
-                                Some(f as f32);
+                            let tick = ecm.get_tick(packet_ent_msg.tick);
+                            df[prop_col * player_col * tick] = Some(f as f32);
                         }
                         PropData::I32(i) => {
                             let prop_col = col_mapping[&prop.prop_inx];
                             let player_col = ecm.get_col(prop.ent_id as u32, packet_ent_msg.tick);
-                            df[prop_col * player_col * (packet_ent_msg.tick / 2) as usize] =
-                                Some(i as f32);
+                            let tick = ecm.get_tick(packet_ent_msg.tick);
+                            df[prop_col * player_col * tick] = Some(i as f32);
                         }
                         // Todo string columns
                         _ => {}
@@ -129,13 +134,12 @@ impl Parser {
         df: &mut Vec<Option<f32>>,
         max_ticks: usize,
     ) -> Vec<Series> {
-        let before = Instant::now();
         // Group jobs by type
         let (packet_ents, game_events, stringtables) = filter_jobresults(jobs);
 
-        let ecm = EntColMapper::new(&stringtables);
+        let ecm = EntColMapper::new(&stringtables, &self.settings.wanted_ticks);
 
-        //let ent_mapping = ent_col_mapping(&stringtables);
+        // let ent_mapping = ent_col_mapping(&stringtables);
 
         let ticks: Vec<i32> = (0..max_ticks).into_iter().map(|t| t as i32).collect();
         let int_props = str_props_to_int_props(&self.settings.wanted_props, parser_maps.clone());
@@ -146,6 +150,7 @@ impl Parser {
         let mut series_players = vec![];
         let mut ticks_col: Vec<i32> = vec![];
         let mut steamids_col: Vec<u64> = vec![];
+        let before = Instant::now();
 
         for (propcol, prop_name) in str_names.iter().enumerate() {
             let mut this_prop_col: Vec<Option<f32>> = Vec::with_capacity(10 * max_ticks);
@@ -161,11 +166,8 @@ impl Parser {
                 fill_none_with_most_recent(&mut df[propcol * entid..propcol * entid + max_ticks]);
                 this_prop_col.extend(&df[propcol * entid..propcol * entid + max_ticks]);
             }
-            let before = Instant::now();
             let props = Series::new(prop_name, &this_prop_col);
             // props[44] = 4;
-            println!("Creating series TOOK {:2?}", before.elapsed());
-
             series_players.push(props);
         }
         let steamids = Series::new("steamids", steamids_col);

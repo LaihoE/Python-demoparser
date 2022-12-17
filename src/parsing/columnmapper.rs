@@ -114,7 +114,6 @@ impl EntColMapper {
         /*
         Returns idx for tick. Mostly interesting for when user only wants some ticks
         */
-        println!("{}", tick);
         return self.tick_map[&tick];
     }
 }

@@ -41,7 +41,7 @@ fn parse_demo(demo_path: String) -> i32 {
     let props_names = vec!["m_angEyeAngles[0]".to_string()];
 
     let mut wanted_ticks = vec![];
-    for i in 1000..10000 {
+    for i in 0..500000 {
         wanted_ticks.push(i);
     }
 

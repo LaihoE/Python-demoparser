@@ -82,7 +82,7 @@ pub fn filter_jobresults(
             _ => {}
         }
     }
-    println!("FILTERING TOOK: {:2?}", before.elapsed());
+    //println!("FILTERING TOOK: {:2?}", before.elapsed());
     (packet_ents, game_events, stringtables)
 }
 
@@ -111,13 +111,13 @@ impl Parser {
                             let prop_col = col_mapping[&prop.prop_inx];
                             let player_col = ecm.get_col(prop.ent_id as u32, packet_ent_msg.tick);
                             let tick = ecm.get_tick(packet_ent_msg.tick);
-                            df[prop_col * player_col * tick] = Some(f as f32);
+                            df[prop_col * player_col + tick] = Some(f as f32);
                         }
                         PropData::I32(i) => {
                             let prop_col = col_mapping[&prop.prop_inx];
                             let player_col = ecm.get_col(prop.ent_id as u32, packet_ent_msg.tick);
                             let tick = ecm.get_tick(packet_ent_msg.tick);
-                            df[prop_col * player_col * tick] = Some(i as f32);
+                            df[prop_col * player_col + tick] = Some(i as f32);
                         }
                         // Todo string columns
                         _ => {}

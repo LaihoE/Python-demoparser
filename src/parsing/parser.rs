@@ -80,7 +80,7 @@ impl Parser {
             event_map: None,
         }));
 
-        let io_threads = 8;
+        let io_threads = 12;
         let cpu_threads = 12;
 
         let mut io_done = Arc::new(AtomicBool::new(false));
@@ -93,14 +93,19 @@ impl Parser {
             cpu_threads,
         );
         // Lets do some allocs in the meantime
-        let max_ticks = self.settings.wanted_ticks.len();
+        let total_ticks = match self.settings.wanted_ticks.len() {
+            0 => self.settings.playback_frames,
+            _ => self.settings.wanted_ticks.len(),
+        };
         // let max_ticks = 500000;
         let before = Instant::now();
         let mut final_data = Vec::with_capacity(50000);
 
-        let mut df: Vec<Option<f32>> =
-            vec![None; max_ticks * 15 * self.settings.wanted_props.len()];
+        let mut df = Array3::<f32>::zeros((15, self.settings.wanted_props.len(), total_ticks));
 
+        //let mut df: Vec<Option<f32>> =
+        //vec![None; max_ticks * 15 * self.settings.wanted_props.len()];
+        println!("{:?}", self.settings.playback_frames);
         for io_handle in io_handles {
             let t = io_handle.0.join().unwrap();
         }
@@ -110,7 +115,7 @@ impl Parser {
             let data = parser_handle.join().unwrap();
             final_data.extend(data);
         }
-        self.get_raw_df(&final_data, parsing_maps.clone(), &mut df, max_ticks)
+        self.get_raw_df(&final_data, parsing_maps.clone(), &mut df, total_ticks)
     }
 
     pub fn start_io_threads(
@@ -205,7 +210,11 @@ impl Parser {
     ) -> i32 {
         let (start_idx, end_idx) = start_end;
         let mut byte_reader = Parser::find_beginning(mmap, start_idx, end_idx).unwrap();
-        let biggest = *wanted_ticks.iter().max().unwrap();
+
+        let biggest = match wanted_ticks.iter().max() {
+            Some(t) => *t,
+            None => 99999999,
+        };
 
         'outer: while byte_reader.byte_idx < byte_reader.max_byte as usize {
             let mut v: Vec<MsgBluePrint> = Vec::with_capacity(256);
@@ -340,8 +349,10 @@ impl Parser {
                     parsing_maps.clone(),
                 );
             }
-            if wanted_ticks.contains(&tick) {
-                tasks.push(msg_blueprint)
+            if wanted_ticks.contains(&tick) || tick < 0 || wanted_ticks.len() == 0 {
+                if msg == 26 || msg == 25 || msg == 13 || msg == 12 {
+                    tasks.push(msg_blueprint)
+                }
             }
         }
         tasks

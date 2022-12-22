@@ -1,23 +1,17 @@
 use super::parser::JobResult;
 use super::parser::MsgBluePrint;
-use super::stringtables::UserInfo;
 use crate::parsing::data_table::ServerClass;
+use crate::parsing::data_table::ServerClasses;
 use crate::parsing::parser::Parser;
 use crate::parsing::read_bits::MyBitreader;
-use crate::parsing::variants::create_default_from_pdata;
 use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
-use crate::VarVec;
 use ahash::HashMap;
-//use ahash::RandomState;
-use crate::parsing::data_table::ServerClasses;
-use bitter::BitReader;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use memmap2::Mmap;
 use protobuf::Message;
 use smallvec::SmallVec;
-use std::collections::HashSet;
 use std::convert::TryInto;
 const SMALLVECSIZE: usize = 32;
 
@@ -86,7 +80,7 @@ impl Parser {
         Main thing to understand here is that entity ids are
         sorted so we can break out early. Also first ~70 entids
         have predictable cls_ids, mainly entid < 64 = player.
-        Higher entity ids are entities for other props etc.
+        Higher entity ids are entities for other stuff,
         that are mostly not interesting.
         */
 
@@ -145,6 +139,7 @@ pub fn get_indicies(b: &mut MyBitreader) -> SmallVec<[i32; SMALLVECSIZE]> {
     let mut val = -1;
     let new_way = b.read_boolie().unwrap();
     let mut indicies: SmallVec<[_; SMALLVECSIZE]> = SmallVec::<[i32; SMALLVECSIZE]>::new();
+
     loop {
         val = b.read_inx(val, new_way).unwrap();
         if val == -1 {
@@ -180,13 +175,13 @@ pub fn parse_ent_props(
     let sv_cls = get_cls(entity_id, sv_cls_map);
     let indicies = get_indicies(b);
     /*
-       match skipvec(&indicies) {
-           Some(bits) => {
-               b.skip_many_bits(bits.try_into().unwrap());
-               return None;
-           }
-           None => {}
-       }
+    match skipvec(&indicies) {
+        Some(bits) => {
+            b.skip_many_bits(bits.try_into().unwrap());
+            return None;
+        }
+        None => {}
+    }
     */
     let mut props: Vec<SingleEntOutput> = Vec::with_capacity(2);
 
@@ -195,13 +190,29 @@ pub fn parse_ent_props(
         let pdata = b.decode(prop).unwrap();
 
         if wanted_props.contains(&prop.name) {
-            if prop.name.len() > 4 {
-                let output = SingleEntOutput {
-                    ent_id: entity_id,
-                    prop_inx: *idx,
-                    data: pdata,
-                };
-                props.push(output);
+            match pdata {
+                PropData::VecXY(xy) => {
+                    let x = SingleEntOutput {
+                        ent_id: entity_id,
+                        prop_inx: 10000,
+                        data: PropData::F32(xy[0]),
+                    };
+                    let y = SingleEntOutput {
+                        ent_id: entity_id,
+                        prop_inx: 10001,
+                        data: PropData::F32(xy[1]),
+                    };
+                    props.push(x);
+                    props.push(y);
+                }
+                _ => {
+                    let data = SingleEntOutput {
+                        ent_id: entity_id,
+                        prop_inx: *idx,
+                        data: pdata,
+                    };
+                    props.push(data);
+                }
             }
         }
     }

@@ -47,9 +47,6 @@ impl<'a> MyBitreader<'a> {
         }
         if new_way && self.read_boolie()? {
             let index = self.read_nbits(3)?;
-            if index == 0xfff {
-                return Some(-1);
-            }
             Some(last + 1 + index as i32)
         } else {
             let mut index = self.read_nbits(7)?;

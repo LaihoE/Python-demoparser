@@ -7,6 +7,7 @@ use ahash::HashSet;
 pub struct EntColMapper {
     players: HashMap<u32, Vec<EntConnection>>,
     tick_map: HashMap<i32, usize>,
+    col_sid_map: HashMap<usize, u64>,
 }
 #[derive(Debug, Clone)]
 pub struct EntConnection {
@@ -44,7 +45,7 @@ impl EntColMapper {
         // Map each steamid to a column idx. No special logic just the order they come in
         let mut sid_to_col_idx = HashMap::default();
         for (idx, player_sid) in unique_players.iter().enumerate() {
-            sid_to_col_idx.insert(player_sid, idx + 1);
+            sid_to_col_idx.insert(*player_sid, idx + 1);
         }
         let mut eids: HashMap<u32, Vec<EntConnection>> = HashMap::default();
 
@@ -60,11 +61,17 @@ impl EntColMapper {
         for (k, v) in &mut eids {
             v.sort_by_key(|x| x.tick);
         }
+        let mut col_sid_map = HashMap::default();
+        for (k, v) in sid_to_col_idx {
+            col_sid_map.insert(v, k);
+        }
         EntColMapper {
             players: eids,
             tick_map: tick_map,
+            col_sid_map: col_sid_map,
         }
     }
+    #[inline(always)]
     fn get_complicated<'a>(
         &self,
         ent_maps_to_these_ids: &'a Vec<EntConnection>,
@@ -81,6 +88,7 @@ impl EntColMapper {
         }
         return &ent_maps_to_these_ids[ent_maps_to_these_ids.len() - 1];
     }
+    #[inline(always)]
     pub fn get_col(&self, entid: u32, tick: i32) -> usize {
         let ent_maps_to_these_ids = match self.players.get(&entid) {
             None => return 0,
@@ -110,11 +118,21 @@ impl EntColMapper {
         let ent_connection = self.get_complicated(&ent_maps_to_these_ids, entid, tick);
         ent_connection.steamid
     }
+    #[inline(always)]
     pub fn get_tick(&self, tick: i32) -> usize {
         /*
         Returns idx for tick. Mostly interesting for when user only wants some ticks
         */
         return self.tick_map[&tick];
+    }
+    #[inline(always)]
+    pub fn get_col_sid_vec(&self, col: usize, max_ticks: usize) -> Vec<u64> {
+        //println!("{:?}", self.col_sid_map);
+        //println!("{:?}", col);
+        match self.col_sid_map.get(&col) {
+            None => vec![0; max_ticks],
+            Some(s) => vec![*s; max_ticks],
+        }
     }
 }
 
@@ -154,6 +172,7 @@ mod tests {
         EntColMapper {
             players: eids,
             tick_map: HashMap::default(),
+            col_sid_map: HashMap::default(),
         }
     }
 

@@ -26,7 +26,8 @@ fn parse_key(key: &Key_t) -> Option<KeyData> {
         _ => panic!("Unkown key type for game event key"),
     }
 }
-#[derive(Debug)]
+
+#[derive(Debug, Clone)]
 pub enum KeyData {
     Str(String),
     Float(f32),
@@ -64,18 +65,28 @@ impl KeyData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NameDataPair {
     pub name: String,
     pub data: Option<KeyData>,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GameEvent {
     pub name: String,
     pub fields: Vec<NameDataPair>,
 }
 
 impl GameEvent {
+    #[inline(always)]
+    pub fn get_key_by_name(&self, name: String) -> Option<KeyData> {
+        for k in &self.fields {
+            if k.name == name {
+                return k.data.clone();
+            }
+        }
+        panic!("No key with that name found")
+    }
+
     pub fn to_py_tuples(&self, py: Python<'_>) -> Vec<(String, PyObject)> {
         let mut py_tuples: Vec<(String, PyObject)> = Vec::new();
         for pair in &self.fields {
@@ -95,7 +106,7 @@ pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
     tick: &i32,
-    //uid_eid_map: &HashMap<u32, u64, RandomState>,
+    byte: &usize,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
     let mut kv_pairs: Vec<NameDataPair> = Vec::new();
@@ -113,6 +124,10 @@ pub fn gen_name_val_pairs(
         name: "tick".to_owned(),
         data: Some(KeyData::Long(*tick)),
     });
+    kv_pairs.push(NameDataPair {
+        name: "byte".to_owned(),
+        data: Some(KeyData::Uint64(*byte as u64)),
+    });
     kv_pairs
 }
 
@@ -129,7 +144,8 @@ impl Parser {
         let event_desc = &game_events_map[&msg.eventid()];
 
         if event_desc.name() == wanted_event {
-            let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.tick);
+            let name_data_pairs =
+                gen_name_val_pairs(&msg, event_desc, &blueprint.tick, &blueprint.byte);
 
             game_events.push({
                 GameEvent {

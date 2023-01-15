@@ -1,34 +1,22 @@
+use super::cache::Cache;
 use super::game_events::GameEvent;
+use crate::parsing::cache;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::parse_packet_entities;
-use crate::parsing::entities::Entity;
 use crate::parsing::parser_settings::*;
 use crate::parsing::read_bytes::ByteReader;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
-use crate::parsing::utils::check_round_change;
-use crate::parsing::utils::read_file;
-use crate::parsing::utils::TYPEHM;
-use crate::parsing::variants::BytesVariant::Mmap3;
 pub use crate::parsing::variants::*;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
-use csgoproto::netmessages::*;
-use dashmap::DashMap;
 use memmap2::Mmap;
-use mimalloc::MiMalloc;
-use protobuf;
-use protobuf::Message;
 use rayon::prelude::*;
+
 use smallvec::SmallVec;
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::slice;
 use std::sync::Arc;
-use std::sync::RwLock;
-use std::time::Instant;
 use std::u8;
-use threadpool::ThreadPool;
 
 pub struct Parser {
     pub maps: Maps,
@@ -44,6 +32,7 @@ pub struct MsgBluePrint {
     pub start_idx: usize,
     pub end_idx: usize,
     pub tick: i32,
+    pub byte: usize,
 }
 #[derive(Debug)]
 pub enum JobResult {
@@ -59,6 +48,12 @@ impl JobResult {
             _ => false,
         }
     }
+    pub fn is_game_event(&self) -> bool {
+        match self {
+            JobResult::GameEvents(_) => true,
+            _ => false,
+        }
+    }
 }
 
 /*
@@ -68,13 +63,50 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 */
 
 impl Parser {
+    fn get_byte_readers(&mut self, start_pos: Vec<u64>) -> Vec<ByteReader> {
+        if start_pos.len() == 0 {
+            return vec![ByteReader::new(self.bytes.clone(), false, 1072)];
+        }
+        let mut readers = vec![];
+        let data_table_reader = ByteReader::new(self.bytes.clone(), true, 138837 - 6);
+        readers.push(data_table_reader);
+        let data_table_reader = ByteReader::new(self.bytes.clone(), true, 458399);
+        readers.push(data_table_reader);
+        for pos in start_pos {
+            let other_reader = ByteReader::new(self.bytes.clone(), true, pos as usize);
+            readers.push(other_reader);
+        }
+        return readers;
+    }
     pub fn start_parsing(&mut self, props_names: &Vec<String>) {
-        let mut byte_reader = ByteReader::new(self.bytes.clone());
+        let mut c = Cache {
+            deltas: vec![],
+            game_events: vec![],
+            stringtables: vec![],
+        };
+        // 24 player death
+        // GL: 458399   MAP: 138837
+        c.set_deltas();
+        c.set_game_events();
+        c.set_stringtables();
 
-        while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
-            let (cmd, tick) = byte_reader.read_frame();
-            self.state.tick = tick;
-            self.parse_cmd(cmd, &mut byte_reader);
+        println!("ST {:?}", c.stringtables);
+        let mut deaths = c.get_event_by_id(24);
+        let st = c.get_stringtables();
+        deaths.extend(st);
+
+        let byte_readers = self.get_byte_readers(deaths);
+        for mut byte_reader in byte_readers {
+            let mut frames_parsed = 0;
+            while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
+                if byte_reader.single && frames_parsed > 0 {
+                    break;
+                }
+                let (cmd, tick) = byte_reader.read_frame();
+                self.state.tick = tick;
+                self.parse_cmd(cmd, &mut byte_reader);
+                frames_parsed += 1;
+            }
         }
         self.compute_jobs();
     }
@@ -108,6 +140,7 @@ impl Parser {
                 start_idx: before_inx,
                 end_idx: after_inx,
                 tick: self.state.tick,
+                byte: byte_reader.byte_idx - 166,
             };
             self.tasks.push(msg_blueprint);
         }
@@ -118,10 +151,12 @@ impl Parser {
         // Event comes one time per demo sometime in the beginning
         for task in &tasks {
             if task.msg == 30 {
+                println!("HERE");
                 self.parse_game_event_map(task);
             }
             if task.msg == 12 {
                 let new_players = self.create_string_table(task);
+                println!("{:?}", new_players);
             }
         }
         let results: Vec<JobResult> = tasks
@@ -136,8 +171,20 @@ impl Parser {
                 )
             })
             .collect();
-        let sts: Vec<JobResult> = results.into_iter().filter(|x| x.is_stringtable()).collect();
-        println!("{:?}", sts);
+        //println!("{:?}", results);
+        let sts: Vec<JobResult> = results.into_iter().filter(|x| x.is_game_event()).collect();
+        for x in sts {
+            match x {
+                JobResult::GameEvents(g) => {
+                    if g.len() > 0 {
+                        let d = g[0].get_key_by_name("attacker".to_string());
+                        //println!("{:?}", d);
+                    }
+                }
+                _ => {}
+            }
+        }
+        // println!("{:?}", sts);
     }
     pub fn msg_handler(
         blueprint: &MsgBluePrint,
@@ -146,7 +193,7 @@ impl Parser {
         game_events_map: &HashMap<i32, Descriptor_t, RandomState>,
         stringtables: &Vec<StringTable>,
     ) -> JobResult {
-        let wanted_event = "player_blind";
+        let wanted_event = "player_death";
         match blueprint.msg {
             26 => parse_packet_entities(blueprint, bytes, serverclass_map),
             25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),

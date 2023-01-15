@@ -133,13 +133,12 @@ pub fn parse_ent_props(
     let m = sv_cls_map;
     let sv_cls = m.get(&cls_id).unwrap();
     let indicies = get_indicies(b);
+
     let mut props: SmallVec<[(i32, PropData); 1]> = SmallVec::<[(i32, PropData); 1]>::new();
     for idx in indicies {
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
-        if prop.name != "m_angEyeAngles[0]" || tick != 6999 {
-            continue;
-        }
+
         if prop.name.len() > 4 {
             props.push((idx, pdata));
         }

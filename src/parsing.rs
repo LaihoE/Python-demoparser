@@ -1,3 +1,4 @@
+pub mod cache;
 pub mod collect_data;
 pub mod data_table;
 pub mod entities;

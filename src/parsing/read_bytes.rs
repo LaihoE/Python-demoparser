@@ -6,13 +6,15 @@ use varint_simd::{decode, decode_two_unsafe, encode, encode_zigzag};
 pub struct ByteReader {
     pub bytes: Arc<Mmap>,
     pub byte_idx: usize,
+    pub single: bool,
 }
 
 impl ByteReader {
-    pub fn new(bytes: Arc<Mmap>) -> Self {
+    pub fn new(bytes: Arc<Mmap>, single: bool, start_idx: usize) -> Self {
         ByteReader {
             bytes: bytes,
-            byte_idx: 1072,
+            byte_idx: start_idx,
+            single: single,
         }
     }
 

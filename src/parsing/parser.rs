@@ -4,6 +4,7 @@ use crate::parsing::cache;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::parse_packet_entities;
 use crate::parsing::parser_settings::*;
+use crate::parsing::players::Players;
 use crate::parsing::read_bytes::ByteReader;
 use crate::parsing::stringtables::StringTable;
 use crate::parsing::stringtables::UserInfo;
@@ -168,15 +169,21 @@ impl Parser {
             })
             .collect();
         //println!("{:?}", results);
-        let sts: Vec<JobResult> = results.into_iter().filter(|x| x.is_stringtable()).collect();
-        println!("{:?}", sts);
+        let jr: Vec<JobResult> = results.into_iter().filter(|x| x.is_stringtable()).collect();
+        let p = Players::new(&jr);
+        //println!("{:?}", sts);
 
-        for x in sts {
+        for x in jr {
             match x {
                 JobResult::GameEvents(g) => {
                     if g.len() > 0 {
                         let d = g[0].get_key_by_name("attacker".to_string());
-                        //println!("{:?}", d);
+                        match d {
+                            Some(super::game_events::KeyData::Short(s)) => {
+                                p.uid_to_entid(s, g[0].tick);
+                            }
+                            _ => {}
+                        }
                     }
                 }
                 _ => {}

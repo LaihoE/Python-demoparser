@@ -74,6 +74,7 @@ pub struct NameDataPair {
 pub struct GameEvent {
     pub name: String,
     pub fields: Vec<NameDataPair>,
+    pub tick: i32,
 }
 
 impl GameEvent {
@@ -105,7 +106,6 @@ impl GameEvent {
 pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
-    tick: &i32,
     byte: &usize,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
@@ -120,10 +120,6 @@ pub fn gen_name_val_pairs(
             data: val,
         })
     }
-    kv_pairs.push(NameDataPair {
-        name: "tick".to_owned(),
-        data: Some(KeyData::Long(*tick)),
-    });
     kv_pairs.push(NameDataPair {
         name: "byte".to_owned(),
         data: Some(KeyData::Uint64(*byte as u64)),
@@ -144,13 +140,13 @@ impl Parser {
         let event_desc = &game_events_map[&msg.eventid()];
 
         if event_desc.name() == wanted_event {
-            let name_data_pairs =
-                gen_name_val_pairs(&msg, event_desc, &blueprint.tick, &blueprint.byte);
+            let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.byte);
 
             game_events.push({
                 GameEvent {
                     name: event_desc.name().to_owned(),
                     fields: name_data_pairs,
+                    tick: blueprint.tick,
                 }
             });
         }

@@ -22,5 +22,12 @@ impl Players {
         }
         Players { players: players }
     }
-    pub fn uid_to_entid(&self, uid: u32) {}
+    pub fn uid_to_entid(&self, uid: i16, tick: i32) -> u32 {
+        for player in &self.players {
+            if player.user_id == uid.try_into().unwrap() {
+                return player.entity_id;
+            }
+        }
+        panic!("No uid found")
+    }
 }

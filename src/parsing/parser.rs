@@ -154,10 +154,6 @@ impl Parser {
                 println!("HERE");
                 self.parse_game_event_map(task);
             }
-            if task.msg == 12 {
-                let new_players = self.create_string_table(task);
-                println!("{:?}", new_players);
-            }
         }
         let results: Vec<JobResult> = tasks
             .into_par_iter()
@@ -172,7 +168,9 @@ impl Parser {
             })
             .collect();
         //println!("{:?}", results);
-        let sts: Vec<JobResult> = results.into_iter().filter(|x| x.is_game_event()).collect();
+        let sts: Vec<JobResult> = results.into_iter().filter(|x| x.is_stringtable()).collect();
+        println!("{:?}", sts);
+
         for x in sts {
             match x {
                 JobResult::GameEvents(g) => {
@@ -184,7 +182,6 @@ impl Parser {
                 _ => {}
             }
         }
-        // println!("{:?}", sts);
     }
     pub fn msg_handler(
         blueprint: &MsgBluePrint,
@@ -197,7 +194,8 @@ impl Parser {
         match blueprint.msg {
             26 => parse_packet_entities(blueprint, bytes, serverclass_map),
             25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
-            13 => Parser::update_string_table_msg(blueprint, bytes, stringtables),
+            12 => Parser::create_string_table(blueprint, bytes),
+            13 => Parser::update_string_table_msg(blueprint, bytes),
             _ => JobResult::None,
         }
     }

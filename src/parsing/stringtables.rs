@@ -18,12 +18,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::TryInto;
 
-// THIS ENTIRE FILE IS A MESS
-// THIS ENTIRE FILE IS A MESS
-// THIS ENTIRE FILE IS A MESS
-// THIS ENTIRE FILE IS A MESS
-// THIS ENTIRE FILE IS A MESS
-
 #[derive(Clone, Debug)]
 pub struct StringTable {
     userinfo: bool,
@@ -38,7 +32,7 @@ pub struct StField {
     entry: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UserInfo {
     pub version: u64,
     pub xuid: u64,
@@ -53,6 +47,7 @@ pub struct UserInfo {
     pub files_downloaded: bool,
     pub entity_id: u32,
     pub tbd: u32,
+    pub tick: i32,
 }
 
 impl UserInfo {
@@ -75,7 +70,7 @@ impl UserInfo {
     }
 }
 impl Parser {
-    pub fn parse_userinfo(userdata: Vec<u8>) -> UserInfo {
+    pub fn parse_userinfo(userdata: Vec<u8>, tick: i32) -> UserInfo {
         let ui = UserInfo {
             version: u64::from_be_bytes(userdata[0..8].try_into().unwrap()),
             xuid: u64::from_be_bytes(userdata[8..16].try_into().unwrap()),
@@ -90,12 +85,13 @@ impl Parser {
             files_downloaded: userdata[330] != 0,
             entity_id: u32::from_be_bytes(userdata[331..335].try_into().unwrap()),
             tbd: u32::from_be_bytes(userdata[331..335].try_into().unwrap()),
+            tick: tick,
         };
         ui
     }
 
-    pub fn create_string_table(&mut self, blueprint: &MsgBluePrint) -> Vec<UserInfo> {
-        let wanted_bytes = &self.bytes[blueprint.start_idx..blueprint.end_idx];
+    pub fn create_string_table(blueprint: &MsgBluePrint, bytes: &Mmap) -> JobResult {
+        let wanted_bytes = &bytes[blueprint.start_idx..blueprint.end_idx];
         let data: CSVCMsg_CreateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
 
         let mut st = StringTable {
@@ -106,7 +102,17 @@ impl Parser {
             uds: data.user_data_size(),
             data: Vec::new(),
         };
-        if st.name == "userinfo" || st.name == "instancebaseline" {
+        //  || st.name == "instancebaseline"
+        if st.name == "userinfo" {
+            let mut st = StringTable {
+                userinfo: true,
+                name: "userinfo".to_string(),
+                max_entries: 256,
+                uds: 0,
+                udfs: false,
+                data: vec![],
+            };
+
             for _ in 1..50000 {
                 st.data.push(StField {
                     entry: "".to_string(),
@@ -118,13 +124,14 @@ impl Parser {
                 data.num_entries(),
                 data.max_entries(),
                 data.user_data_fixed_size(),
+                blueprint.tick,
             );
-            self.state.stringtables.push(st);
             if new_players.is_some() {
-                return new_players.unwrap();
+                let new_players = new_players.unwrap();
+                return JobResult::StringTables(new_players);
             }
         }
-        vec![]
+        JobResult::None
     }
 
     pub fn update_string_table(
@@ -133,6 +140,7 @@ impl Parser {
         num_entries: i32,
         max_entries: i32,
         user_data_fixsize: bool,
+        tick: i32,
     ) -> Option<Vec<UserInfo>> {
         let mut buf = MyBitreader::new(data);
         let entry_bits = (max_entries as f32).log2() as i32;
@@ -196,10 +204,11 @@ impl Parser {
                 }
                 */
                 if st.userinfo {
-                    let mut ui = Parser::parse_userinfo(user_data);
+                    let mut ui = Parser::parse_userinfo(user_data, tick);
                     ui.entity_id = entry_index as u32 + 1;
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
+                    //println!("{:?}", ui);
                     new_userinfo.push(ui);
                 }
             }
@@ -210,11 +219,7 @@ impl Parser {
             None
         }
     }
-    pub fn update_string_table_msg(
-        blueprint: &MsgBluePrint,
-        mmap: &Mmap,
-        stringtables: &Vec<StringTable>,
-    ) -> JobResult {
+    pub fn update_string_table_msg(blueprint: &MsgBluePrint, mmap: &Mmap) -> JobResult {
         let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
         let data: CSVCMsg_UpdateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
         if data.table_id() != 7 {
@@ -228,126 +233,18 @@ impl Parser {
             udfs: false,
             data: vec![],
         };
-
-        //println!("{} {}", st.name, data.table_id());
         let new_userinfos = Parser::update_string_table(
             data.string_data(),
             &st,
             data.num_changed_entries(),
             st.max_entries,
             st.udfs,
+            blueprint.tick,
         );
+        //println!("XXX {:?}", new_userinfos);
         match new_userinfos {
             Some(u) => JobResult::StringTables(u),
             None => JobResult::None,
         }
     }
 }
-
-/*
-    pub fn update_string_table_msg(blueprint: &MsgBluePrint, mmap: &Mmap) -> Option<bool> {
-        let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
-        let data: CSVCMsg_UpdateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
-
-        let st = self
-            .state
-            .stringtables
-            .get_mut(data.table_id() as usize)
-            .unwrap();
-        let mut buf = MyBitreader::new(data.string_data());
-        let entry_bits = (st.max_entries as f32).log2() as i32;
-        let mut index = 0;
-        let mut last_inx: i32 = -1;
-        let mut idx = 0;
-        let mut btc = 0;
-        let mut history: Vec<String> = Vec::new();
-        let mut entry = String::new();
-        buf.read_boolie()?;
-
-        if !(st.name == "userinfo" || st.name == "instancebaseline") {
-            return Some(true);
-        }
-        println!("{}", st.name);
-        for _i in 0..data.num_changed_entries() {
-            index = last_inx + 1;
-            if !(buf.read_boolie()?) {
-                index = buf
-                    .read_nbits(entry_bits.try_into().unwrap())?
-                    .try_into()
-                    .unwrap();
-            }
-            last_inx = index;
-            if buf.read_boolie()? {
-                if buf.read_boolie()? {
-                    let idx = buf.read_nbits(5)? as i32;
-                    let bytes_to_copy = buf.read_nbits(5)?;
-                    let s = &history[idx as usize];
-                    let s_slice = &s[..bytes_to_copy as usize + 1];
-                    entry = s_slice.to_owned() + &buf.read_string(4096)?;
-                } else {
-                    entry = buf.read_string(4096)?;
-                }
-                st.data[index as usize].entry = entry.to_string()
-            }
-            if history.len() >= 32 {
-                history.remove(0);
-            }
-            history.push(entry.clone());
-            if buf.read_boolie()? {
-                let user_data = if st.udfs {
-                    vec![buf
-                        .read_nbits(st.uds.try_into().unwrap())?
-                        .try_into()
-                        .unwrap()]
-                } else {
-                    let size = buf.read_nbits(14)?;
-                    buf.read_bits_st(size)?
-                };
-                /*
-                if st.name == "instancebaseline" {
-                    let k = entry.parse::<u32>().unwrap_or(999999);
-                    match self.maps.serverclass_map.get(&(k as u16)) {
-                        Some(sv_cls) => {
-                            parse_baselines(&user_data, sv_cls, &mut self.maps.baselines);
-                        }
-                        None => {
-                            // Serverclass_map is not initiated yet, we need to parse this
-                            // later. Just why??? :() just seems unnecessarily complicated
-                            self.maps.baseline_no_cls.insert(k, user_data.clone());
-                        }
-                    }
-                }
-                */
-                if st.userinfo {
-                    let mut ui = Parser::parse_userinfo(user_data.clone());
-                    ui.entity_id = index as u32 + 1;
-                    ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
-                    ui.name = ui.name.trim_end_matches("\x00").to_string();
-
-                    self.maps
-                        .userid_sid_map
-                        .entry(ui.user_id)
-                        .or_insert(Vec::new())
-                        .push((ui.xuid.clone(), self.state.tick));
-
-                    self.maps
-                        .uid_eid_map
-                        .entry(ui.user_id)
-                        .or_insert(Vec::new())
-                        .push((ui.entity_id, self.state.tick));
-
-                    self.maps
-                        .sid_entid_map
-                        .entry(ui.xuid.clone())
-                        .or_insert(Vec::new())
-                        .push((ui.entity_id, self.state.tick));
-
-                    self.maps.players.insert(ui.xuid.clone(), ui);
-                }
-            }
-            history.push(entry.to_string());
-        }
-        Some(true)
-    }
-}
-*/

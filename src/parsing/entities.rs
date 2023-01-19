@@ -134,6 +134,8 @@ pub fn parse_ent_props(
     let sv_cls = m.get(&cls_id).unwrap();
     let indicies = get_indicies(b);
 
+    println!("{} {:?}", entity_id, indicies);
+
     let mut props: SmallVec<[(i32, PropData); 1]> = SmallVec::<[(i32, PropData); 1]>::new();
     for idx in indicies {
         let prop = &sv_cls.props[idx as usize];

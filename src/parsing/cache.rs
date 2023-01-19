@@ -2,6 +2,8 @@ use std::time::Instant;
 
 use crate::parsing::parser;
 use serde::Deserialize;
+
+use super::players::Players;
 pub struct Cache {
     pub deltas: Vec<Delta>,
     pub game_events: Vec<GameEventIdx>,
@@ -42,7 +44,9 @@ impl Cache {
         .unwrap();
         for result in rdr.deserialize() {
             let record: GameEventIdx = result.unwrap();
-            self.game_events.push(record);
+            if record.id == 24 {
+                self.game_events.push(record);
+            }
         }
     }
     pub fn set_stringtables(&mut self) {
@@ -58,51 +62,35 @@ impl Cache {
     pub fn get_stringtables(&self) -> Vec<u64> {
         self.stringtables.iter().map(|s| s.byte).collect()
     }
-    pub fn get_event_by_id(&self, wanted_id: i32) -> Vec<u64> {
+
+    pub fn get_event_by_id(&self, wanted_id: u32, players: &Players) -> Vec<u64> {
+        let mut v = vec![];
+
         let mut kills_idx = 0;
-        let before = Instant::now();
         for i in 0..self.deltas.len() {
-            let byte = self.deltas[i].byte;
-            //println!("{} < {}", self.game_events[kills_idx].byte, byte);
-            if self.game_events[kills_idx].byte < byte {
-                let byte_want =
-                    self.find_last_val(&self.deltas, &self.game_events[kills_idx], i, 20);
-                //println!("BW {:?}", byte_want);
+            let delta_start_byte = self.deltas[i].byte;
+
+            if self.game_events[kills_idx].byte < delta_start_byte {
+                let byte_want = self.find_last_val(
+                    &self.deltas,
+                    &self.game_events[kills_idx],
+                    i,
+                    wanted_id,
+                    players,
+                    self.game_events[kills_idx].byte,
+                );
+                v.push(byte_want);
+                //println!("GE: {:?} {byte_want}", self.game_events);
+
                 kills_idx += 1;
                 if kills_idx == self.game_events.len() {
                     break;
                 }
             }
         }
-        println!("{:2?}", before.elapsed());
-        let mut v = vec![];
-        for ev in &self.game_events {
-            if ev.id == wanted_id {
-                v.push(ev.byte);
-            }
-        }
+        println!("Number bytes {:?}", v.len());
         v
     }
-    /*
-    let v = get_v();
-    let kills = vec![(1000000, 5), (2000000, 4), (3000000, 5)];
-    let wanted_idx = 20;
-    let mut kills_idx = 0;
-
-    let before = Instant::now();
-
-    for i in 0..v.len() {
-        let byte = v[i].byte;
-        if kills[kills_idx].0 < byte {
-            let byte_want = find_last_val(&v, &kills[kills_idx], i, wanted_idx);
-            println!("{:?}", byte_want);
-            kills_idx += 1;
-            if kills_idx == kills.len() {
-                break;
-            }
-        }
-    }
-    */
 
     pub fn find_last_val(
         &self,
@@ -110,12 +98,16 @@ impl Cache {
         kill: &GameEventIdx,
         i: usize,
         wanted_idx: u32,
+        players: &Players,
+        byte: u64,
     ) -> u64 {
         /*
         Find most recent delta
         */
         for i in (0..i).rev() {
-            if v[i].idx == wanted_idx {
+            if v[i].idx == wanted_idx
+                && v[i].entid == players.uid_to_entid(84 as u32, byte as usize)
+            {
                 return v[i].byte;
             }
         }

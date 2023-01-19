@@ -1,9 +1,18 @@
+use ahash::HashMap;
+
 use crate::parsing::stringtables::UserInfo;
 
 use super::parser::JobResult;
 
+#[derive(Debug, Clone)]
 pub struct Players {
     pub players: Vec<UserInfo>,
+    pub uid_to_eid: HashMap<u32, Vec<Connection>>,
+}
+#[derive(Debug, Clone)]
+pub struct Connection {
+    entid: u32,
+    byte: usize,
 }
 
 impl Players {
@@ -20,14 +29,36 @@ impl Players {
                 _ => {}
             }
         }
-        Players { players: players }
+        let mut uid_to_entid = HashMap::default();
+
+        for player in &players {
+            uid_to_entid
+                .entry(player.user_id)
+                .or_insert(vec![])
+                .push(Connection {
+                    entid: player.entity_id,
+                    byte: player.byte,
+                });
+        }
+        for (k, v) in &uid_to_entid {
+            //println!("{} {:?}", k, v);
+        }
+        Players {
+            players: players,
+            uid_to_eid: uid_to_entid,
+        }
     }
-    pub fn uid_to_entid(&self, uid: i16, tick: i32) -> u32 {
-        for player in &self.players {
-            if player.user_id == uid.try_into().unwrap() {
-                return player.entity_id;
+    pub fn uid_to_entid(&self, uid: u32, byte: usize) -> u32 {
+        match self.uid_to_eid.get(&uid) {
+            None => panic!("NO USERID MAPPING TO ENTID: {}", uid),
+            Some(player_mapping) => {
+                for mapping in player_mapping {
+                    if mapping.byte > byte {
+                        return mapping.entid;
+                    }
+                }
+                return player_mapping.last().unwrap().entid;
             }
         }
-        panic!("No uid found")
     }
 }

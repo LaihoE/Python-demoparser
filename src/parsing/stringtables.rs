@@ -48,6 +48,7 @@ pub struct UserInfo {
     pub entity_id: u32,
     pub tbd: u32,
     pub tick: i32,
+    pub byte: usize,
 }
 
 impl UserInfo {
@@ -70,7 +71,7 @@ impl UserInfo {
     }
 }
 impl Parser {
-    pub fn parse_userinfo(userdata: Vec<u8>, tick: i32) -> UserInfo {
+    pub fn parse_userinfo(userdata: Vec<u8>, tick: i32, byte: usize) -> UserInfo {
         let ui = UserInfo {
             version: u64::from_be_bytes(userdata[0..8].try_into().unwrap()),
             xuid: u64::from_be_bytes(userdata[8..16].try_into().unwrap()),
@@ -86,6 +87,7 @@ impl Parser {
             entity_id: u32::from_be_bytes(userdata[331..335].try_into().unwrap()),
             tbd: u32::from_be_bytes(userdata[331..335].try_into().unwrap()),
             tick: tick,
+            byte: byte,
         };
         ui
     }
@@ -125,6 +127,7 @@ impl Parser {
                 data.max_entries(),
                 data.user_data_fixed_size(),
                 blueprint.tick,
+                blueprint.byte,
             );
             if new_players.is_some() {
                 let new_players = new_players.unwrap();
@@ -141,6 +144,7 @@ impl Parser {
         max_entries: i32,
         user_data_fixsize: bool,
         tick: i32,
+        byte: usize,
     ) -> Option<Vec<UserInfo>> {
         let mut buf = MyBitreader::new(data);
         let entry_bits = (max_entries as f32).log2() as i32;
@@ -204,10 +208,11 @@ impl Parser {
                 }
                 */
                 if st.userinfo {
-                    let mut ui = Parser::parse_userinfo(user_data, tick);
+                    let mut ui = Parser::parse_userinfo(user_data, tick, byte);
                     ui.entity_id = entry_index as u32 + 1;
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
+
                     //println!("{:?}", ui);
                     new_userinfo.push(ui);
                 }
@@ -240,6 +245,7 @@ impl Parser {
             st.max_entries,
             st.udfs,
             blueprint.tick,
+            blueprint.byte,
         );
         //println!("XXX {:?}", new_userinfos);
         match new_userinfos {

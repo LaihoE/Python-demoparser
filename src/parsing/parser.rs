@@ -78,23 +78,16 @@ impl Parser {
         return readers;
     }
     pub fn start_parsing(&mut self, props_names: &Vec<String>) {
-        let mut c = Cache {
+        let mut cache = Cache {
             deltas: vec![],
             game_events: vec![],
             stringtables: vec![],
         };
-        // 24 player death
-        // GL: 458399   MAP: 138837
-        c.set_deltas();
-        c.set_game_events();
-        c.set_stringtables();
+        cache.set_deltas();
+        cache.set_game_events();
+        cache.set_stringtables();
 
-        println!("ST {:?}", c.stringtables);
-        let mut deaths = c.get_event_by_id(24);
-        let st = c.get_stringtables();
-        deaths.extend(st);
-
-        let byte_readers = self.get_byte_readers(deaths);
+        let byte_readers = self.get_byte_readers(cache.get_stringtables());
         for mut byte_reader in byte_readers {
             let mut frames_parsed = 0;
             while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
@@ -107,7 +100,7 @@ impl Parser {
                 frames_parsed += 1;
             }
         }
-        self.compute_jobs();
+        self.compute_jobs(cache);
     }
 
     #[inline(always)]
@@ -144,13 +137,12 @@ impl Parser {
             self.tasks.push(msg_blueprint);
         }
     }
-    pub fn compute_jobs(&mut self) {
+    pub fn compute_jobs(&mut self, cache: Cache) {
         let tasks = self.tasks.clone();
         // Special msg that is needed for parsing game events.
         // Event comes one time per demo sometime in the beginning
         for task in &tasks {
             if task.msg == 30 {
-                println!("HERE");
                 self.parse_game_event_map(task);
             }
         }
@@ -166,25 +158,57 @@ impl Parser {
                 )
             })
             .collect();
-        //println!("{:?}", results);
-        let jr: Vec<JobResult> = results.into_iter().filter(|x| x.is_stringtable()).collect();
-        let p = Players::new(&jr);
 
-        for x in jr {
+        // 24 player death
+        // GL: 458399   MAP: 138837
+        let p = Players::new(&results);
+
+        let mut need_to_parse_bytes = cache.get_event_by_id(24, &p);
+
+        let byte_readers = self.get_byte_readers(need_to_parse_bytes);
+        for mut byte_reader in byte_readers {
+            let mut frames_parsed = 0;
+            while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
+                if byte_reader.single && frames_parsed > 0 {
+                    break;
+                }
+                let (cmd, tick) = byte_reader.read_frame();
+                self.state.tick = tick;
+                self.parse_cmd(cmd, &mut byte_reader);
+                frames_parsed += 1;
+            }
+        }
+        let tasks = self.tasks.clone();
+
+        let results: Vec<JobResult> = tasks
+            .into_par_iter()
+            .map(|t| {
+                Parser::msg_handler(
+                    &t,
+                    &self.bytes,
+                    &self.maps.serverclass_map,
+                    &self.maps.event_map.as_ref().unwrap(),
+                    &self.state.stringtables,
+                )
+            })
+            .collect();
+        for x in results {
             match x {
-                JobResult::GameEvents(g) => {
-                    if g.len() > 0 {
-                        let d = g[0].get_key_by_name("attacker".to_string());
-                        match d {
-                            Some(super::game_events::KeyData::Short(s)) => {
-                                p.uid_to_entid(s, g[0].tick);
+                JobResult::PacketEntities(j) => {
+                    for i in j {
+                        for v in i {
+                            for xx in v {
+                                if xx.0 == 5 {
+                                    println!("{:?}", xx.1);
+                                }
                             }
-                            _ => {}
                         }
+                        //println!("{:?}", i)
                     }
                 }
                 _ => {}
             }
+            //println!("{:?}", x);
         }
     }
     pub fn msg_handler(

@@ -3,6 +3,7 @@ use memmap2::Mmap;
 use std::sync::Arc;
 use varint_simd::{decode, decode_two_unsafe, encode, encode_zigzag};
 
+#[derive(Debug)]
 pub struct ByteReader {
     pub bytes: Arc<Mmap>,
     pub byte_idx: usize,

@@ -69,10 +69,8 @@ impl Parser {
             return vec![ByteReader::new(self.bytes.clone(), false, 1072)];
         }
         let mut readers = vec![];
-        let data_table_reader = ByteReader::new(self.bytes.clone(), true, 138837 - 6);
-        readers.push(data_table_reader);
-        let data_table_reader = ByteReader::new(self.bytes.clone(), true, 458399);
-        readers.push(data_table_reader);
+        readers.push(ByteReader::new(self.bytes.clone(), true, 138837 - 6));
+        readers.push(ByteReader::new(self.bytes.clone(), true, 458399));
         for pos in start_pos {
             let other_reader = ByteReader::new(self.bytes.clone(), true, pos as usize);
             readers.push(other_reader);
@@ -171,7 +169,6 @@ impl Parser {
         //println!("{:?}", results);
         let jr: Vec<JobResult> = results.into_iter().filter(|x| x.is_stringtable()).collect();
         let p = Players::new(&jr);
-        //println!("{:?}", sts);
 
         for x in jr {
             match x {

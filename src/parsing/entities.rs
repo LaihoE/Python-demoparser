@@ -25,6 +25,18 @@ pub struct Entity {
     pub entity_id: u32,
     pub props: HashMap<String, PropAtom, RandomState>,
 }
+#[derive(Debug, Clone)]
+pub struct SingleEntOutput {
+    pub ent_id: i32,
+    pub prop_inx: i32,
+    pub data: PropData,
+}
+#[derive(Debug, Clone)]
+pub struct PacketEntsOutput {
+    pub data: Vec<SingleEntOutput>,
+    pub tick: i32,
+    pub byte: usize,
+}
 
 #[derive(Debug, Clone)]
 pub struct Prop {
@@ -49,11 +61,16 @@ pub fn parse_packet_entities(
 ) -> JobResult {
     let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
     let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
-    JobResult::PacketEntities(Parser::_parse_packet_entities(
-        msg,
-        sv_cls_map,
-        blueprint.tick,
-    ))
+
+    let result = Parser::_parse_packet_entities(msg, sv_cls_map, blueprint.tick);
+    match result {
+        None => JobResult::None,
+        Some(p) => JobResult::PacketEntities(PacketEntsOutput {
+            data: p,
+            tick: blueprint.tick,
+            byte: blueprint.byte,
+        }),
+    }
 }
 
 impl Parser {
@@ -61,7 +78,7 @@ impl Parser {
         pack_ents: CSVCMsg_PacketEntities,
         sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
         tick: i32,
-    ) -> Option<Vec<SmallVec<[(i32, PropData); 1]>>> {
+    ) -> Option<Vec<SingleEntOutput>> {
         /*
         Main thing to understand here is that entity ids are
         sorted so we can break out early. Also first ~70 entids
@@ -128,7 +145,7 @@ pub fn parse_ent_props(
     b: &mut MyBitreader,
     sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
     tick: i32,
-) -> Option<SmallVec<[(i32, PropData); 1]>> {
+) -> Vec<SingleEntOutput> {
     let cls_id = get_cls_id(entity_id);
     let m = sv_cls_map;
     let sv_cls = m.get(&cls_id).unwrap();
@@ -136,16 +153,20 @@ pub fn parse_ent_props(
 
     println!("{} {:?}", entity_id, indicies);
 
-    let mut props: SmallVec<[(i32, PropData); 1]> = SmallVec::<[(i32, PropData); 1]>::new();
+    let mut props: Vec<SingleEntOutput> = Vec::with_capacity(2);
+
     for idx in indicies {
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
 
-        if prop.name.len() > 4 {
-            props.push((idx, pdata));
-        }
+        let data = SingleEntOutput {
+            ent_id: entity_id,
+            prop_inx: idx,
+            data: pdata,
+        };
+        props.push(data);
     }
-    Some(props)
+    props
 }
 
 #[inline(always)]
@@ -200,6 +221,7 @@ pub fn parse_baselines(
     for inx in indicies {
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop).unwrap();
+
         baseline.insert(prop.name.to_owned(), pdata);
     }
     baselines.insert(sv_cls.id.try_into().unwrap(), baseline);

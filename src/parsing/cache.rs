@@ -3,7 +3,7 @@ use std::time::Instant;
 use crate::parsing::parser;
 use serde::Deserialize;
 
-use super::players::Players;
+use super::{parser::JobResult, players::Players};
 pub struct Cache {
     pub deltas: Vec<Delta>,
     pub game_events: Vec<GameEventIdx>,
@@ -62,18 +62,42 @@ impl Cache {
     pub fn get_stringtables(&self) -> Vec<u64> {
         self.stringtables.iter().map(|s| s.byte).collect()
     }
+    pub fn get_event_by_id(&self, wanted_id: i32) -> Vec<&GameEventIdx> {
+        self.game_events
+            .iter()
+            .filter(|x| x.id == wanted_id)
+            .collect()
+    }
+    pub fn get_event_bytes_by_id(&self, wanted_id: i32) -> Vec<u64> {
+        self.game_events
+            .iter()
+            .filter(|x| x.id == wanted_id)
+            .map(|x| x.byte)
+            .collect()
+    }
 
-    pub fn get_event_by_id(&self, wanted_id: u32, players: &Players) -> Vec<u64> {
+    pub fn set_game_event_jobs(&mut self, game_evs: Vec<&JobResult>) {
         let mut v = vec![];
+        for event in game_evs {
+            match event {
+                JobResult::GameEvents(ge) => v.push(ge[0]),
+                _ => {}
+            }
+        }
+    }
+
+    pub fn get_event_deltas(&self, wanted_id: u32, players: &Players) -> Vec<u64> {
+        let mut v = vec![];
+        let wanted_events = self.get_event_by_id(wanted_id as i32);
 
         let mut kills_idx = 0;
         for i in 0..self.deltas.len() {
             let delta_start_byte = self.deltas[i].byte;
 
-            if self.game_events[kills_idx].byte < delta_start_byte {
+            if wanted_events[kills_idx].byte < delta_start_byte {
                 let byte_want = self.find_last_val(
                     &self.deltas,
-                    &self.game_events[kills_idx],
+                    &wanted_events[kills_idx],
                     i,
                     wanted_id,
                     players,
@@ -83,7 +107,7 @@ impl Cache {
                 //println!("GE: {:?} {byte_want}", self.game_events);
 
                 kills_idx += 1;
-                if kills_idx == self.game_events.len() {
+                if kills_idx == wanted_events.len() {
                     break;
                 }
             }

@@ -1,8 +1,10 @@
 use super::cache::Cache;
+use super::entities::SingleEntOutput;
 use super::game_events::GameEvent;
 use crate::parsing::cache;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::parse_packet_entities;
+use crate::parsing::entities::PacketEntsOutput;
 use crate::parsing::parser_settings::*;
 use crate::parsing::players::Players;
 use crate::parsing::read_bytes::ByteReader;
@@ -13,7 +15,6 @@ use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use memmap2::Mmap;
 use rayon::prelude::*;
-
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -37,7 +38,7 @@ pub struct MsgBluePrint {
 }
 #[derive(Debug)]
 pub enum JobResult {
-    PacketEntities(Option<Vec<SmallVec<[(i32, PropData); 1]>>>),
+    PacketEntities(PacketEntsOutput),
     GameEvents(Vec<GameEvent>),
     StringTables(Vec<UserInfo>),
     None,
@@ -87,7 +88,10 @@ impl Parser {
         cache.set_game_events();
         cache.set_stringtables();
 
-        let byte_readers = self.get_byte_readers(cache.get_stringtables());
+        let mut wanted_bytes = cache.get_event_bytes_by_id(24);
+        wanted_bytes.extend(cache.get_stringtables());
+
+        let byte_readers = self.get_byte_readers(wanted_bytes);
         for mut byte_reader in byte_readers {
             let mut frames_parsed = 0;
             while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
@@ -161,9 +165,10 @@ impl Parser {
 
         // 24 player death
         // GL: 458399   MAP: 138837
+        //let game_ev: Vec<&GameEvent> = results.iter().filter(|x| x.is_game_event()).collect();
         let p = Players::new(&results);
 
-        let mut need_to_parse_bytes = cache.get_event_by_id(24, &p);
+        let mut need_to_parse_bytes = cache.get_event_deltas(24, &p, &results);
 
         let byte_readers = self.get_byte_readers(need_to_parse_bytes);
         for mut byte_reader in byte_readers {
@@ -195,20 +200,14 @@ impl Parser {
         for x in results {
             match x {
                 JobResult::PacketEntities(j) => {
-                    for i in j {
-                        for v in i {
-                            for xx in v {
-                                if xx.0 == 5 {
-                                    println!("{:?}", xx.1);
-                                }
-                            }
+                    for s in j.data {
+                        if s.ent_id == 5 {
+                            println!("{} {:?}", j.tick, s);
                         }
-                        //println!("{:?}", i)
                     }
                 }
                 _ => {}
             }
-            //println!("{:?}", x);
         }
     }
     pub fn msg_handler(

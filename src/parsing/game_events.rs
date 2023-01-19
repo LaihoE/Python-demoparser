@@ -75,6 +75,8 @@ pub struct GameEvent {
     pub name: String,
     pub fields: Vec<NameDataPair>,
     pub tick: i32,
+    pub byte: usize,
+    pub id: i32,
 }
 
 impl GameEvent {
@@ -139,21 +141,25 @@ impl Parser {
         let mut game_events: Vec<GameEvent> = Vec::new();
         let event_desc = &game_events_map[&msg.eventid()];
 
-        if event_desc.name() == wanted_event {
-            let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.byte);
+        let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.byte);
 
-            game_events.push({
-                GameEvent {
-                    name: event_desc.name().to_owned(),
-                    fields: name_data_pairs,
-                    tick: blueprint.tick,
-                }
-            });
-        }
+        game_events.push({
+            GameEvent {
+                name: event_desc.name().to_owned(),
+                fields: name_data_pairs,
+                tick: blueprint.tick,
+                byte: blueprint.byte,
+                id: msg.eventid(),
+            }
+        });
+
         JobResult::GameEvents(game_events)
     }
 
     pub fn parse_game_event_map(&mut self, blueprint: &MsgBluePrint) {
+        //println!("GEEEEEEEEEEe {} {}", blueprint.start_idx, );
+        self.state.ge_map_started_at = (blueprint.byte) as u64;
+
         let wanted_bytes = &self.bytes[blueprint.start_idx..blueprint.end_idx];
         let msg: CSVCMsg_GameEventList = Message::parse_from_bytes(wanted_bytes).unwrap();
         let mut hm: HashMap<i32, Descriptor_t, RandomState> = HashMap::default();

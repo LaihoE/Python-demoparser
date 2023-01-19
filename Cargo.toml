@@ -30,6 +30,7 @@ rayon = "1.6.0"
 threadpool = "1.8.1"
 dashmap = "5.4.0"
 varint-simd = "0.3.0"
+sha256 = "1.1.1"
 
 [dependencies.csgoproto]
 path = "src/parsing/csgoproto"

@@ -60,7 +60,13 @@ fn main() {
         let props_names = vec!["m_vecOrigin".to_string()];
         println!("{:?}", demo_path.as_ref().unwrap().path());
         let mut parser = Parser::new(
-            p.to_string(),
+            demo_path
+                .unwrap()
+                .path()
+                .as_path()
+                .to_str()
+                .unwrap()
+                .to_string(),
             true,
             vec![],
             vec![],
@@ -77,7 +83,7 @@ fn main() {
         let h: Header = parser.parse_demo_header();
         let mut event_names: Vec<String> = Vec::new();
         let data_a = parser.start_parsing(&props_names);
-        break;
+        //break;
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?}", elapsed);
     }

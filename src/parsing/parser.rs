@@ -1,4 +1,5 @@
-use super::cache::Cache;
+use super::cache::ReadCache;
+use super::cache::WriteCache;
 use super::entities::SingleEntOutput;
 use super::game_events::GameEvent;
 use crate::parsing::cache;
@@ -14,10 +15,13 @@ pub use crate::parsing::variants::*;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use memmap2::Mmap;
+use polars::export::regex::internal::Inst;
 use rayon::prelude::*;
+use sha256;
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use std::u8;
 
 pub struct Parser {
@@ -79,11 +83,13 @@ impl Parser {
         return readers;
     }
     pub fn start_parsing(&mut self, props_names: &Vec<String>) {
-        let mut cache = Cache {
-            deltas: vec![],
-            game_events: vec![],
-            stringtables: vec![],
-        };
+        let file_hash = sha256::digest(&self.bytes[..10000]);
+        let path = "/home/laiho/Documents/cache/".to_string();
+        let path_and_hash = path + &file_hash + "/";
+
+        println!("{:?}", file_hash);
+
+        let mut cache = ReadCache::new(&path_and_hash);
         cache.set_deltas();
         cache.set_game_events();
         cache.set_stringtables();
@@ -104,7 +110,19 @@ impl Parser {
                 frames_parsed += 1;
             }
         }
-        self.compute_jobs(cache);
+
+        let jobresults = self.compute_jobs_no_cache();
+
+        let mut wc = WriteCache::new(
+            jobresults,
+            self.state.dt_started_at,
+            self.state.ge_map_started_at,
+        );
+
+        wc.write_packet_ents(path_and_hash.to_owned());
+        wc.write_game_events(path_and_hash.to_owned());
+        wc.write_string_tables(path_and_hash.to_owned());
+        wc.write_maps(path_and_hash.to_owned());
     }
 
     #[inline(always)]
@@ -112,13 +130,17 @@ impl Parser {
         match cmd {
             1 => self.parse_packet(byte_reader),
             2 => self.parse_packet(byte_reader),
-            6 => self.parse_datatable(byte_reader),
+            6 => {
+                self.state.dt_started_at = (byte_reader.byte_idx - 6) as u64;
+                self.parse_datatable(byte_reader)
+            }
             _ => {}
         }
     }
 
     #[inline(always)]
     pub fn parse_packet(&mut self, byte_reader: &mut ByteReader) {
+        let packet_started_at = byte_reader.byte_idx - 6;
         byte_reader.byte_idx += 160;
         let packet_len = byte_reader.read_i32();
         let goal_inx = byte_reader.byte_idx + packet_len as usize;
@@ -136,17 +158,45 @@ impl Parser {
                 start_idx: before_inx,
                 end_idx: after_inx,
                 tick: self.state.tick,
-                byte: byte_reader.byte_idx - 166,
+                byte: packet_started_at,
             };
             self.tasks.push(msg_blueprint);
         }
     }
-    pub fn compute_jobs(&mut self, cache: Cache) {
+    pub fn compute_jobs_no_cache(&mut self) -> Vec<JobResult> {
         let tasks = self.tasks.clone();
         // Special msg that is needed for parsing game events.
         // Event comes one time per demo sometime in the beginning
+        let before = Instant::now();
         for task in &tasks {
             if task.msg == 30 {
+                self.parse_game_event_map(task);
+            }
+        }
+        let results: Vec<JobResult> = tasks
+            .into_par_iter()
+            .map(|t| {
+                Parser::msg_handler(
+                    &t,
+                    &self.bytes,
+                    &self.maps.serverclass_map,
+                    &self.maps.event_map.as_ref().unwrap(),
+                    &self.state.stringtables,
+                )
+            })
+            .collect();
+        println!("{:?}", results.len());
+        return results;
+    }
+
+    pub fn compute_jobs(&mut self, cache: &mut ReadCache) {
+        let tasks = self.tasks.clone();
+        // Special msg that is needed for parsing game events.
+        // Event comes one time per demo sometime in the beginning
+        let before = Instant::now();
+        for task in &tasks {
+            if task.msg == 30 {
+                self.state.ge_map_started_at = (task.start_idx - 6) as u64;
                 self.parse_game_event_map(task);
             }
         }
@@ -165,10 +215,13 @@ impl Parser {
 
         // 24 player death
         // GL: 458399   MAP: 138837
-        //let game_ev: Vec<&GameEvent> = results.iter().filter(|x| x.is_game_event()).collect();
-        let p = Players::new(&results);
+        // let game_ev: Vec<&GameEvent> = results.iter().filter(|x| x.is_game_event()).collect();
 
-        let mut need_to_parse_bytes = cache.get_event_deltas(24, &p, &results);
+        let p = Players::new(&results);
+        let events = cache.get_game_event_jobs(&results, &p);
+        let mut need_to_parse_bytes = cache.get_event_deltas(24, &p, &events);
+
+        self.tasks = vec![];
 
         let byte_readers = self.get_byte_readers(need_to_parse_bytes);
         for mut byte_reader in byte_readers {
@@ -201,14 +254,15 @@ impl Parser {
             match x {
                 JobResult::PacketEntities(j) => {
                     for s in j.data {
-                        if s.ent_id == 5 {
-                            println!("{} {:?}", j.tick, s);
+                        if s.ent_id == 5 && s.prop_inx == 20 {
+                            //println!("{} {:?}", j.tick, s);
                         }
                     }
                 }
                 _ => {}
             }
         }
+        println!("Took {:2?}", before.elapsed());
     }
     pub fn msg_handler(
         blueprint: &MsgBluePrint,
@@ -218,6 +272,7 @@ impl Parser {
         stringtables: &Vec<StringTable>,
     ) -> JobResult {
         let wanted_event = "player_death";
+        //println!("{:?} {}", blueprint.tick, blueprint.msg);
         match blueprint.msg {
             26 => parse_packet_entities(blueprint, bytes, serverclass_map),
             25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),

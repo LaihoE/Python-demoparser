@@ -22,6 +22,8 @@ pub struct ParserState {
     pub entities: Vec<(u32, Entity)>,
     pub stringtables: Vec<StringTable>,
     pub game_events: Vec<GameEvent>,
+    pub ge_map_started_at: u64,
+    pub dt_started_at: u64,
 }
 
 pub struct Maps {
@@ -117,6 +119,8 @@ impl Parser {
                     entities: vec![],
                     game_events: vec![],
                     stringtables: vec![],
+                    dt_started_at: 0,
+                    ge_map_started_at: 0,
                 };
                 match data {
                     Mmap3(m) => Ok(Self {

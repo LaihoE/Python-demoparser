@@ -151,7 +151,7 @@ pub fn parse_ent_props(
     let sv_cls = m.get(&cls_id).unwrap();
     let indicies = get_indicies(b);
 
-    println!("{} {:?}", entity_id, indicies);
+    // println!("{} {:?}", entity_id, indicies);
 
     let mut props: Vec<SingleEntOutput> = Vec::with_capacity(2);
 

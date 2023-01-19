@@ -32,6 +32,7 @@ impl Players {
         let mut uid_to_entid = HashMap::default();
 
         for player in &players {
+            println!("{} {}", player.entity_id, player.xuid);
             uid_to_entid
                 .entry(player.user_id)
                 .or_insert(vec![])
@@ -41,7 +42,7 @@ impl Players {
                 });
         }
         for (k, v) in &uid_to_entid {
-            //println!("{} {:?}", k, v);
+            // println!("{} {:?}", k, v);
         }
         Players {
             players: players,

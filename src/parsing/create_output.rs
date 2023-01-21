@@ -5,7 +5,6 @@ use super::stringtables::StringTable;
 use super::stringtables::UserInfo;
 use crate::parsing::columnmapper::EntColMapper;
 use crate::parsing::data_table::ServerClass;
-use crate::parsing::entities::SingleEntOutput;
 use crate::parsing::game_events;
 use crate::parsing::parser::JobResult;
 use crate::parsing::parser::ParsingMaps;
@@ -97,82 +96,18 @@ pub fn filter_jobresults(
     */
     (packet_ents, game_events, stringtables)
 }
-struct WrapperType(*mut f32);
-unsafe impl Send for WrapperType {}
-unsafe impl Sync for WrapperType {}
 
 impl Parser {
     pub fn insert_props_into_df(
         &self,
         packet_ents: Vec<&PacketEntsOutput>,
         max_ticks: usize,
-        int_props: &Vec<i32>,
         df: &mut ArrayBase<OwnedRepr<f32>, Dim<[usize; 3]>>,
         ecm: &EntColMapper,
-    ) -> HashMap<usize, i32> {
+    ) {
+        let before = Instant::now();
         // Map prop idx into its column.
-        let (col_mapping, idx_col) = create_idx_col_mapping(&int_props);
-        let before = Instant::now();
 
-        let mut v: Vec<f32> = vec![0.0; max_ticks];
-        println!("😎 {:2?}", before.elapsed());
-
-        let df_ptr = WrapperType(v.as_mut_ptr());
-
-        let cpa = packet_ents.clone();
-
-        cpa.into_par_iter().for_each(|peo| {
-            peo.data.iter().for_each(|seo| {
-                seo.iter().for_each(|x| match x.data {
-                    PropData::F32(f) => {
-                        println!("{}", f);
-                        // df[[0, 0, 0]] = f;
-                        let _ = &df_ptr;
-                        unsafe { df_ptr.0.offset(peo.tick.try_into().unwrap()).write(f) };
-                        //println!("{:?} {}", f, peo.tick)
-                    }
-                    _ => {}
-                })
-            })
-        });
-
-        //println!("😎 {:2?}", before.elapsed());
-
-        //println!("{:?}", v);
-
-        /*
-        use std::thread;
-
-        let before = Instant::now();
-
-        thread::scope(|s| {
-            s.spawn(|| unsafe {
-                let _ = &df_ptr;
-                df_ptr.0.write(69.0);
-            });
-            println!("hello from the main thread");
-        });
-
-        println!(":( {:?}", before.elapsed());
-        */
-        //println!("{:?}", floats);
-
-        //let v: Vec<&&PacketEntsOutput> = packet_ents.iter().map(|x| x).collect();
-        //let x: Vec<PropData> = v.iter().flat_map(|x| x.data.iter().collect::()).collect();
-
-        /*
-        let v: Vec<PropData> = packet_ents
-            .into_iter()
-            .flat_map(|packet_ents| {
-                packet_ents
-                    .data
-                    .into_iter()
-                    .flat_map(|x| x.into_iter().flat_map(|x| x.data))
-            })
-            .collect();
-            */
-
-        let before = Instant::now();
         // For every packetEnt message during game
         for packet_ent_msg in packet_ents {
             // For every entity in the message
@@ -182,14 +117,15 @@ impl Parser {
                     match prop.data {
                         PropData::F32(f) => {
                             // println!("NOW IDX {:?} {:?}", prop.prop_inx, prop.data);
-                            let prop_col = col_mapping[&prop.prop_inx];
-                            let player_col = ecm.get_col(prop.ent_id as u32, packet_ent_msg.tick);
-                            //println!("{} {} {}", player_col, prop_col, packet_ent_msg.tick);
+                            let prop_col = ecm.get_prop_col(&prop.prop_inx);
+                            let player_col =
+                                ecm.get_player_col(prop.ent_id as u32, packet_ent_msg.tick);
                             df[[player_col, prop_col, packet_ent_msg.tick as usize]] = f as f32;
                         }
                         PropData::I32(i) => {
-                            let prop_col = col_mapping[&prop.prop_inx];
-                            let player_col = ecm.get_col(prop.ent_id as u32, packet_ent_msg.tick);
+                            let prop_col = ecm.get_prop_col(&prop.prop_inx);
+                            let player_col =
+                                ecm.get_player_col(prop.ent_id as u32, packet_ent_msg.tick);
                             // let tick = ecm.get_tick(packet_ent_msg.tick);
                             df[[player_col, prop_col, packet_ent_msg.tick as usize]] = i as f32;
                         }
@@ -199,10 +135,34 @@ impl Parser {
                 }
             }
         }
-        println!("SLOW: {:2?}", before.elapsed());
+    }
+    pub fn create_game_events(
+        &mut self,
+        game_events: &Vec<&GameEvent>,
+        ecm: EntColMapper,
+        df: &mut ArrayBase<OwnedRepr<f32>, Dim<[usize; 3]>>,
+    ) {
+        for ev in game_events {
+            for field in &ev.fields {
+                if field.name == "userid" {
+                    //let ent_id = ecm.entid_from_uid(&field.data);
+                    /*
+                    let prop_col = col_mapping[&prop.prop_inx];
+                    let player_col = ecm.get_col(ent_id, ev.tick);
+                    df[[player_col, prop_col, packet_ent_msg.tick as usize]] = i as f32;
+                    */
+                }
+                //println!("{:?}", f);
+            }
+        }
+        // let prop_col = col_mapping[&prop.prop_inx];
+        // let player_col = ecm.get_col(prop.ent_id as u32, packet_ent_msg.tick);
 
-        //println!("VEC TO DF TOOK: {:2?}", before.elapsed());
-        idx_col
+        //df[[player_col, prop_col, packet_ent_msg.tick as usize]] = i as f32;
+
+        //let tick = ev.tick;
+        //ecm.g
+        //println!("{:?}", df[[]])
     }
 
     pub fn get_raw_df(
@@ -214,80 +174,56 @@ impl Parser {
     ) -> Vec<Series> {
         // Group jobs by type
         let (packet_ents, game_events, stringtables) = filter_jobresults(jobs);
-        //println!("{:?}", stringtables);
-        let ecm = EntColMapper::new(&stringtables, &self.settings.wanted_ticks);
-        let mut real_props = rm_user_friendly_names(&self.settings.wanted_props);
-        let ticks: Vec<i32> = (0..max_ticks).into_iter().map(|t| t as i32).collect();
-        let int_props = str_props_to_int_props(&real_props, parser_maps.clone());
-        let str_names = self.insert_props_into_df(packet_ents, max_ticks, &int_props, df, &ecm);
+
+        let ecm = EntColMapper::new(
+            &stringtables,
+            &self.settings.wanted_ticks,
+            &self.settings.wanted_props,
+            max_ticks,
+            parser_maps.clone(),
+        );
+
+        self.insert_props_into_df(packet_ents, max_ticks, df, &ecm);
 
         let mut series_players = vec![];
-        let mut ticks_col: Vec<i32> = vec![]; //Vec::with_capacity(max_ticks * 12);
-        let mut steamids_col: Vec<u64> = vec![]; //Vec::with_capacity(max_ticks * 12);
+        let mut ticks_col: Vec<i32> = vec![];
+        let mut steamids_col: Vec<u64> = vec![];
 
         fill_none_with_most_recent(df, self.settings.wanted_props.len());
-        /*
-        let temp = df.clone();
-        let t = temp
-            .into_shape((df.shape()[0] * df.shape()[1], df.shape()[2]))
-            .unwrap()
-            .to_owned();
-
-        let before = Instant::now();
-        let s = Series::new("boo", t.as_slice().unwrap());
-        */
-        //println!("X {:2?}", before.elapsed());
-        //println!("{}", s);
-
-        //println!("RESHAPE MAGIC SPEED GOGOO {:2?}", before.elapsed());
-
-        //println!("{:?}", t.shape());
-        //println!("{}", t.slice(s![4, 80000..80100]));
-
-        //a.slice(s![..3, 4..9])
 
         let all_player_cols: Vec<&usize> = ecm.col_sid_map.keys().into_iter().collect();
-        //println!("PLAYERS {:?}", all_player_cols);
-        /*
         let before = Instant::now();
-        for (propcol, prop_name) in str_names.iter().enumerate() {
-            // let before3 = Instant::now();
-            let mut this_prop_col: Vec<f32> = Vec::with_capacity(15 * max_ticks);
-            let before = Instant::now();
+        let str_names = ecm.idx_pos.clone();
+        let ticks: Vec<i32> = (0..max_ticks).into_iter().map(|t| t as i32).collect();
 
-            // println!("alloc {:2?}", before3.elapsed());
-            // println!("PROPCOL LEN {}", this_prop_col.capacity());
-            // MAX playerid is 64, just skip if not player
+        for (propcol, prop_name) in str_names.iter().enumerate() {
+            let mut this_prop_col: Vec<f32> = Vec::with_capacity(15 * max_ticks);
             for player_col in 1..15 {
                 // Metadata
                 if !all_player_cols.contains(&&player_col) {
                     continue;
                 }
-                let before = Instant::now();
-
                 if propcol == 0 {
                     ticks_col.extend(&ticks);
                     steamids_col.extend(ecm.get_col_sid_vec(player_col, max_ticks));
-                    //println!("STD {:2?}", before.elapsed());
                 }
-
                 this_prop_col.extend(&df.slice(s![player_col, propcol, ..]));
             }
-            println!("SERIES: {:2?}", before.elapsed());
-
             let n = str_names[prop_name.0];
-
             let props = Series::new(&n.to_string(), &this_prop_col);
-
             series_players.push(props);
         }
+
+        // println!("SERIES: {:2?}", before.elapsed());
 
         let steamids = Series::new("steamids", steamids_col);
         let ticks = Series::new("ticks", ticks_col);
 
         series_players.push(steamids);
         series_players.push(ticks);
-        */
+
+        self.create_game_events(&game_events, ecm, df);
+
         series_players
     }
 }
@@ -305,7 +241,6 @@ pub fn fill_none_with_most_recent(
     Output: Vec![1, 2, 3, 3, 3, 6]
     */
     let before = Instant::now();
-
     for propcol in 0..n_props {
         for entid in 0..12 {
             let mut last = 0.0;
@@ -320,221 +255,5 @@ pub fn fill_none_with_most_recent(
             }
         }
     }
-    println!("FFIL TOOK: {:2?}", before.elapsed());
-}
-
-fn create_idx_col_mapping(prop_indicies: &Vec<i32>) -> (HashMap<i32, usize>, HashMap<usize, i32>) {
-    /*
-    Create mapping from property index into column index.
-    This is needed because prop indicies might be:
-    24, 248, 354 and we can't be creating 354 columns so
-    we map it into 0,1,2..
-    */
-    let mut idx_pos: HashMap<i32, usize> = HashMap::default();
-    let mut col_idx: HashMap<usize, i32> = HashMap::default();
-    //println!("INT PROPS {:?}", prop_indicies);
-    for (cnt, p_idx) in prop_indicies.iter().enumerate() {
-        idx_pos.insert(*p_idx, cnt);
-        col_idx.insert(cnt, *p_idx);
-    }
-    //println!("STR PROPS {:?}", col_idx);
-    //println!("IDX PROPS {:?}", idx_pos);
-
-    (idx_pos, col_idx)
-}
-fn col_str_mapping(col_indicies: &Vec<i32>, parser_maps: Arc<RwLock<ParsingMaps>>) -> Vec<String> {
-    /*
-    Maps column index to it's human readable name
-    */
-    let parser_maps_read = parser_maps.read().unwrap();
-    let serverclass_map = parser_maps_read.serverclass_map.as_ref().unwrap();
-
-    let mut str_names = vec![];
-    let props = &serverclass_map.player.props;
-    for ci in col_indicies {
-        let s = &props[*ci as usize];
-        str_names.push(s.name.to_owned());
-    }
-    str_names
-}
-
-// String_name --> Propidx --> Colidx
-
-struct PropIdentity {
-    str_name: String,
-    prop_idx: i32,
-    col_idx: i32,
-}
-
-pub fn str_props_to_int_props(
-    str_props: &Vec<String>,
-    parser_maps: Arc<RwLock<ParsingMaps>>,
-) -> Vec<i32> {
-    let parser_maps_read = parser_maps.read().unwrap();
-    let serverclass_map = parser_maps_read.serverclass_map.as_ref().unwrap();
-
-    let mut int_props = vec![];
-
-    for s in str_props {
-        //if s != "m_vecOrigin" {
-        int_props.push(str_prop_to_int(s, &serverclass_map));
-        //}
-    }
-    int_props
-}
-
-fn str_prop_to_int(wanted_prop: &str, serverclass_map: &ServerClasses) -> i32 {
-    /*
-    Maps string names to their prop index (used in packet ents)
-    For example m_angEyeAngles[0] --> 20
-    Mainly need to pay attention to manager props comming from different
-    serverclass
-    */
-    match wanted_prop {
-        "m_vecOrigin_X" => return 10000i32,
-        "m_vecOrigin_Y" => return 10001i32,
-        _ => {}
-    }
-
-    let sv_cls = &serverclass_map.player;
-
-    match sv_cls.props.iter().position(|x| x.name == wanted_prop) {
-        Some(idx) => idx as i32,
-        None => panic!("Could not find prop idx for {}", wanted_prop),
-    }
-}
-
-pub fn rm_user_friendly_names(names: &Vec<String>) -> Vec<String> {
-    let mut unfriendly_names = vec![];
-    for name in names {
-        match &name[..] {
-            "X" => unfriendly_names.push("m_vecOrigin_X".to_string()),
-            "Y" => unfriendly_names.push("m_vecOrigin_Y".to_string()),
-            "Z" => unfriendly_names.push("m_vecOrigin[2]".to_string()),
-            "ammo" => unfriendly_names.push("m_iClip1".to_string()),
-            "velocity_X" => unfriendly_names.push("m_vecVelocity[0]".to_string()),
-            "velocity_Y" => unfriendly_names.push("m_vecVelocity[1]".to_string()),
-            "velocity_Z" => unfriendly_names.push("m_vecVelocity[2]".to_string()),
-            "viewangle_pitch" => unfriendly_names.push("m_angEyeAngles[0]".to_string()),
-            "viewangle_yaw" => unfriendly_names.push("m_angEyeAngles[1]".to_string()),
-            "ducked" => unfriendly_names.push("m_bDucked".to_string()),
-            "in_buy_zone" => unfriendly_names.push("m_bInBuyZone".to_string()),
-            "scoped" => unfriendly_names.push("m_bIsScoped".to_string()),
-            "health" => unfriendly_names.push("m_iHealth".to_string()),
-            "flash_duration" => unfriendly_names.push("m_flFlashDuration".to_string()),
-            "aimpunch_X" => unfriendly_names.push("m_aimPunchAngle_X".to_string()),
-            "aimpunch_Y" => unfriendly_names.push("m_aimPunchAngle_Y".to_string()),
-            "aimpunch_Z" => unfriendly_names.push("m_aimPunchAngle_Z".to_string()),
-            "aimpunch_vel_X" => unfriendly_names.push("m_aimPunchAngleVel_X".to_string()),
-            "aimpunch_vel_Y" => unfriendly_names.push("m_aimPunchAngleVel_Y".to_string()),
-            "aimpunch_vel_Z" => unfriendly_names.push("m_aimPunchAngleVel_Z".to_string()),
-            "balance" => unfriendly_names.push("m_iAccount".to_string()),
-            "ping" => unfriendly_names.push("m_iPing".to_string()),
-            "score" => unfriendly_names.push("m_iScore".to_string()),
-            "deaths" => unfriendly_names.push("m_iDeaths".to_string()),
-            "kills" => unfriendly_names.push("m_iKills".to_string()),
-            "assists" => unfriendly_names.push("m_iAssists".to_string()),
-            "mvps" => unfriendly_names.push("m_iMVPs".to_string()),
-            "armor" => unfriendly_names.push("m_iArmor".to_string()),
-            "silencer_on" => unfriendly_names.push("m_bSilencerOn".to_string()),
-            "place_name" => unfriendly_names.push("m_szLastPlaceName".to_string()),
-            "total_enemies_flashed" => {
-                unfriendly_names.push("m_iMatchStats_EnemiesFlashed_Total".to_string())
-            }
-            "total_util_damage" => {
-                unfriendly_names.push("m_iMatchStats_UtilityDamage_Total".to_string())
-            }
-            "total_cash_earned" => {
-                unfriendly_names.push("m_iMatchStats_CashEarned_Total".to_string())
-            }
-            "total_objective_total" => {
-                unfriendly_names.push("m_iMatchStats_Objective_Total".to_string())
-            }
-            "total_headshots" => {
-                unfriendly_names.push("m_iMatchStats_HeadShotKills_Total".to_string())
-            }
-            "total_assists" => unfriendly_names.push("m_iMatchStats_Assists_Total".to_string()),
-            "total_deaths" => unfriendly_names.push("m_iMatchStats_Deaths_Total".to_string()),
-            "total_live_time" => unfriendly_names.push("m_iMatchStats_LiveTime_Total".to_string()),
-            "total_kill_reward" => {
-                unfriendly_names.push("m_iMatchStats_KillReward_Total".to_string())
-            }
-            "total_equipment_value" => {
-                unfriendly_names.push("m_iMatchStats_EquipmentValue_Total".to_string())
-            }
-            "total_damage" => unfriendly_names.push("m_iMatchStats_Damage_Total".to_string()),
-            "3ks" => unfriendly_names.push("m_iMatchStats_3k_Total".to_string()),
-            "4ks" => unfriendly_names.push("m_iMatchStats_4k_Total".to_string()),
-            "5ks" => unfriendly_names.push("m_iMatchStats_5k_Total".to_string()),
-            "total_kills" => unfriendly_names.push("m_iMatchStats_Kills_Total".to_string()),
-            "is_auto_muted" => unfriendly_names.push("m_bHasCommunicationAbuseMute".to_string()),
-            "friendly_honors" => {
-                unfriendly_names.push("m_nPersonaDataPublicCommendsFriendly".to_string())
-            }
-            "teacher_honors" => {
-                unfriendly_names.push("m_nPersonaDataPublicCommendsTeacher".to_string())
-            }
-            "leader_honors" => {
-                unfriendly_names.push("m_nPersonaDataPublicCommendsLeader".to_string())
-            }
-            "public_level" => unfriendly_names.push("m_nPersonaDataPublicLevel".to_string()),
-            "active_coin_rank" => unfriendly_names.push("m_nActiveCoinRank".to_string()),
-            "cash_spent_this_round" => unfriendly_names.push("m_iCashSpentThisRound".to_string()),
-            "total_cash_spent" => unfriendly_names.push("m_iTotalCashSpent".to_string()),
-            "controlled_by_player" => unfriendly_names.push("m_iControlledByPlayer".to_string()),
-            "controlled_player" => unfriendly_names.push("m_iControlledPlayer".to_string()),
-            "controlling_bot" => unfriendly_names.push("m_bControllingBot".to_string()),
-            "lifetime_start" => unfriendly_names.push("m_iLifetimeStart".to_string()),
-            "lifetime_end" => unfriendly_names.push("m_iLifetimeEnd".to_string()),
-            "connected" => unfriendly_names.push("m_bConnected".to_string()),
-            "holding_look_weapon" => unfriendly_names.push("m_bIsHoldingLookAtWeapon".to_string()),
-            "looking_at_weapon" => unfriendly_names.push("m_bIsLookingAtWeapon".to_string()),
-            "headshots_this_round" => {
-                unfriendly_names.push("m_iNumRoundKillsHeadshots".to_string())
-            }
-            "concurrent_killed" => unfriendly_names.push("m_nLastConcurrentKilled".to_string()),
-            "freeze_end_eq_val" => {
-                unfriendly_names.push("m_unFreezetimeEndEquipmentValue".to_string())
-            }
-            "round_start_eq_val" => {
-                unfriendly_names.push("m_unRoundStartEquipmentValue".to_string())
-            }
-            "equipment_value" => unfriendly_names.push("m_unCurrentEquipmentValue".to_string()),
-            "flash_alpha" => unfriendly_names.push("m_flFlashMaxAlpha".to_string()),
-            "has_helmet" => unfriendly_names.push("m_bHasHelmet".to_string()),
-            "has_heavy_armor" => unfriendly_names.push("m_bHasHeavyArmor".to_string()),
-            "detected_enemy_sensor" => {
-                unfriendly_names.push("m_flDetectedByEnemySensorTime".to_string())
-            }
-            "is_rescuing" => unfriendly_names.push("m_bIsRescuing".to_string()),
-            "molotov_dmg_time" => unfriendly_names.push("m_fMolotovDamageTime".to_string()),
-            "molotov_use_time" => unfriendly_names.push("m_fMolotovUseTime".to_string()),
-            "moved_since_spawn" => unfriendly_names.push("m_bHasMovedSinceSpawn".to_string()),
-            "resume_zoom" => unfriendly_names.push("m_bResumeZoom".to_string()),
-            "is_walking" => unfriendly_names.push("m_bIsWalking".to_string()),
-            "is_defusing" => unfriendly_names.push("m_bIsDefusing".to_string()),
-            "has_defuser" => unfriendly_names.push("m_bHasDefuser".to_string()),
-            "in_bomb_zone" => unfriendly_names.push("m_bInBombZone".to_string()),
-            "granade_counter" => unfriendly_names.push("m_iThrowGrenadeCounter".to_string()),
-            "last_made_noise_time" => unfriendly_names.push("m_flLastMadeNoiseTime".to_string()),
-            "spotted" => unfriendly_names.push("m_bSpotted".to_string()),
-            "elasticity" => unfriendly_names.push("m_flElasticity".to_string()),
-            "team_num" => unfriendly_names.push("m_iTeamNum".to_string()),
-            "velocity_modifier" => unfriendly_names.push("m_flVelocityModifier".to_string()),
-            "next_think_tick" => unfriendly_names.push("m_nNextThinkTick".to_string()),
-            "friction" => unfriendly_names.push("m_flFriction".to_string()),
-            "on_target" => unfriendly_names.push("m_fOnTarget".to_string()),
-            "vec_view_offset0" => unfriendly_names.push("m_vecViewOffset[0]".to_string()),
-            "vec_view_offset1" => unfriendly_names.push("m_vecViewOffset[1]".to_string()),
-            "is_wearing_suit" => unfriendly_names.push("m_bWearingSuit".to_string()),
-            "jump_time_msecs" => unfriendly_names.push("m_nJumpTimeMsecs".to_string()),
-            "duck_time_msecs" => unfriendly_names.push("m_nDuckJumpTimeMsecs".to_string()),
-            "in_duck_jump" => unfriendly_names.push("m_bInDuckJump".to_string()),
-            "last_duck_time" => unfriendly_names.push("m_flLastDuckTime".to_string()),
-            "is_ducking" => unfriendly_names.push("m_bDucking".to_string()),
-
-            _ => unfriendly_names.push(name.to_string()),
-        }
-    }
-    unfriendly_names
+    //println!("FFIL TOOK: {:2?}", before.elapsed());
 }

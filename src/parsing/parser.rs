@@ -87,7 +87,7 @@ impl Parser {
         let path = "/home/laiho/Documents/cache/".to_string();
         let path_and_hash = path + &file_hash;
 
-        //println!("{:?}", file_hash);
+        // println!("{:?}", file_hash);
 
         let mut cache = ReadCache::new(&path_and_hash);
         cache.read_stringtables();
@@ -100,6 +100,7 @@ impl Parser {
         wanted_bytes.push(dt_start as u64);
         wanted_bytes.extend(cache.get_stringtables());
 
+        //let byte_readers = self.get_byte_readers(vec![]);
         let byte_readers = self.get_byte_readers(wanted_bytes);
         for mut byte_reader in byte_readers {
             let mut frames_parsed = 0;
@@ -113,10 +114,8 @@ impl Parser {
                 frames_parsed += 1;
             }
         }
-        //self.compute_jobs(&mut cache);
-
         self.compute_jobs(&mut cache);
-
+        // let jobresults = self.compute_jobs_no_cache();
         // println!("{:?}", jobresults);
         /*
         let mut wc = WriteCache::new(
@@ -182,7 +181,7 @@ impl Parser {
             }
         }
         let results: Vec<JobResult> = tasks
-            .into_par_iter()
+            .into_iter()
             .map(|t| {
                 Parser::msg_handler(
                     &t,
@@ -193,7 +192,7 @@ impl Parser {
                 )
             })
             .collect();
-        //println!("{:?}", results.len());
+        println!("{:?}", results.len());
         return results;
     }
 
@@ -209,7 +208,7 @@ impl Parser {
             }
         }
         let results: Vec<JobResult> = tasks
-            .into_par_iter()
+            .into_iter()
             .map(|t| {
                 Parser::msg_handler(
                     &t,
@@ -247,7 +246,7 @@ impl Parser {
         let tasks = self.tasks.clone();
 
         let results: Vec<JobResult> = tasks
-            .into_par_iter()
+            .into_iter()
             .map(|t| {
                 Parser::msg_handler(
                     &t,
@@ -264,7 +263,7 @@ impl Parser {
                 JobResult::PacketEntities(j) => {
                     for s in j.data {
                         if s.ent_id == 5 && s.prop_inx == 20 {
-                            //println!("{} {:?}", j.tick, s);
+                            // println!("{} {:?}", j.tick, s);
                         }
                     }
                 }
@@ -281,7 +280,7 @@ impl Parser {
         stringtables: &Vec<StringTable>,
     ) -> JobResult {
         let wanted_event = "player_death";
-        //println!("{:?} {}", blueprint.tick, blueprint.msg);
+        // println!("{:?} {}", blueprint.tick, blueprint.msg);
         match blueprint.msg {
             26 => parse_packet_entities(blueprint, bytes, serverclass_map),
             25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),

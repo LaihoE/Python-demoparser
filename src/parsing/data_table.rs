@@ -55,8 +55,10 @@ impl Parser {
             let id = byte_reader.read_short();
             let _ = byte_reader.read_string();
             let dt = byte_reader.read_string();
+            // println!("{} {}", dt, id);
 
-            if id == 275 || id == 40 {
+            if id != 6666 {
+                //id == 275 || id == 40 {
                 let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
                 let server_class = ServerClass { id, dt, props };
                 // Set baselines parsed earlier in stringtables.

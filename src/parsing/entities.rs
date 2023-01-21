@@ -93,7 +93,9 @@ impl Parser {
         let mut entity_id: i32 = -1;
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var()? as i32);
-            if entity_id > 64 {
+            //println!("{}", entity_id);
+
+            if entity_id > 71 {
                 break;
             }
             if b.read_boolie()? {
@@ -116,9 +118,21 @@ impl Parser {
 fn get_cls_id(ent_id: i32) -> u16 {
     // Returns correct serverclass id based on entityid
     // This is the key to being able to go parallel across ticks
-    assert!(ent_id < 65);
+    //assert!(ent_id < 65);
+    // MANAGER 70
+    // RULES 71
+
     match ent_id {
         0 => 275,
+        // TEAM
+        65 => 43,
+        66 => 43,
+        67 => 43,
+        68 => 43,
+        // MANAGER
+        70 => 41,
+        // RULES
+        71 => 39,
         _ => 40,
     }
 }
@@ -149,6 +163,7 @@ pub fn parse_ent_props(
 ) -> Vec<SingleEntOutput> {
     let cls_id = get_cls_id(entity_id);
     let m = sv_cls_map;
+
     let sv_cls = m.get(&cls_id).unwrap();
     let indicies = get_indicies(b);
 
@@ -159,7 +174,9 @@ pub fn parse_ent_props(
     for idx in indicies {
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
-
+        if entity_id == 70 {
+            //println!("{:?}", pdata);
+        }
         let data = SingleEntOutput {
             ent_id: entity_id,
             prop_inx: idx,

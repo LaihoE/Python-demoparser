@@ -64,7 +64,6 @@ impl WriteCache {
         let (game_events, string_tables, packet_ents) = WriteCache::filter_per_result(jobresults);
         println!("PEL {}", packet_ents.len());
 
-        let mut buf = [0; 65536];
         let mut file = fs::File::create(path.to_owned() + ".zip").unwrap();
         let mut zip = zip::ZipWriter::new(file);
 
@@ -107,28 +106,32 @@ impl WriteCache {
         let before = Instant::now();
 
         let m = v.iter().into_group_map_by(|x| x.2);
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
+
+        let forbidden = vec![0, 1, 2, 37, 103, 93, 59, 58, 1343, 1297, 40, 41, 26, 27];
 
         for i in 0..2000 {
-            match m.get(&i) {
-                Some(g) => {
-                    self.zip.start_file(i.to_string(), options).unwrap();
-                    let mut byt = vec![];
-                    byt.extend(g.len().to_le_bytes());
-                    for t in g {
-                        byt.extend(t.0.to_le_bytes());
+            if !forbidden.contains(&i) {
+                match m.get(&i) {
+                    Some(g) => {
+                        self.zip.start_file(i.to_string(), options).unwrap();
+                        let mut byt = vec![];
+                        byt.extend(g.len().to_le_bytes());
+                        for t in g {
+                            byt.extend(t.0.to_le_bytes());
+                        }
+                        for t in g {
+                            byt.extend(t.1.to_le_bytes());
+                        }
+                        self.zip.write_all(&byt).unwrap();
                     }
-                    for t in g {
-                        byt.extend(t.1.to_le_bytes());
-                    }
-                    self.zip.write_all(&byt).unwrap();
+                    None => {}
                 }
-                None => {}
             }
         }
     }
     pub fn write_string_tables(&mut self) {
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
 
         self.zip.start_file("string_tables", options).unwrap();
         let mut byt = vec![];
@@ -141,7 +144,7 @@ impl WriteCache {
     }
 
     pub fn write_game_events(&mut self) {
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
         self.zip.start_file("game_events", options).unwrap();
 
         let mut byt = vec![];

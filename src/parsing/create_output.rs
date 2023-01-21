@@ -168,7 +168,7 @@ impl Parser {
     pub fn get_raw_df(
         &mut self,
         jobs: &Vec<JobResult>,
-        parser_maps: Arc<RwLock<ParsingMaps>>,
+        //parser_maps: Arc<RwLock<ParsingMaps>>,
         df: &mut ArrayBase<OwnedRepr<f32>, Dim<[usize; 3]>>,
         max_ticks: usize,
     ) -> Vec<Series> {

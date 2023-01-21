@@ -270,6 +270,11 @@ impl Parser {
                 _ => {}
             }
         }
+        use ndarray::Array3;
+        let total_ticks = self.settings.playback_frames * 2;
+        let mut df = Array3::<f32>::zeros((12, self.settings.wanted_props.len(), total_ticks));
+        let z = self.get_raw_df(&results, parsing_maps.clone(), &mut df, total_ticks);
+
         //println!("Took {:2?}", before.elapsed());
     }
     pub fn msg_handler(

@@ -1,5 +1,7 @@
 pub mod cache;
 pub mod collect_data;
+pub mod columnmapper;
+pub mod create_output;
 pub mod data_table;
 pub mod entities;
 pub mod game_events;

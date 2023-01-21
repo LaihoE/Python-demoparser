@@ -32,7 +32,7 @@ impl Players {
         let mut uid_to_entid = HashMap::default();
 
         for player in &players {
-            println!("{} {}", player.entity_id, player.xuid);
+            //println!("{} {}", player.entity_id, player.xuid);
             uid_to_entid
                 .entry(player.user_id)
                 .or_insert(vec![])
@@ -49,16 +49,16 @@ impl Players {
             uid_to_eid: uid_to_entid,
         }
     }
-    pub fn uid_to_entid(&self, uid: u32, byte: usize) -> u32 {
+    pub fn uid_to_entid(&self, uid: u32, byte: usize) -> Option<u32> {
         match self.uid_to_eid.get(&uid) {
-            None => panic!("NO USERID MAPPING TO ENTID: {}", uid),
+            None => None, //panic!("NO USERID MAPPING TO ENTID: {}", uid),
             Some(player_mapping) => {
                 for mapping in player_mapping {
                     if mapping.byte > byte {
-                        return mapping.entid;
+                        return Some(mapping.entid);
                     }
                 }
-                return player_mapping.last().unwrap().entid;
+                return Some(player_mapping.last().unwrap().entid);
             }
         }
     }

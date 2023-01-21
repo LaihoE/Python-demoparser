@@ -14,6 +14,7 @@ use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use memmap2::Mmap;
 use protobuf::Message;
+use serde::Deserialize;
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -25,13 +26,13 @@ pub struct Entity {
     pub entity_id: u32,
     pub props: HashMap<String, PropAtom, RandomState>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct SingleEntOutput {
     pub ent_id: i32,
     pub prop_inx: i32,
     pub data: PropData,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct PacketEntsOutput {
     pub data: Vec<SingleEntOutput>,
     pub tick: i32,

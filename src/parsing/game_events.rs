@@ -87,7 +87,8 @@ impl GameEvent {
                 return k.data.clone();
             }
         }
-        panic!("No key with that name found")
+        None
+        //panic!("No key with that name found")
     }
 
     pub fn to_py_tuples(&self, py: Python<'_>) -> Vec<(String, PyObject)> {

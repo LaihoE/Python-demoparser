@@ -52,7 +52,7 @@ pub fn max_skip_tick(game_events: &Vec<GameEvent>) -> i32 {
 
 fn main() {
     let now = Instant::now();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/benchmark/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     let p = "/home/laiho/Documents/demos/faceits/m/1-0e7a456a-6318-4f85-ae08-e203823e1758_76561199053401103.dem";
 
     for demo_path in paths {
@@ -85,7 +85,7 @@ fn main() {
         let data_a = parser.start_parsing(&props_names);
         //break;
         let elapsed = now.elapsed();
-        println!("Elapsed: {:.2?}", elapsed);
+        //println!("Elapsed: {:.2?}", elapsed);
     }
     // 145
     let elapsed = now.elapsed();

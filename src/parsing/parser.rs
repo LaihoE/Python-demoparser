@@ -74,8 +74,8 @@ impl Parser {
             return vec![ByteReader::new(self.bytes.clone(), false, 1072)];
         }
         let mut readers = vec![];
-        readers.push(ByteReader::new(self.bytes.clone(), true, 138837 - 6));
-        readers.push(ByteReader::new(self.bytes.clone(), true, 458399));
+        //readers.push(ByteReader::new(self.bytes.clone(), true, 138837 - 6));
+        //readers.push(ByteReader::new(self.bytes.clone(), true, 458399));
         for pos in start_pos {
             let other_reader = ByteReader::new(self.bytes.clone(), true, pos as usize);
             readers.push(other_reader);
@@ -85,16 +85,19 @@ impl Parser {
     pub fn start_parsing(&mut self, props_names: &Vec<String>) {
         let file_hash = sha256::digest(&self.bytes[..10000]);
         let path = "/home/laiho/Documents/cache/".to_string();
-        let path_and_hash = path + &file_hash + "/";
+        let path_and_hash = path + &file_hash;
 
-        println!("{:?}", file_hash);
+        //println!("{:?}", file_hash);
 
         let mut cache = ReadCache::new(&path_and_hash);
-        cache.set_deltas();
-        cache.set_game_events();
-        cache.set_stringtables();
+        cache.read_stringtables();
+        cache.read_game_events();
 
+        let (ge_start, dt_start) = cache.read_maps();
         let mut wanted_bytes = cache.get_event_bytes_by_id(24);
+
+        wanted_bytes.push(ge_start as u64);
+        wanted_bytes.push(dt_start as u64);
         wanted_bytes.extend(cache.get_stringtables());
 
         let byte_readers = self.get_byte_readers(wanted_bytes);
@@ -110,19 +113,24 @@ impl Parser {
                 frames_parsed += 1;
             }
         }
+        //self.compute_jobs(&mut cache);
 
-        let jobresults = self.compute_jobs_no_cache();
+        self.compute_jobs(&mut cache);
 
+        // println!("{:?}", jobresults);
+        /*
         let mut wc = WriteCache::new(
+            &path_and_hash,
             jobresults,
             self.state.dt_started_at,
             self.state.ge_map_started_at,
         );
 
-        wc.write_packet_ents(path_and_hash.to_owned());
-        wc.write_game_events(path_and_hash.to_owned());
-        wc.write_string_tables(path_and_hash.to_owned());
-        wc.write_maps(path_and_hash.to_owned());
+        wc.write_packet_ents();
+        wc.write_game_events();
+        wc.write_string_tables();
+        wc.write_maps();
+        */
     }
 
     #[inline(always)]
@@ -185,7 +193,7 @@ impl Parser {
                 )
             })
             .collect();
-        println!("{:?}", results.len());
+        //println!("{:?}", results.len());
         return results;
     }
 
@@ -220,7 +228,7 @@ impl Parser {
         let p = Players::new(&results);
         let events = cache.get_game_event_jobs(&results, &p);
         let mut need_to_parse_bytes = cache.get_event_deltas(24, &p, &events);
-
+        // println!("{:?}", need_to_parse_bytes);
         self.tasks = vec![];
 
         let byte_readers = self.get_byte_readers(need_to_parse_bytes);
@@ -250,6 +258,7 @@ impl Parser {
                 )
             })
             .collect();
+        // println!("{:?}", results);
         for x in results {
             match x {
                 JobResult::PacketEntities(j) => {
@@ -262,7 +271,7 @@ impl Parser {
                 _ => {}
             }
         }
-        println!("Took {:2?}", before.elapsed());
+        //println!("Took {:2?}", before.elapsed());
     }
     pub fn msg_handler(
         blueprint: &MsgBluePrint,

@@ -1,5 +1,7 @@
 use crate::parsing::parser::Parser;
 use memmap2::Mmap;
+use serde::Deserialize;
+use serde::Serialize;
 
 // Some of these could be combined
 #[derive(Debug, Clone)]
@@ -15,7 +17,7 @@ pub struct PropColumn {
     pub data: VarVec,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PropData {
     I32(i32),
     F32(f32),

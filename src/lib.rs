@@ -1,4 +1,3 @@
-/*
 mod parsing;
 use crate::parsing::game_events::GameEvent;
 use crate::parsing::game_events::NameDataPair;
@@ -833,4 +832,3 @@ fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<DemoParser>()?;
     Ok(())
 }
-*/

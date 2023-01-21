@@ -101,7 +101,7 @@ impl Parser {
         wanted_bytes.extend(cache.get_stringtables());
 
         //let byte_readers = self.get_byte_readers(vec![]);
-        let byte_readers = self.get_byte_readers(wanted_bytes);
+        let byte_readers = self.get_byte_readers(vec![]);
         for mut byte_reader in byte_readers {
             let mut frames_parsed = 0;
             while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
@@ -114,8 +114,8 @@ impl Parser {
                 frames_parsed += 1;
             }
         }
-        self.compute_jobs(&mut cache);
-        // let jobresults = self.compute_jobs_no_cache();
+        // self.compute_jobs(&mut cache);
+        let jobresults = self.compute_jobs_no_cache();
         // println!("{:?}", jobresults);
         /*
         let mut wc = WriteCache::new(
@@ -167,7 +167,9 @@ impl Parser {
                 tick: self.state.tick,
                 byte: packet_started_at,
             };
-            self.tasks.push(msg_blueprint);
+            if msg == 25 || msg == 26 || msg == 12 || msg == 13 || msg == 30 {
+                self.tasks.push(msg_blueprint);
+            }
         }
     }
     pub fn compute_jobs_no_cache(&mut self) -> Vec<JobResult> {
@@ -181,7 +183,7 @@ impl Parser {
             }
         }
         let results: Vec<JobResult> = tasks
-            .into_iter()
+            .into_par_iter()
             .map(|t| {
                 Parser::msg_handler(
                     &t,
@@ -193,6 +195,11 @@ impl Parser {
             })
             .collect();
         println!("{:?}", results.len());
+        use ndarray::Array3;
+        let total_ticks = self.settings.playback_frames * 2;
+        let mut df = Array3::<f32>::zeros((12, self.settings.wanted_props.len(), total_ticks));
+        let z = self.get_raw_df(&results, &mut df, total_ticks);
+        //println!("{:?}", z);
         return results;
     }
 
@@ -208,7 +215,7 @@ impl Parser {
             }
         }
         let results: Vec<JobResult> = tasks
-            .into_iter()
+            .into_par_iter()
             .map(|t| {
                 Parser::msg_handler(
                     &t,
@@ -246,7 +253,7 @@ impl Parser {
         let tasks = self.tasks.clone();
 
         let results: Vec<JobResult> = tasks
-            .into_iter()
+            .into_par_iter()
             .map(|t| {
                 Parser::msg_handler(
                     &t,
@@ -258,23 +265,12 @@ impl Parser {
             })
             .collect();
         // println!("{:?}", results);
-        for x in results {
-            match x {
-                JobResult::PacketEntities(j) => {
-                    for s in j.data {
-                        if s.ent_id == 5 && s.prop_inx == 20 {
-                            // println!("{} {:?}", j.tick, s);
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
+
         use ndarray::Array3;
         let total_ticks = self.settings.playback_frames * 2;
         let mut df = Array3::<f32>::zeros((12, self.settings.wanted_props.len(), total_ticks));
-        let z = self.get_raw_df(&results, parsing_maps.clone(), &mut df, total_ticks);
-
+        let z = self.get_raw_df(&results, &mut df, total_ticks);
+        println!("{:?}", z);
         //println!("Took {:2?}", before.elapsed());
     }
     pub fn msg_handler(

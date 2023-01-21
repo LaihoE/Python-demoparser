@@ -1,4 +1,3 @@
-use super::data_table::ServerClasses;
 use super::entities::PacketEntsOutput;
 use super::game_events::GameEvent;
 use super::stringtables::StringTable;
@@ -7,7 +6,6 @@ use crate::parsing::columnmapper::EntColMapper;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::game_events;
 use crate::parsing::parser::JobResult;
-use crate::parsing::parser::ParsingMaps;
 pub use crate::parsing::variants::*;
 use crate::Parser;
 use ahash::HashMap;
@@ -73,10 +71,8 @@ pub fn filter_jobresults(
 
     for j in jobs {
         match j {
-            JobResult::PacketEntities(p) => match p {
-                Some(p) => packet_ents.push(p),
-                None => {}
-            },
+            JobResult::PacketEntities(p) => packet_ents.push(p),
+
             JobResult::GameEvents(ge) => {
                 game_events.extend(ge);
             }
@@ -111,28 +107,28 @@ impl Parser {
         // For every packetEnt message during game
         for packet_ent_msg in packet_ents {
             // For every entity in the message
-            for single_ent in &packet_ent_msg.data {
+            for prop in &packet_ent_msg.data {
                 // For every updated value for the entity
-                for prop in single_ent {
-                    match prop.data {
-                        PropData::F32(f) => {
-                            // println!("NOW IDX {:?} {:?}", prop.prop_inx, prop.data);
-                            let prop_col = ecm.get_prop_col(&prop.prop_inx);
-                            let player_col =
-                                ecm.get_player_col(prop.ent_id as u32, packet_ent_msg.tick);
-                            df[[player_col, prop_col, packet_ent_msg.tick as usize]] = f as f32;
-                        }
-                        PropData::I32(i) => {
-                            let prop_col = ecm.get_prop_col(&prop.prop_inx);
-                            let player_col =
-                                ecm.get_player_col(prop.ent_id as u32, packet_ent_msg.tick);
-                            // let tick = ecm.get_tick(packet_ent_msg.tick);
-                            df[[player_col, prop_col, packet_ent_msg.tick as usize]] = i as f32;
-                        }
-                        // Todo string columns
-                        _ => {}
+                // for prop in single_ent {
+                match prop.data {
+                    PropData::F32(f) => {
+                        // println!("NOW IDX {:?} {:?}", prop.prop_inx, prop.data);
+                        let prop_col = ecm.get_prop_col(&prop.prop_inx);
+                        let player_col =
+                            ecm.get_player_col(prop.ent_id as u32, packet_ent_msg.tick);
+                        df[[player_col, prop_col, packet_ent_msg.tick as usize]] = f as f32;
                     }
+                    PropData::I32(i) => {
+                        let prop_col = ecm.get_prop_col(&prop.prop_inx);
+                        let player_col =
+                            ecm.get_player_col(prop.ent_id as u32, packet_ent_msg.tick);
+                        // let tick = ecm.get_tick(packet_ent_msg.tick);
+                        df[[player_col, prop_col, packet_ent_msg.tick as usize]] = i as f32;
+                    }
+                    // Todo string columns
+                    _ => {}
                 }
+                // }
             }
         }
     }
@@ -180,10 +176,11 @@ impl Parser {
             &self.settings.wanted_ticks,
             &self.settings.wanted_props,
             max_ticks,
-            parser_maps.clone(),
+            &self.maps,
         );
 
         self.insert_props_into_df(packet_ents, max_ticks, df, &ecm);
+        //println!("{:?}", df);
 
         let mut series_players = vec![];
         let mut ticks_col: Vec<i32> = vec![];
@@ -197,6 +194,7 @@ impl Parser {
         let ticks: Vec<i32> = (0..max_ticks).into_iter().map(|t| t as i32).collect();
 
         for (propcol, prop_name) in str_names.iter().enumerate() {
+            //println!("PC {:?}", all_player_cols);
             let mut this_prop_col: Vec<f32> = Vec::with_capacity(15 * max_ticks);
             for player_col in 1..15 {
                 // Metadata
@@ -207,10 +205,12 @@ impl Parser {
                     ticks_col.extend(&ticks);
                     steamids_col.extend(ecm.get_col_sid_vec(player_col, max_ticks));
                 }
+                //println!("SLICE {}", &df.slice(s![player_col, propcol, ..]));
                 this_prop_col.extend(&df.slice(s![player_col, propcol, ..]));
             }
             let n = str_names[prop_name.0];
             let props = Series::new(&n.to_string(), &this_prop_col);
+            //println!("{:?} {}", props, max_ticks);
             series_players.push(props);
         }
 
@@ -247,6 +247,9 @@ pub fn fill_none_with_most_recent(
             let s = &mut df.slice_mut(s![entid, propcol, ..]);
 
             for x in s.iter_mut() {
+                if x != &0.0 {
+                    //println!("{}", x);
+                }
                 if x == &0.0 {
                     *x = last;
                 } else {

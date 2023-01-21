@@ -95,7 +95,7 @@ impl Parser {
             entity_id += 1 + (b.read_u_bit_var()? as i32);
             //println!("{}", entity_id);
 
-            if entity_id > 71 {
+            if entity_id > 64 {
                 break;
             }
             if b.read_boolie()? {
@@ -174,15 +174,14 @@ pub fn parse_ent_props(
     for idx in indicies {
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
-        if entity_id == 70 {
-            //println!("{:?}", pdata);
+        if idx == 21 {
+            let data = SingleEntOutput {
+                ent_id: entity_id,
+                prop_inx: idx,
+                data: pdata,
+            };
+            props.push(data);
         }
-        let data = SingleEntOutput {
-            ent_id: entity_id,
-            prop_inx: idx,
-            data: pdata,
-        };
-        props.push(data);
     }
     props
 }

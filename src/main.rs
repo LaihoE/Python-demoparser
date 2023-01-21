@@ -81,8 +81,8 @@ fn main() {
 
     let this_p = &paths_v[0];
     let single = vec![this_p];
-    let x: Vec<i32> = single
-        .into_iter()
+    let x: Vec<i32> = paths_v
+        .into_par_iter()
         .map(|f| parse_demo(f.to_owned()))
         .collect();
     // 145

@@ -95,7 +95,7 @@ impl Parser {
             entity_id += 1 + (b.read_u_bit_var()? as i32);
             //println!("{}", entity_id);
 
-            if entity_id > 64 {
+            if entity_id > 71 {
                 break;
             }
             if b.read_boolie()? {

@@ -35,6 +35,7 @@ serde_cbor = "0.11.2"
 zip = "0.6.3"
 itertools = "0.10.5"
 q_compress = "0.11.4"
+kdam = "0.3.0"
 
 [dependencies.csgoproto]
 path = "src/parsing/csgoproto"

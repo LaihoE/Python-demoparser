@@ -35,7 +35,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 fn parse_demo(demo_path: String) -> i32 {
     // m_iHealth
     // m_angEyeAngles[1]
-    println!("{}", demo_path);
+    // println!("{}", demo_path);
 
     let now = Instant::now();
     let props_names = vec!["m_angEyeAngles[1]".to_string()];
@@ -66,6 +66,8 @@ fn parse_demo(demo_path: String) -> i32 {
 
 fn main() {
     let now = Instant::now();
+    //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/").unwrap();
+    //let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
     let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     let mut paths_v = vec![];
     for path in paths {
@@ -78,11 +80,21 @@ fn main() {
         .build_global()
         .unwrap();
     println!("{:?}", paths_v.len());
+    use kdam::tqdm;
+
+    fn main() {
+        for _ in tqdm!(0..100) {}
+    }
 
     let this_p = &paths_v[0];
     let single = vec![this_p];
-    let x: Vec<i32> = single
-        .into_iter()
+    /*
+    let x: Vec<i32> = tqdm!(paths_v.into_iter())
+        .map(|f| parse_demo(f.to_owned()))
+        .collect();
+     */
+    let x: Vec<i32> = paths_v
+        .into_par_iter()
         .map(|f| parse_demo(f.to_owned()))
         .collect();
     // 145

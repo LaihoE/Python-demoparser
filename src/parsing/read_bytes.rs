@@ -1,7 +1,6 @@
 use crate::parsing::parser::Parser;
 use memmap2::Mmap;
 use std::sync::Arc;
-use varint_simd::{decode, decode_two_unsafe, encode, encode_zigzag};
 
 #[derive(Debug)]
 pub struct ByteReader {
@@ -96,6 +95,7 @@ impl ByteReader {
         self.skip_n_bytes(1);
         (cmd, tick)
     }
+    /*
     #[inline(always)]
     pub fn read_two_varints(&mut self) -> (u32, u32) {
         let max_two = self.bytes[self.byte_idx..self.byte_idx + 10].as_ptr();
@@ -108,4 +108,5 @@ impl ByteReader {
             }
         }
     }
+    */
 }

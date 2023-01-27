@@ -9,23 +9,25 @@ import tqdm
 from collections import Counter
 
 def coordinates(file):
-    #print(file)
-    #parser = DemoParser("/home/laiho/Documents/demos/mygames/match730_003449965367076585902_0881240613_184.dem")
+    # print(file)
+    # parser = DemoParser("/home/laiho/Documents/demos/mygames/match730_003449965367076585902_0881240613_184.dem")
     parser = DemoParser(file)
-    #df = pd.DataFrame(parser.parse_ticks(["m_angEyeAngles[1]"]))
+    # df = pd.DataFrame(parser.parse_ticks(["m_angEyeAngles[1]"]))
     df = pd.DataFrame(parser.parse_events("player_death"))
-    #print(df)
-    #print(df.columns)
-    #print(Counter(df["event_name"]))
-    #df = df[df[:, ["DATA"]]]
-    #print(df["DATA"].unique())
-    #print(df.loc[:, ["attacker_name", "victim_name", "DATA", "tick"]])
-    #return df
+    # print(df)
+    # print(df.columns)
+    # print(Counter(df["event_name"]))
+    # df = df[df[:, ["DATA"]]]
+    # print(df["DATA"].unique())
+    # print(df.loc[:, ["attacker_name", "victim_name", "DATA", "tick"]])
+    return df
 
 
 if __name__ == "__main__":
-    files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[:1]
-    with mp.Pool(processes=1) as pool:
+    # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[:1]
+    # files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")
+    files = glob.glob("/home/laiho/Documents/demos/mygames/*")
+    with mp.Pool(processes=12) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(
             coordinates, files), total=len(files)))
     df = pd.concat(results)

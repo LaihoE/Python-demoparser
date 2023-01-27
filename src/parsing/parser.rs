@@ -21,6 +21,8 @@ use rayon::prelude::*;
 use sha256;
 use smallvec::SmallVec;
 use std::collections::HashMap;
+use std::fs::metadata;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 use std::u8;
@@ -70,25 +72,32 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 */
 
 impl Parser {
-    fn get_byte_readers(&mut self, start_pos: Vec<u64>) -> Vec<ByteReader> {
+    fn get_byte_readers(&self, start_pos: Vec<u64>) -> Vec<ByteReader> {
         if start_pos.len() == 0 {
             return vec![ByteReader::new(self.bytes.clone(), false, 1072)];
         }
         let mut readers = vec![];
-        //readers.push(ByteReader::new(self.bytes.clone(), true, 138837 - 6));
-        //readers.push(ByteReader::new(self.bytes.clone(), true, 458399));
         for pos in start_pos {
-            let other_reader = ByteReader::new(self.bytes.clone(), true, pos as usize);
-            readers.push(other_reader);
+            readers.push(ByteReader::new(self.bytes.clone(), true, pos as usize));
         }
         return readers;
     }
-    pub fn start_parsing(&mut self) -> Vec<GameEvent> {
+    pub fn get_cache_path(&self) -> String {
         let file_hash = sha256::digest(&self.bytes[..10000]);
-        let path = "/home/laiho/Documents/cache/".to_string();
-        let path_and_hash = path + &file_hash;
-        /* */
-        let mut cache = ReadCache::new(&path_and_hash);
+        let path = "/home/laiho/Documents/cache/".to_owned();
+        path + &file_hash + &".zip"
+    }
+
+    pub fn get_cache_if_exists(&self) -> Option<ReadCache> {
+        let cache_path = self.get_cache_path();
+        println!("{}", cache_path);
+        // If file exists
+        match Path::new(&cache_path).exists() {
+            true => Some(ReadCache::new(&cache_path)),
+            false => None,
+        }
+    }
+    pub fn get_wanted_bytes(&self, cache: &mut ReadCache) -> Vec<u64> {
         cache.read_stringtables();
         cache.read_game_events();
 
@@ -97,10 +106,46 @@ impl Parser {
 
         wanted_bytes.push(ge_start as u64);
         wanted_bytes.push(dt_start as u64);
-        wanted_bytes.extend(cache.get_stringtables());
-        //wanted_bytes.extend(v);
-        // let byte_readers = self.get_byte_readers(vec![]);
 
+        wanted_bytes.extend(cache.get_stringtables());
+        wanted_bytes.extend(cache.find_delta_ticks(68, 2));
+
+        wanted_bytes
+    }
+
+    pub fn start_parsing(&mut self) -> Vec<GameEvent> {
+        match self.get_cache_if_exists() {
+            Some(mut cache) => {
+                println!("Using cache");
+                // Bytes where our wanted ticks start
+                let wanted_bytes = self.get_wanted_bytes(&mut cache);
+                self.parse_bytes(wanted_bytes);
+                let jobresults = self.compute_jobs(&mut cache);
+                // println!("{:?}", jobresults);
+                jobresults
+            }
+            None => {
+                println!("No cache found");
+
+                // Empty vec == parse entire demo
+                self.parse_bytes(vec![]);
+                let jobresults = self.compute_jobs_no_cache();
+                let cache_path = self.get_cache_path();
+
+                let mut wc = WriteCache::new(
+                    &cache_path,
+                    jobresults,
+                    self.state.dt_started_at,
+                    self.state.ge_map_started_at,
+                );
+                wc.write_all_caches();
+                vec![]
+            }
+        }
+    }
+    pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>) -> Vec<MsgBluePrint> {
+        // Todo dt map idx mutability
+        let mut v = vec![];
         let byte_readers = self.get_byte_readers(wanted_bytes);
         for mut byte_reader in byte_readers {
             let mut frames_parsed = 0;
@@ -114,24 +159,27 @@ impl Parser {
                 frames_parsed += 1;
             }
         }
-        // let jobresults = self.compute_jobs_no_cache();
-        // println!("{:?}", jobresults);
-        let jobresults = self.compute_jobs(&mut cache);
+        v
+    }
 
-        /*
-        let mut wc = WriteCache::new(
-            &path_and_hash,
-            jobresults,
-            self.state.dt_started_at,
-            self.state.ge_map_started_at,
-        );
-
-        wc.write_packet_ents();
-        wc.write_game_events();
-        wc.write_string_tables();
-        wc.write_maps();
-        */
-        jobresults
+    pub fn compute_tasks(&mut self, tasks: &Vec<MsgBluePrint>) -> Vec<JobResult> {
+        for task in tasks {
+            if task.msg == 30 {
+                self.parse_game_event_map(task);
+            }
+        }
+        tasks
+            .into_iter()
+            .map(|t| {
+                Parser::msg_handler(
+                    &t,
+                    &self.bytes,
+                    &self.maps.serverclass_map,
+                    &self.maps.event_map.as_ref().unwrap(),
+                    &self.state.stringtables,
+                )
+            })
+            .collect()
     }
 
     #[inline(always)]
@@ -184,19 +232,7 @@ impl Parser {
                 self.parse_game_event_map(task);
             }
         }
-        let results: Vec<JobResult> = tasks
-            .into_par_iter()
-            .map(|t| {
-                Parser::msg_handler(
-                    &t,
-                    &self.bytes,
-                    &self.maps.serverclass_map,
-                    &self.maps.event_map.as_ref().unwrap(),
-                    &self.state.stringtables,
-                )
-            })
-            .collect();
-        //println!("{:?}", results.len());
+        let results: Vec<JobResult> = self.compute_tasks(&tasks);
         use ndarray::Array3;
         let total_ticks = self.settings.playback_frames * 2;
         let mut df = Array3::<f32>::zeros((12, self.settings.wanted_props.len(), total_ticks));
@@ -216,18 +252,7 @@ impl Parser {
                 self.parse_game_event_map(task);
             }
         }
-        let results: Vec<JobResult> = tasks
-            .into_iter()
-            .map(|t| {
-                Parser::msg_handler(
-                    &t,
-                    &self.bytes,
-                    &self.maps.serverclass_map,
-                    &self.maps.event_map.as_ref().unwrap(),
-                    &self.state.stringtables,
-                )
-            })
-            .collect();
+        let results: Vec<JobResult> = self.compute_tasks(&tasks);
 
         // 24 player death
         // GL: 458399   MAP: 138837
@@ -235,7 +260,7 @@ impl Parser {
 
         let p = Players::new(&results);
         let mut events = cache.get_game_event_jobs(&results, &p);
-        let need_to_parse_bytes = cache.get_event_deltas2(21, &p, &mut events);
+        let need_to_parse_bytes = cache.get_event_deltas(21, &mut events);
 
         // HERERERERERE
         let byte_readers = self.get_byte_readers(need_to_parse_bytes);
@@ -251,29 +276,9 @@ impl Parser {
                 frames_parsed += 1;
             }
         }
-        /*
-        0           lændr  Bo-Krister   37.754517  132974.0
-        1           lændr  Bo-Krister   37.754517  132974.0
-        2      Bo-Krister  rEVILS_tex  114.757690  132924.0
-        3      Bo-Krister  rEVILS_tex  114.757690  132924.0
-        */
 
         let tasks = self.tasks.clone();
-
-        let results: Vec<JobResult> = tasks
-            .into_iter()
-            .map(|t| {
-                Parser::msg_handler(
-                    &t,
-                    &self.bytes,
-                    &self.maps.serverclass_map,
-                    &self.maps.event_map.as_ref().unwrap(),
-                    &self.state.stringtables,
-                )
-            })
-            .collect();
-
-        // println!("{:?}", results);
+        let results: Vec<JobResult> = self.compute_tasks(&tasks);
 
         use ndarray::Array3;
         let total_ticks = self.settings.playback_frames * 2;

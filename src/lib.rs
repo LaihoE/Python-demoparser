@@ -268,9 +268,9 @@ impl DemoParser {
                 wanted_props.push("steamid".to_string());
                 wanted_props.push("tick".to_string());
                 let polars = py.import("polars").unwrap();
-                //let all_series_py = ss.to_object(py);
+                // let all_series_py = ss.to_object(py);
                 let df = polars.call_method1("DataFrame", (ss,)).unwrap();
-                //df.setattr("columns", wanted_props.to_object(py)).unwrap();
+                // df.setattr("columns", wanted_props.to_object(py)).unwrap();
                 let pandas_df = df.call_method0("to_pandas").unwrap();
                 Ok(pandas_df.to_object(py))
             }

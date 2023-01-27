@@ -40,7 +40,10 @@ pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
         Err(e) => Err(e),
         Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
             Err(e) => Err(e),
-            Ok(m) => Ok(BytesVariant::Mmap3(m)),
+            Ok(m) => {
+                //m.advise(memmap2::Advice::Random).unwrap();
+                Ok(BytesVariant::Mmap3(m))
+            }
         },
     }
 }

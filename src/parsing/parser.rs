@@ -16,6 +16,7 @@ use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use memmap2::Mmap;
 use polars::export::regex::internal::Inst;
+use polars::series::Series;
 use rayon::prelude::*;
 use sha256;
 use smallvec::SmallVec;
@@ -82,13 +83,11 @@ impl Parser {
         }
         return readers;
     }
-    pub fn start_parsing(&mut self, props_names: &Vec<String>) {
+    pub fn start_parsing(&mut self) -> Vec<GameEvent> {
         let file_hash = sha256::digest(&self.bytes[..10000]);
         let path = "/home/laiho/Documents/cache/".to_string();
         let path_and_hash = path + &file_hash;
-
-        // println!("{:?}", file_hash);
-
+        /* */
         let mut cache = ReadCache::new(&path_and_hash);
         cache.read_stringtables();
         cache.read_game_events();
@@ -99,9 +98,10 @@ impl Parser {
         wanted_bytes.push(ge_start as u64);
         wanted_bytes.push(dt_start as u64);
         wanted_bytes.extend(cache.get_stringtables());
+        //wanted_bytes.extend(v);
+        // let byte_readers = self.get_byte_readers(vec![]);
 
-        //let byte_readers = self.get_byte_readers(vec![]);
-        let byte_readers = self.get_byte_readers(vec![]);
+        let byte_readers = self.get_byte_readers(wanted_bytes);
         for mut byte_reader in byte_readers {
             let mut frames_parsed = 0;
             while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
@@ -114,9 +114,10 @@ impl Parser {
                 frames_parsed += 1;
             }
         }
-        // self.compute_jobs(&mut cache);
-        let jobresults = self.compute_jobs_no_cache();
+        // let jobresults = self.compute_jobs_no_cache();
         // println!("{:?}", jobresults);
+        let jobresults = self.compute_jobs(&mut cache);
+
         /*
         let mut wc = WriteCache::new(
             &path_and_hash,
@@ -130,6 +131,7 @@ impl Parser {
         wc.write_string_tables();
         wc.write_maps();
         */
+        jobresults
     }
 
     #[inline(always)]
@@ -194,16 +196,16 @@ impl Parser {
                 )
             })
             .collect();
-        println!("{:?}", results.len());
+        //println!("{:?}", results.len());
         use ndarray::Array3;
         let total_ticks = self.settings.playback_frames * 2;
         let mut df = Array3::<f32>::zeros((12, self.settings.wanted_props.len(), total_ticks));
-        let z = self.get_raw_df(&results, &mut df, total_ticks);
-        //println!("{:?}", z);
-        return results;
+        // let z = self.get_raw_df(&results, &mut df, total_ticks, );
+        // println!("{:?}", z);
+        results
     }
 
-    pub fn compute_jobs(&mut self, cache: &mut ReadCache) {
+    pub fn compute_jobs(&mut self, cache: &mut ReadCache) -> Vec<GameEvent> {
         let tasks = self.tasks.clone();
         // Special msg that is needed for parsing game events.
         // Event comes one time per demo sometime in the beginning
@@ -215,7 +217,7 @@ impl Parser {
             }
         }
         let results: Vec<JobResult> = tasks
-            .into_par_iter()
+            .into_iter()
             .map(|t| {
                 Parser::msg_handler(
                     &t,
@@ -232,11 +234,10 @@ impl Parser {
         // let game_ev: Vec<&GameEvent> = results.iter().filter(|x| x.is_game_event()).collect();
 
         let p = Players::new(&results);
-        let events = cache.get_game_event_jobs(&results, &p);
-        let mut need_to_parse_bytes = cache.get_event_deltas(24, &p, &events);
-        // println!("{:?}", need_to_parse_bytes);
-        self.tasks = vec![];
+        let mut events = cache.get_game_event_jobs(&results, &p);
+        let need_to_parse_bytes = cache.get_event_deltas2(21, &p, &mut events);
 
+        // HERERERERERE
         let byte_readers = self.get_byte_readers(need_to_parse_bytes);
         for mut byte_reader in byte_readers {
             let mut frames_parsed = 0;
@@ -250,10 +251,17 @@ impl Parser {
                 frames_parsed += 1;
             }
         }
+        /*
+        0           lændr  Bo-Krister   37.754517  132974.0
+        1           lændr  Bo-Krister   37.754517  132974.0
+        2      Bo-Krister  rEVILS_tex  114.757690  132924.0
+        3      Bo-Krister  rEVILS_tex  114.757690  132924.0
+        */
+
         let tasks = self.tasks.clone();
 
         let results: Vec<JobResult> = tasks
-            .into_par_iter()
+            .into_iter()
             .map(|t| {
                 Parser::msg_handler(
                     &t,
@@ -264,13 +272,15 @@ impl Parser {
                 )
             })
             .collect();
+
         // println!("{:?}", results);
 
         use ndarray::Array3;
         let total_ticks = self.settings.playback_frames * 2;
-        let mut df = Array3::<f32>::zeros((12, self.settings.wanted_props.len(), total_ticks));
-        let z = self.get_raw_df(&results, &mut df, total_ticks);
-        println!("{:?}", z);
+        let mut df = Array3::<f32>::zeros((12, 2, 2));
+        let events = self.get_raw_df(&results, &mut df, total_ticks, &p);
+        events
+        //println!("{:?}", z);
         //println!("Took {:2?}", before.elapsed());
     }
     pub fn msg_handler(
@@ -282,6 +292,7 @@ impl Parser {
     ) -> JobResult {
         let wanted_event = "player_death";
         // println!("{:?} {}", blueprint.tick, blueprint.msg);
+
         match blueprint.msg {
             26 => parse_packet_entities(blueprint, bytes, serverclass_map),
             25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),

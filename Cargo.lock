@@ -427,6 +427,7 @@ dependencies = [
  "polars-arrow",
  "protobuf",
  "pyo3",
+ "q_compress",
  "rayon",
  "serde",
  "serde_cbor",
@@ -1324,6 +1325,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "q_compress"
+version = "0.11.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1de537c3b0a5bb7ec75ea9929bdc52ec6277d7e4ad999fd2a0ce3d144307fb3a"
 
 [[package]]
 name = "quote"

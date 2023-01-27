@@ -118,7 +118,7 @@ impl Parser {
 fn get_cls_id(ent_id: i32) -> u16 {
     // Returns correct serverclass id based on entityid
     // This is the key to being able to go parallel across ticks
-    //assert!(ent_id < 65);
+    // assert!(ent_id < 65);
     // MANAGER 70
     // RULES 71
 
@@ -174,14 +174,13 @@ pub fn parse_ent_props(
     for idx in indicies {
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
-        if idx == 21 {
-            let data = SingleEntOutput {
-                ent_id: entity_id,
-                prop_inx: idx,
-                data: pdata,
-            };
-            props.push(data);
-        }
+
+        let data = SingleEntOutput {
+            ent_id: entity_id,
+            prop_inx: idx,
+            data: pdata,
+        };
+        props.push(data);
     }
     props
 }

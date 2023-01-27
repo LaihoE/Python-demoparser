@@ -28,19 +28,20 @@ pub struct Delta {
     byte: u64,
     idx: u32,
     entid: u32,
+    tick: i32,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GameEventIdx {
-    byte: u64,
-    id: i32,
+    pub byte: u64,
+    pub id: i32,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Stringtables {
-    byte: u64,
+    pub byte: u64,
 }
 pub struct GameEventBluePrint {
-    byte: u64,
-    entid: u32,
+    pub byte: u64,
+    pub entid: u32,
 }
 
 pub struct WriteCache {
@@ -62,7 +63,6 @@ pub struct ReadCache {
 impl WriteCache {
     pub fn new(path: &String, jobresults: Vec<JobResult>, dt_start: u64, ge_start: u64) -> Self {
         let (game_events, string_tables, packet_ents) = WriteCache::filter_per_result(jobresults);
-        println!("PEL {}", packet_ents.len());
 
         let mut file = fs::File::create(path.to_owned() + ".zip").unwrap();
         let mut zip = zip::ZipWriter::new(file);
@@ -100,15 +100,17 @@ impl WriteCache {
         let mut v = vec![];
         for p in &self.packet_ents {
             for x in &p.data {
-                v.push((p.byte, x.ent_id, x.prop_inx))
+                v.push((p.byte, x.prop_inx, x.ent_id, p.tick))
             }
         }
-        let before = Instant::now();
 
-        let m = v.iter().into_group_map_by(|x| x.2);
+        let m = v.iter().into_group_map_by(|x| x.1);
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
-
         let forbidden = vec![0, 1, 2, 37, 103, 93, 59, 58, 1343, 1297, 40, 41, 26, 27];
+
+        /*
+        Write data per prop. Also use SoA form for ~3x size reduction.
+        */
 
         for i in 0..2000 {
             if !forbidden.contains(&i) {
@@ -121,8 +123,12 @@ impl WriteCache {
                             byt.extend(t.0.to_le_bytes());
                         }
                         for t in g {
-                            byt.extend(t.1.to_le_bytes());
+                            byt.extend(t.3.to_le_bytes());
                         }
+                        for t in g {
+                            byt.extend(t.2.to_le_bytes());
+                        }
+
                         self.zip.write_all(&byt).unwrap();
                     }
                     None => {}
@@ -225,7 +231,8 @@ impl ReadCache {
         let number_rows = usize::from_le_bytes(data[..8].try_into().unwrap());
 
         let mut starting_bytes = Vec::with_capacity(number_rows);
-        let mut pidx = Vec::with_capacity(number_rows);
+        let mut entids = Vec::with_capacity(number_rows);
+        let mut ticks = Vec::with_capacity(number_rows);
         // Stored as u64
         let BYTES_SIZE = 8;
         // Stored as u32
@@ -234,15 +241,25 @@ impl ReadCache {
         for bytes in data[8..number_rows * BYTES_SIZE + 8].chunks(BYTES_SIZE) {
             starting_bytes.push(usize::from_le_bytes(bytes.try_into().unwrap()));
         }
-        for bytes in data[number_rows * BYTES_SIZE + 8..].chunks(PIDX_SIZE) {
-            pidx.push(u32::from_le_bytes(bytes.try_into().unwrap()));
+        for bytes in data[number_rows * BYTES_SIZE + 8
+            ..(number_rows * BYTES_SIZE + 8) + number_rows * PIDX_SIZE + 8]
+            .chunks(PIDX_SIZE)
+        {
+            entids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
-        for (byte, idx) in starting_bytes.iter().zip(pidx) {
-            // WRONG WAY !!!!!!!!!!!!!!!!!!!!
+        for bytes in
+            data[(number_rows * BYTES_SIZE + 8) + number_rows * PIDX_SIZE + 8..].chunks(PIDX_SIZE)
+        {
+            ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        }
+        use itertools::izip;
+
+        for (byte, entid, tick) in izip!(&starting_bytes, &ticks, &entids) {
             self.deltas.push(Delta {
                 byte: *byte as u64,
                 idx: wanted_idx,
-                entid: idx,
+                entid: *entid as u32,
+                tick: *tick,
             });
         }
     }
@@ -352,7 +369,7 @@ impl ReadCache {
         &mut self,
         wanted_id: u32,
         players: &Players,
-        events: &Vec<GameEventBluePrint>,
+        events: &mut Vec<GameEventBluePrint>,
     ) -> Vec<u64> {
         let d = self.read_deltas_by_pidx(wanted_id);
         //println!("{:?}", self.deltas);
@@ -361,9 +378,13 @@ impl ReadCache {
 
         let mut kills_idx = 0;
         // println!("{:?}", d)
+
+        events.sort_by_key(|x| x.byte);
+
         for i in 0..self.deltas.len() {
             let delta_start_byte = self.deltas[i].byte;
-            //println!("{} < {}", events[kills_idx].byte, delta_start_byte);
+            //v.push(delta_start_byte);
+            // println!("{} < {}", events[kills_idx].byte, delta_start_byte);
             if events[kills_idx].byte < delta_start_byte {
                 let byte_want = self.find_last_val(
                     &self.deltas,
@@ -373,8 +394,17 @@ impl ReadCache {
                     players,
                     events[kills_idx].byte,
                 );
-                v.push(byte_want);
-                //println!("GE: {:?} {byte_want}", self.game_events);
+                let bs = self.find_delta_tick(
+                    &self.deltas,
+                    events[kills_idx].entid,
+                    21,
+                    events[kills_idx].byte,
+                );
+                // println!("COMP {:?} {:?}", bs, byte_want);
+                // v.push(byte_want);
+
+                //v.push(bs.unwrap());
+                // println!("GE: {:?} {byte_want}", self.game_events);
 
                 kills_idx += 1;
                 if kills_idx == events.len() {
@@ -382,6 +412,28 @@ impl ReadCache {
                 }
             }
         }
+        v
+    }
+    pub fn get_event_deltas2(
+        &mut self,
+        wanted_id: u32,
+        players: &Players,
+        events: &mut Vec<GameEventBluePrint>,
+    ) -> Vec<u64> {
+        self.read_deltas_by_pidx(wanted_id);
+        let mut v = vec![];
+        let mut kills_idx = 0;
+
+        events.sort_by_key(|x| x.byte);
+
+        for event in events {
+            let x = self.find_delta_tick(&self.deltas, event.entid, 21, event.byte);
+            match x {
+                Some(d) => v.push(d),
+                None => {}
+            }
+        }
+
         v
     }
 
@@ -399,10 +451,45 @@ impl ReadCache {
         */
         for i in (0..i).rev() {
             if v[i].idx == wanted_idx && v[i].entid == kill.entid {
+                /*
+                println!(
+                    "Match: {} {} {} == {} {} == {}",
+                    v[i].byte, kill.byte, v[i].idx, wanted_idx, v[i].entid, kill.entid
+                );
+                */
                 return v[i].byte;
             }
         }
         //panic!("no found")
         0
+    }
+    #[inline]
+    pub fn find_delta_tick(
+        &self,
+        deltas: &Vec<Delta>,
+        entid: u32,
+        prop: u32,
+        byte: u64,
+    ) -> Option<u64> {
+        let startpos =
+            deltas.binary_search_by(|segment| segment.byte.partial_cmp(&byte).expect("NaN"));
+
+        let startpos = match startpos {
+            Err(e) => e,
+            Ok(x) => x,
+        };
+
+        for i in (0..startpos).rev() {
+            let current_delta = &deltas[i];
+            if current_delta.entid == entid && current_delta.idx == prop {
+                // println!(">> {} {}", current_delta.tick, &deltas[startpos].tick);
+                if current_delta.tick != deltas[startpos - 1].tick {
+                    return Some(current_delta.byte);
+                } else {
+                    continue;
+                }
+            }
+        }
+        None
     }
 }

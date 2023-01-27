@@ -90,11 +90,30 @@ impl GameEvent {
         None
         //panic!("No key with that name found")
     }
+    pub fn get_attacker_uid(&self) -> Option<i16> {
+        match self.get_key_by_name("attacker".to_string()) {
+            Some(uid) => match uid {
+                KeyData::Short(uid) => Some(uid),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+    pub fn get_player_uid(&self) -> Option<i16> {
+        match self.get_key_by_name("userid".to_string()) {
+            Some(uid) => match uid {
+                KeyData::Short(uid) => Some(uid),
+                _ => None,
+            },
+            None => None,
+        }
+    }
 
     pub fn to_py_tuples(&self, py: Python<'_>) -> Vec<(String, PyObject)> {
         let mut py_tuples: Vec<(String, PyObject)> = Vec::new();
         for pair in &self.fields {
             let name = &pair.name;
+            //println!("{} {:?}", name, pair.data);
             let val = match &pair.data {
                 Some(d) => d.to_string_py(py),
                 None => "None".to_object(py),
@@ -142,19 +161,23 @@ impl Parser {
         let mut game_events: Vec<GameEvent> = Vec::new();
         let event_desc = &game_events_map[&msg.eventid()];
 
-        let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.byte);
+        if msg.eventid() == 24 {
+            //println!("GE {}", blueprint.tick);
 
-        game_events.push({
-            GameEvent {
-                name: event_desc.name().to_owned(),
-                fields: name_data_pairs,
-                tick: blueprint.tick,
-                byte: blueprint.byte,
-                id: msg.eventid(),
-            }
-        });
+            let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.byte);
 
-        JobResult::GameEvents(game_events)
+            game_events.push({
+                GameEvent {
+                    name: event_desc.name().to_owned(),
+                    fields: name_data_pairs,
+                    tick: blueprint.tick,
+                    byte: blueprint.byte,
+                    id: msg.eventid(),
+                }
+            });
+            return JobResult::GameEvents(game_events);
+        }
+        JobResult::None
     }
 
     pub fn parse_game_event_map(&mut self, blueprint: &MsgBluePrint) {

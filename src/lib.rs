@@ -31,6 +31,7 @@ use pyo3::{PyErr, Python};
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::path::Path;
+use std::time::Instant;
 use std::vec;
 
 /// https://github.com/pola-rs/polars/blob/master/examples/python_rust_compiled_function/src/ffi.rs
@@ -183,11 +184,14 @@ impl DemoParser {
             Ok(mut parser) => {
                 let _: Header = parser.parse_demo_header();
 
-                let _ = parser.start_parsing(&vec!["m_iMVPs".to_owned()]);
+                let game_events = parser.start_parsing();
                 let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
 
                 // Create Hashmap with <string, pyobject> to be able to convert to python dict
-                for ge in parser.state.game_events {
+                for ge in game_events {
+                    if ge.id != 24 {
+                        continue;
+                    }
                     let mut hm: FxHashMap<String, PyObject> = FxHashMap::default();
                     let tuples = ge.to_py_tuples(py);
                     for (k, v) in tuples {
@@ -200,7 +204,7 @@ impl DemoParser {
             }
         }
     }
-
+    /*
     #[args(py_kwargs = "**")]
     pub fn parse_ticks(
         &self,
@@ -208,7 +212,10 @@ impl DemoParser {
         mut wanted_props: Vec<String>,
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
+        //println!("WANTED PROPS {:?}", wanted_props);
         let mut real_props = rm_user_friendly_names(&wanted_props);
+        //println!("REAL PROPS {:?}", real_props);
+
         let unk_props = check_validity_props(&real_props);
         if !unk_props.is_empty() {
             return Err(PyKeyError::new_err(format!(
@@ -251,76 +258,26 @@ impl DemoParser {
                 } else {
                     wanted_ticks_len
                 };
-                let data = parser.start_parsing(&real_props);
-                real_props.push("tick".to_string());
-                real_props.push("steamid".to_string());
-                real_props.push("name".to_string());
-                wanted_props.push("tick".to_string());
-                wanted_props.push("steamid".to_string());
-                wanted_props.push("name".to_string());
-
-                let mut all_series = vec![];
-
-                match data.get("tick") {
-                    Some(d) => {
-                        let df_len = d.data.get_len();
-                        for prop_name in &real_props {
-                            if data.contains_key(prop_name) {
-                                match &data[prop_name].data {
-                                    VarVec::F32(data) => {
-                                        let s = Series::new(prop_name, data);
-                                        let py_series = rust_series_to_py_series(&s).unwrap();
-                                        all_series.push(py_series);
-                                    }
-                                    VarVec::I32(data) => {
-                                        let s = Series::new(prop_name, data);
-                                        let py_series = rust_series_to_py_series(&s).unwrap();
-                                        all_series.push(py_series);
-                                    }
-                                    VarVec::String(data) => {
-                                        let s = Series::new(prop_name, data);
-                                        let py_series = rust_series_to_py_series(&s).unwrap();
-                                        all_series.push(py_series);
-                                    }
-                                    VarVec::U64(data) => {
-                                        let s = Series::new(prop_name, data);
-                                        let py_series = rust_series_to_py_series(&s).unwrap();
-                                        all_series.push(py_series);
-                                    }
-                                    _ => {
-                                        let mut empty_col: Vec<Option<i32>> = vec![];
-                                        for _ in 0..df_len {
-                                            empty_col.push(None);
-                                        }
-                                        let s = Series::new(prop_name, empty_col);
-                                        let py_series = rust_series_to_py_series(&s).unwrap();
-                                        all_series.push(py_series);
-                                    }
-                                }
-                            }
-                        }
-                        let polars = py.import("polars")?;
-                        let all_series_py = all_series.to_object(py);
-                        let df = polars.call_method1("DataFrame", (all_series_py,))?;
-                        df.setattr("columns", wanted_props.to_object(py)).unwrap();
-                        let pandas_df = df.call_method0("to_pandas").unwrap();
-                        Ok(pandas_df.to_object(py))
-                    }
-                    None => {
-                        return {
-                            let pandas = py.import("pandas")?;
-                            let mut dict = HashMap::new();
-                            dict.insert("columns", real_props.to_object(py));
-                            let py_dict = dict.into_py_dict(py);
-                            let df = pandas.call_method("DataFrame", (), Some(py_dict)).unwrap();
-                            Ok(df.to_object(py))
-                        };
-                    }
+                parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
+                let mut ss = vec![];
+                let series_vec = parser.start_parsing();
+                for s in series_vec {
+                    let py_series = rust_series_to_py_series(&s).unwrap();
+                    ss.push(py_series);
                 }
+                wanted_props.push("steamid".to_string());
+                wanted_props.push("tick".to_string());
+                let polars = py.import("polars").unwrap();
+                //let all_series_py = ss.to_object(py);
+                let df = polars.call_method1("DataFrame", (ss,)).unwrap();
+                //df.setattr("columns", wanted_props.to_object(py)).unwrap();
+                let pandas_df = df.call_method0("to_pandas").unwrap();
+                Ok(pandas_df.to_object(py))
             }
         }
     }
-
+    */
+    /*
     pub fn parse_players(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let parser = Parser::new(
             self.path.clone(),
@@ -384,7 +341,7 @@ impl DemoParser {
             }
         }
     }
-
+    */
     pub fn parse_header(&self) -> PyResult<Py<PyAny>> {
         let parser = Parser::new(
             self.path.clone(),

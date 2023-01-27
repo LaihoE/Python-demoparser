@@ -8,6 +8,8 @@ use super::parser::JobResult;
 pub struct Players {
     pub players: Vec<UserInfo>,
     pub uid_to_eid: HashMap<u32, Vec<Connection>>,
+    pub uid_to_steamid: HashMap<u32, u64>,
+    pub uid_to_name: HashMap<u32, String>,
 }
 #[derive(Debug, Clone)]
 pub struct Connection {
@@ -30,6 +32,8 @@ impl Players {
             }
         }
         let mut uid_to_entid = HashMap::default();
+        let mut uid_to_steamid = HashMap::default();
+        let mut uid_to_name = HashMap::default();
 
         for player in &players {
             //println!("{} {}", player.entity_id, player.xuid);
@@ -40,6 +44,8 @@ impl Players {
                     entid: player.entity_id,
                     byte: player.byte,
                 });
+            uid_to_steamid.insert(player.user_id, player.xuid);
+            uid_to_name.insert(player.user_id, player.name.clone());
         }
         for (k, v) in &uid_to_entid {
             // println!("{} {:?}", k, v);
@@ -47,6 +53,8 @@ impl Players {
         Players {
             players: players,
             uid_to_eid: uid_to_entid,
+            uid_to_steamid: uid_to_steamid,
+            uid_to_name: uid_to_name,
         }
     }
     pub fn uid_to_entid(&self, uid: u32, byte: usize) -> Option<u32> {
@@ -59,6 +67,22 @@ impl Players {
                     }
                 }
                 return Some(player_mapping.last().unwrap().entid);
+            }
+        }
+    }
+    pub fn uid_to_steamid(&self, uid: u32) -> Option<u64> {
+        match self.uid_to_steamid.get(&uid) {
+            None => None, //panic!("NO USERID MAPPING TO ENTID: {}", uid),
+            Some(sid) => {
+                return Some(*sid);
+            }
+        }
+    }
+    pub fn uid_to_name(&self, uid: u32) -> Option<String> {
+        match self.uid_to_name.get(&uid) {
+            None => None, //panic!("NO USERID MAPPING TO ENTID: {}", uid),
+            Some(sid) => {
+                return Some(sid.to_owned());
             }
         }
     }

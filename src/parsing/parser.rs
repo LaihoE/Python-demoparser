@@ -14,8 +14,11 @@ use crate::parsing::stringtables::UserInfo;
 pub use crate::parsing::variants::*;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
+use itertools::Itertools;
 use memmap2::Mmap;
+use polars::export::arrow::compute::filter;
 use polars::export::regex::internal::Inst;
+use polars::prelude::NamedFrom;
 use polars::series::Series;
 use rayon::prelude::*;
 use sha256;
@@ -60,6 +63,12 @@ impl JobResult {
     pub fn is_game_event(&self) -> bool {
         match self {
             JobResult::GameEvents(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_packet_ent(&self) -> bool {
+        match self {
+            JobResult::PacketEntities(_) => true,
             _ => false,
         }
     }
@@ -113,14 +122,21 @@ impl Parser {
         wanted_bytes
     }
 
-    pub fn start_parsing(&mut self) -> Vec<GameEvent> {
+    pub fn start_parsing(&mut self) -> Vec<Series> {
+        let wanted_props = vec![20, 21];
         match self.get_cache_if_exists() {
             Some(mut cache) => {
                 println!("Using cache");
                 // Bytes where our wanted ticks start
-                let wanted_bytes = self.get_wanted_bytes(&mut cache);
+                let mut wanted_bytes = self.get_wanted_bytes(&mut cache);
+                for prop in &wanted_props {
+                    wanted_bytes.extend(cache.find_delta_ticks(5, *prop));
+                }
+
                 self.parse_bytes(wanted_bytes);
-                let jobresults = self.compute_jobs(&mut cache);
+
+                let jobresults = self.compute_jobs(&mut cache, &wanted_props);
+
                 // println!("{:?}", jobresults);
                 jobresults
             }
@@ -233,6 +249,7 @@ impl Parser {
             }
         }
         let results: Vec<JobResult> = self.compute_tasks(&tasks);
+
         use ndarray::Array3;
         let total_ticks = self.settings.playback_frames * 2;
         let mut df = Array3::<f32>::zeros((12, self.settings.wanted_props.len(), total_ticks));
@@ -241,7 +258,7 @@ impl Parser {
         results
     }
 
-    pub fn compute_jobs(&mut self, cache: &mut ReadCache) -> Vec<GameEvent> {
+    pub fn compute_jobs(&mut self, cache: &mut ReadCache, wanted_props: &Vec<u32>) -> Vec<Series> {
         let tasks = self.tasks.clone();
         // Special msg that is needed for parsing game events.
         // Event comes one time per demo sometime in the beginning
@@ -253,10 +270,6 @@ impl Parser {
             }
         }
         let results: Vec<JobResult> = self.compute_tasks(&tasks);
-
-        // 24 player death
-        // GL: 458399   MAP: 138837
-        // let game_ev: Vec<&GameEvent> = results.iter().filter(|x| x.is_game_event()).collect();
 
         let p = Players::new(&results);
         let mut events = cache.get_game_event_jobs(&results, &p);
@@ -280,14 +293,85 @@ impl Parser {
         let tasks = self.tasks.clone();
         let results: Vec<JobResult> = self.compute_tasks(&tasks);
 
+        let v: Vec<i32> = (20000..50000).collect();
+        let mut ss = vec![];
+        for p in wanted_props {
+            let out = self.functional_searcher(&results, *p as i32, 5, v.clone());
+            let s = Series::new("out", out);
+            ss.push(s);
+        }
+        let before = Instant::now();
+
+        println!("Searcher took: {:2?}", before.elapsed());
+
         use ndarray::Array3;
         let total_ticks = self.settings.playback_frames * 2;
         let mut df = Array3::<f32>::zeros((12, 2, 2));
         let events = self.get_raw_df(&results, &mut df, total_ticks, &p);
-        events
+
+        ss
         //println!("{:?}", z);
         //println!("Took {:2?}", before.elapsed());
     }
+
+    pub fn filter_jobs_by_pidx_entid(
+        &self,
+        results: &Vec<JobResult>,
+        entid: i32,
+        pidx: i32,
+    ) -> Vec<(f32, i32)> {
+        /*
+        Filters the raw parser outputs into form:
+        Vec<Val, Tick>
+        That can then be binary searched.
+        */
+        let mut v = vec![];
+        for x in results {
+            if let JobResult::PacketEntities(pe) = x {
+                v.push(pe);
+            }
+        }
+        v.into_par_iter()
+            .flat_map(|x| self.matcher(x, pidx, entid))
+            .collect()
+    }
+
+    pub fn functional_searcher(
+        &self,
+        results: &Vec<JobResult>,
+        pidx: i32,
+        entid: i32,
+        ticks: Vec<i32>,
+    ) -> Vec<f32> {
+        let filtered = self.filter_jobs_by_pidx_entid(results, entid, pidx);
+
+        let mut output = vec![];
+        for tick in ticks {
+            let idx = filtered.binary_search_by(|segment| segment.1.partial_cmp(&tick).unwrap());
+            let p = match idx {
+                Ok(i) => filtered[i],
+                Err(i) => filtered[i],
+            };
+            output.push(p.0);
+            //println!("{} {:?}", tick, p)
+        }
+        output
+    }
+    #[inline(always)]
+    pub fn matcher(&self, pe: &PacketEntsOutput, pidx: i32, entid: i32) -> Option<(f32, i32)> {
+        for x in &pe.data {
+            if x.ent_id == entid && x.prop_inx == pidx {
+                match x.data {
+                    PropData::F32(f) => {
+                        return Some((f, pe.tick));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        None
+    }
+
     pub fn msg_handler(
         blueprint: &MsgBluePrint,
         bytes: &Mmap,

@@ -93,9 +93,9 @@ fn main() {
         .map(|f| parse_demo(f.to_owned()))
         .collect();
      */
-    let x: Vec<i32> = paths_v
-        .into_par_iter()
-        .map(|f| parse_demo(f.to_owned()))
+    let x: Vec<i32> = single
+        .into_iter()
+        .map(|f| parse_demo("/home/laiho/Documents/demos/mygames/match730_003449965367076585902_0881240613_184.dem".to_owned()))
         .collect();
     // 145
     let elapsed = now.elapsed();

@@ -146,6 +146,7 @@ impl DemoParser {
     pub fn py_new(demo_path: String) -> PyResult<Self> {
         Ok(DemoParser { path: demo_path })
     }
+    /*
     #[args(py_kwargs = "**")]
     pub fn parse_events(
         &self,
@@ -204,7 +205,8 @@ impl DemoParser {
             }
         }
     }
-    /*
+    */
+
     #[args(py_kwargs = "**")]
     pub fn parse_ticks(
         &self,
@@ -276,7 +278,7 @@ impl DemoParser {
             }
         }
     }
-    */
+
     /*
     pub fn parse_players(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let parser = Parser::new(

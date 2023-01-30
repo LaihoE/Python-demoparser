@@ -784,6 +784,10 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_nPersonaDataPublicLevel"=> 0,
     "m_iClip1" => 0,
     "weapon_name" => 99,
+    "DT_CSLocalPlayerExclusive.m_vecOrigin[2]" => 0,
+    "DT_BasePlayer.m_iHealth" => 0,
+    "DT_BasePlayer.m_szLastPlaceName" => 0,
+    "DT_LocalPlayerExclusive.m_vecViewOffset[2]" => 0,
 };
 
 #[pymodule]

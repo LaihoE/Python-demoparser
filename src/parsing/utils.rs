@@ -41,7 +41,7 @@ pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
         Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
             Err(e) => Err(e),
             Ok(m) => {
-                //m.advise(memmap2::Advice::Random).unwrap();
+                // m.advise(memmap2::Advice::Random).unwrap();
                 Ok(BytesVariant::Mmap3(m))
             }
         },
@@ -225,5 +225,8 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
     "m_iClip1" => 0,
     "weapon_name" => 99,
     "m_bAlive" => 10,
-
+    "DT_CSLocalPlayerExclusive.m_vecOrigin[2]" => 0,
+    "DT_BasePlayer.m_iHealth" => 0,
+    "DT_BasePlayer.m_szLastPlaceName" => 0,
+    "DT_LocalPlayerExclusive.m_vecViewOffset[2]" => 0,
 };

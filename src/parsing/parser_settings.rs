@@ -70,6 +70,7 @@ impl Parser {
         og_names: Vec<String>,
     ) -> Result<Self, std::io::Error> {
         let mut extra_wanted_props = vec![];
+        // println!("{}", demo_path);
         for p in &wanted_props {
             match TYPEHM.get(p) {
                 Some(_) => match &p[(p.len() - 1)..] {
@@ -128,7 +129,7 @@ impl Parser {
                         settings: settings,
                         bytes: Arc::new(m),
                         state: state,
-                        tasks: Vec::with_capacity(100000),
+                        tasks: vec![],
                     }),
                     BytesVariant::Vec(_) => panic!("vec"),
                 }

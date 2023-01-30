@@ -49,15 +49,13 @@ impl Parser {
                 }
             }
         }
-
         let class_count = byte_reader.read_short();
         for _ in 0..class_count {
             let id = byte_reader.read_short();
             let _ = byte_reader.read_string();
             let dt = byte_reader.read_string();
 
-            // Todo skip
-            if id != 6666 {
+            if id == 275 || id == 43 || id == 41 || id == 39 || id == 40 {
                 let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
                 let server_class = ServerClass { id, dt, props };
                 // Set baselines parsed earlier in stringtables.
@@ -123,7 +121,6 @@ impl Parser {
                 }
             }
         }
-
         newp
     }
 
@@ -151,7 +148,7 @@ impl Parser {
         table_name: String,
         excl: &SmallVec<[Sendprop_t; 32]>,
     ) -> Vec<Prop> {
-        let mut flat: Vec<Prop> = Vec::new();
+        let mut flat: Vec<Prop> = vec![];
         let mut cnt = 0;
 
         for prop in &table.props {
@@ -211,6 +208,7 @@ impl Parser {
             cnt += 1;
         }
         flat.sort_by_key(|x| x.col);
+        //println!("{:?}", flat.len());
         return flat;
     }
 }

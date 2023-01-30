@@ -1,9 +1,3 @@
-use ahash::HashMap;
-use csv::Writer;
-use rayon::prelude::IntoParallelIterator;
-use std::fs::{create_dir, metadata};
-use std::{fs, time::Instant};
-
 use super::{
     entities::PacketEntsOutput,
     game_events::{self, GameEvent},
@@ -11,8 +5,10 @@ use super::{
     players::Players,
     stringtables::UserInfo,
 };
-use crate::parsing::parser;
+use crate::parsing::data_table::ServerClass;
+use ahash::HashMap;
 use itertools::Itertools;
+use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -20,15 +16,16 @@ use serde_cbor;
 use std::error::Error;
 use std::fs::File;
 use std::fs::OpenOptions;
+use std::fs::{create_dir, metadata};
 use std::io::Read;
 use std::io::Write;
+use std::{fs, time::Instant};
 use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Delta {
     byte: u64,
-    idx: u32,
     entid: u32,
     tick: i32,
 }
@@ -56,7 +53,7 @@ pub struct WriteCache {
 }
 
 pub struct ReadCache {
-    pub deltas: Vec<Delta>,
+    pub deltas: HashMap<String, Vec<Delta>>,
     pub game_events: Vec<GameEventIdx>,
     pub stringtables: Vec<Stringtables>,
     pub cache_path: String,
@@ -78,8 +75,8 @@ impl WriteCache {
             zip: zip,
         }
     }
-    pub fn write_all_caches(&mut self) {
-        self.write_packet_ents();
+    pub fn write_all_caches(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
+        self.write_packet_ents(sv_cls_map);
         self.write_game_events();
         self.write_string_tables();
         self.write_maps();
@@ -104,15 +101,22 @@ impl WriteCache {
 
         self.zip.write_all(&byt).unwrap();
     }
+    pub fn to_str_name(&mut self, sv_cls_map: &HashMap<u16, ServerClass>, idx: i32) -> String {
+        let player_props = &sv_cls_map.get(&40).unwrap().props;
+        let prop = player_props.get(idx as usize).unwrap();
+        prop.table.to_owned() + "." + &prop.name.to_owned()
+    }
 
-    pub fn write_packet_ents(&mut self) {
+    pub fn write_packet_ents(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
         let forbidden = vec![0, 1, 2, 37, 103, 93, 59, 58, 1343, 1297, 40, 41, 26, 27];
 
         let mut v = vec![];
         for p in &self.packet_ents {
             for x in &p.data {
                 if !forbidden.contains(&x.prop_inx) || x.ent_id > 64 {
-                    v.push((p.byte, x.prop_inx, x.ent_id, p.tick))
+                    if x.ent_id < 64 && x.ent_id > 0 {
+                        v.push((p.byte, x.prop_inx, x.ent_id, p.tick))
+                    }
                 }
             }
         }
@@ -124,10 +128,19 @@ impl WriteCache {
         Write data per prop. Also use SoA form for ~3x size reduction.
         */
 
-        for i in 0..2000 {
-            match m.get(&i) {
+        for idx in 0..11000 {
+            match m.get(&idx) {
                 Some(g) => {
-                    self.zip.start_file(i.to_string(), options).unwrap();
+                    let prop_str_name = if idx >= 10000 {
+                        "m_vecOrigin_X".to_string()
+                    } else {
+                        self.to_str_name(sv_cls_map, idx)
+                    };
+                    println!("{} {} ", idx, prop_str_name);
+
+                    // println!("{}", prop_str_name);
+
+                    self.zip.start_file(prop_str_name, options).unwrap();
                     let mut byt = vec![];
                     byt.extend(g.len().to_le_bytes());
                     for t in g {
@@ -200,7 +213,7 @@ impl ReadCache {
 
         ReadCache {
             zip: ZipArchive::new(file).unwrap(),
-            deltas: vec![],
+            deltas: HashMap::default(),
             game_events: vec![],
             stringtables: vec![],
             cache_path: cache_path.clone(),
@@ -221,7 +234,11 @@ impl ReadCache {
         return (ge_map, dt_map);
     }
 
-    pub fn read_deltas_by_pidx(&mut self, wanted_idx: u32) {
+    pub fn read_deltas_by_name(
+        &mut self,
+        wanted_name: &str,
+        sv_cls_map: &HashMap<u16, ServerClass>,
+    ) {
         /*
         File format:
         first 8 bytes -> number of structs (u64)
@@ -230,10 +247,11 @@ impl ReadCache {
 
         We are storing the structs in SOA form.
         */
+        println!("WANTED {}", wanted_name);
         let mut data = vec![];
         let x = self
             .zip
-            .by_name(&wanted_idx.to_string())
+            .by_name(&wanted_name)
             .unwrap()
             .read_to_end(&mut data)
             .unwrap();
@@ -247,8 +265,6 @@ impl ReadCache {
         let BYTES_SIZE = 8;
         // Stored as u32
         let PIDX_SIZE = 4;
-
-        println!("{} {}", wanted_idx, data.len());
 
         for bytes in data[8..number_rows * BYTES_SIZE + 8].chunks(BYTES_SIZE) {
             starting_bytes.push(usize::from_le_bytes(bytes.try_into().unwrap()));
@@ -266,10 +282,18 @@ impl ReadCache {
         }
         use itertools::izip;
 
+        let p = &sv_cls_map[&40];
+        for prop in &p.props {
+            let key = prop.table.to_owned() + "." + &prop.name.to_owned();
+            self.deltas.insert(key, vec![]);
+        }
+        self.deltas.insert("m_vecOrigin_X".to_owned(), vec![]);
+
+        let mut v = self.deltas.get_mut(wanted_name).unwrap();
+
         for (byte, entid, tick) in izip!(&starting_bytes, &ticks, &entids) {
-            self.deltas.push(Delta {
+            v.push(Delta {
                 byte: *byte as u64,
-                idx: wanted_idx,
                 entid: *entid as u32,
                 tick: *tick,
             });
@@ -376,13 +400,13 @@ impl ReadCache {
         }
         v
     }
-
+    /*
     pub fn get_event_deltas(
         &mut self,
-        wanted_id: u32,
+        wanted_name: String,
         events: &mut Vec<GameEventBluePrint>,
     ) -> Vec<u64> {
-        self.read_deltas_by_pidx(wanted_id);
+        self.read_deltas_by_name(wanted_name);
         let mut v = vec![];
         let mut kills_idx = 0;
 
@@ -397,21 +421,63 @@ impl ReadCache {
         }
         v
     }
-    pub fn find_delta_ticks(&mut self, entid: u32, prop: u32) -> Vec<u64> {
-        let before = Instant::now();
+    */
+    pub fn filter_delta_ticks_wanted(
+        &self,
+        temp_ticks: &Vec<(u64, i32)>,
+        wanted_ticks: &Vec<i32>,
+    ) -> Vec<u64> {
+        let mut wanted_bytes = Vec::with_capacity(wanted_ticks.len());
+        let mut all_ticks = temp_ticks.clone();
+        all_ticks.sort_by_key(|x| x.1);
 
-        let v: Vec<u64> = self
-            .deltas
-            .par_iter()
-            .filter(|x| x.idx == prop && x.entid == entid)
-            .map(|x| x.byte)
-            .collect();
+        if all_ticks.len() == 0 {
+            return vec![];
+        }
 
-        // println!("CHANGED: {:?}", v);
-        // println!("THIS {:2?}", before.elapsed());
-        v
+        for wanted_tick in wanted_ticks {
+            let idx = all_ticks.binary_search_by(|x| x.1.partial_cmp(&wanted_tick).unwrap());
+
+            let p = match idx {
+                Ok(i) => {
+                    if i >= all_ticks.len() {
+                        all_ticks[all_ticks.len() - 1]
+                    } else {
+                        all_ticks[i]
+                    }
+                }
+                Err(i) => {
+                    if i >= all_ticks.len() {
+                        all_ticks[all_ticks.len() - 1]
+                    } else {
+                        all_ticks[i]
+                    }
+                }
+            };
+            wanted_bytes.push(p.0);
+        }
+        wanted_bytes
     }
 
+    pub fn find_delta_ticks(
+        &mut self,
+        entid: u32,
+        prop_name: String,
+        wanted_ticks: &Vec<i32>,
+    ) -> Vec<u64> {
+        println!("DELTA {}", prop_name);
+        let delta_vec = self.deltas.get(&prop_name).unwrap();
+
+        let all_deltas: Vec<(u64, i32)> = delta_vec
+            .iter()
+            .filter(|x| x.entid == entid)
+            .map(|x| (x.byte, x.tick))
+            .collect();
+        self.filter_delta_ticks_wanted(&all_deltas, wanted_ticks)
+        // println!("{:?}", all_deltas);
+        //all_deltas.iter().map(|x| x.0).collect()
+    }
+    /*
     #[inline]
     pub fn find_delta_tick(
         &self,
@@ -420,6 +486,8 @@ impl ReadCache {
         prop: u32,
         byte: u64,
     ) -> Option<u64> {
+        let delta_vec = self.deltas.get(prop);
+
         let startpos =
             deltas.binary_search_by(|segment| segment.byte.partial_cmp(&byte).expect("NaN"));
 
@@ -431,7 +499,7 @@ impl ReadCache {
         for i in (0..startpos).rev() {
             let current_delta = &deltas[i];
             if current_delta.entid == entid && current_delta.idx == prop {
-                // println!(">> {} {}", current_delta.tick, &deltas[startpos].tick);
+                // println!(" >> {} {}", current_delta.tick, &deltas[startpos].tick);
                 if current_delta.tick != deltas[startpos - 1].tick {
                     return Some(current_delta.byte);
                 } else {
@@ -441,4 +509,5 @@ impl ReadCache {
         }
         None
     }
+    */
 }

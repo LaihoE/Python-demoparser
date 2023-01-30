@@ -176,7 +176,9 @@ pub fn parse_ent_props(
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
 
-        if true == true {
+        // DEADFLAG
+        /*
+        if false == true {
             let data = SingleEntOutput {
                 ent_id: entity_id,
                 prop_inx: idx,
@@ -185,25 +187,23 @@ pub fn parse_ent_props(
             props.push(data);
             continue;
         }
-
-        // println!("{} {} {:?} {:?}", sv_cls.id, prop.name, idx, pdata);
+        */
         match pdata {
             PropData::VecXY(v) => {
-                if idx == 9488847 {
-                    let x = SingleEntOutput {
-                        ent_id: entity_id,
-                        prop_inx: 100000,
-                        data: PropData::F32(v[0]),
-                    };
-                    let y = SingleEntOutput {
-                        ent_id: entity_id,
-                        prop_inx: 100001,
-                        data: PropData::F32(v[1]),
-                    };
-                    props.push(x);
-                    props.push(y);
-                }
+                let x = SingleEntOutput {
+                    ent_id: entity_id,
+                    prop_inx: 10000,
+                    data: PropData::F32(v[0]),
+                };
+                let y = SingleEntOutput {
+                    ent_id: entity_id,
+                    prop_inx: 10001,
+                    data: PropData::F32(v[1]),
+                };
+                props.push(x);
+                props.push(y);
             }
+
             _ => {
                 let data = SingleEntOutput {
                     ent_id: entity_id,

@@ -248,6 +248,8 @@ impl ReadCache {
         // Stored as u32
         let PIDX_SIZE = 4;
 
+        println!("{} {}", wanted_idx, data.len());
+
         for bytes in data[8..number_rows * BYTES_SIZE + 8].chunks(BYTES_SIZE) {
             starting_bytes.push(usize::from_le_bytes(bytes.try_into().unwrap()));
         }
@@ -396,18 +398,17 @@ impl ReadCache {
         v
     }
     pub fn find_delta_ticks(&mut self, entid: u32, prop: u32) -> Vec<u64> {
-        self.read_deltas_by_pidx(prop);
         let before = Instant::now();
 
         let v: Vec<u64> = self
             .deltas
-            .iter()
+            .par_iter()
             .filter(|x| x.idx == prop && x.entid == entid)
             .map(|x| x.byte)
             .collect();
 
-        //println!("CHANGED: {:?}", v);
-        println!("{:2?}", before.elapsed());
+        // println!("CHANGED: {:?}", v);
+        // println!("THIS {:2?}", before.elapsed());
         v
     }
 

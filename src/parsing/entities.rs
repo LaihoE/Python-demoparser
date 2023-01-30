@@ -111,6 +111,7 @@ impl Parser {
                 all_props.extend(parse_ent_props(entity_id, &mut b, sv_cls_map, tick));
             }
         }
+        //println!("{}", all_props.len());
         return Some(all_props);
     }
 }
@@ -123,12 +124,14 @@ fn get_cls_id(ent_id: i32) -> u16 {
     // RULES 71
 
     match ent_id {
+        // WORLD
         0 => 275,
         // TEAM
         65 => 43,
         66 => 43,
         67 => 43,
         68 => 43,
+        69 => 43,
         // MANAGER
         70 => 41,
         // RULES
@@ -137,14 +140,14 @@ fn get_cls_id(ent_id: i32) -> u16 {
     }
 }
 #[inline(always)]
-pub fn get_indicies(b: &mut MyBitreader) -> SmallVec<[i32; 128]> {
+pub fn parse_indicies(b: &mut MyBitreader) -> SmallVec<[i32; 64]> {
     /*
     Gets wanted prop indicies. The index maps to a Prop struct.
     For example Player serverclass (id=40) with index 20 gives m_angEyeAngles[0]
     */
     let mut val = -1;
     let new_way = b.read_boolie().unwrap();
-    let mut indicies: SmallVec<[_; 128]> = SmallVec::<[i32; 128]>::new();
+    let mut indicies: SmallVec<[_; 64]> = SmallVec::<[i32; 64]>::new();
     loop {
         val = b.read_inx(val, new_way).unwrap();
         if val == -1 {
@@ -165,23 +168,53 @@ pub fn parse_ent_props(
     let m = sv_cls_map;
 
     let sv_cls = m.get(&cls_id).unwrap();
-    let indicies = get_indicies(b);
+    let indicies = parse_indicies(b);
 
-    // println!("{} {:?}", entity_id, indicies);
-
-    let mut props: Vec<SingleEntOutput> = Vec::with_capacity(2);
+    let mut props: Vec<SingleEntOutput> = Vec::with_capacity(4);
 
     for idx in indicies {
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
 
-        let data = SingleEntOutput {
-            ent_id: entity_id,
-            prop_inx: idx,
-            data: pdata,
-        };
-        props.push(data);
+        if true == true {
+            let data = SingleEntOutput {
+                ent_id: entity_id,
+                prop_inx: idx,
+                data: pdata,
+            };
+            props.push(data);
+            continue;
+        }
+
+        // println!("{} {} {:?} {:?}", sv_cls.id, prop.name, idx, pdata);
+        match pdata {
+            PropData::VecXY(v) => {
+                if idx == 9488847 {
+                    let x = SingleEntOutput {
+                        ent_id: entity_id,
+                        prop_inx: 100000,
+                        data: PropData::F32(v[0]),
+                    };
+                    let y = SingleEntOutput {
+                        ent_id: entity_id,
+                        prop_inx: 100001,
+                        data: PropData::F32(v[1]),
+                    };
+                    props.push(x);
+                    props.push(y);
+                }
+            }
+            _ => {
+                let data = SingleEntOutput {
+                    ent_id: entity_id,
+                    prop_inx: idx,
+                    data: pdata,
+                };
+                props.push(data);
+            }
+        }
     }
+    //println!("{}", props.len());
     props
 }
 

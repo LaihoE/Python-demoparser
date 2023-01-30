@@ -43,7 +43,7 @@ fn parse_demo(demo_path: String) -> i32 {
     let mut parser = Parser::new(
         demo_path,
         true,
-        vec![],
+        (10000..80000).collect(),
         vec![],
         vec!["m_angEyeAngles[1]".to_string()],
         "player_death".to_string(),
@@ -92,11 +92,12 @@ fn main() {
     let x: Vec<i32> = tqdm!(paths_v.into_iter())
         .map(|f| parse_demo(f.to_owned()))
         .collect();
-     */
-    let x: Vec<i32> = single
+    */
+    let x: Vec<i32> = paths_v
         .into_iter()
-        .map(|f| parse_demo("/home/laiho/Documents/demos/mygames/match730_003449965367076585902_0881240613_184.dem".to_owned()))
+        .map(|f| parse_demo(f.to_string()))
         .collect();
+
     // 145
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 67);

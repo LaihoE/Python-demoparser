@@ -76,10 +76,10 @@ impl WriteCache {
         }
     }
     pub fn write_all_caches(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
-        self.write_packet_ents(sv_cls_map);
         self.write_game_events();
         self.write_string_tables();
         self.write_maps();
+        self.write_packet_ents(sv_cls_map);
     }
 
     pub fn create_if_not_exists(&self, path: &String) {
@@ -104,7 +104,10 @@ impl WriteCache {
     pub fn to_str_name(&mut self, sv_cls_map: &HashMap<u16, ServerClass>, idx: i32) -> String {
         let player_props = &sv_cls_map.get(&40).unwrap().props;
         let prop = player_props.get(idx as usize).unwrap();
-        prop.table.to_owned() + "." + &prop.name.to_owned()
+
+        let name = prop.table.to_owned() + "." + &prop.name.to_owned();
+        // println!("{:?} => {},", name, prop.p_type);
+        name
     }
 
     pub fn write_packet_ents(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
@@ -136,9 +139,6 @@ impl WriteCache {
                     } else {
                         self.to_str_name(sv_cls_map, idx)
                     };
-                    println!("{} {} ", idx, prop_str_name);
-
-                    // println!("{}", prop_str_name);
 
                     self.zip.start_file(prop_str_name, options).unwrap();
                     let mut byt = vec![];
@@ -247,7 +247,7 @@ impl ReadCache {
 
         We are storing the structs in SOA form.
         */
-        println!("WANTED {}", wanted_name);
+        // println!("WANTED {}", wanted_name);
         let mut data = vec![];
         let x = self
             .zip
@@ -266,30 +266,46 @@ impl ReadCache {
         // Stored as u32
         let PIDX_SIZE = 4;
 
-        for bytes in data[8..number_rows * BYTES_SIZE + 8].chunks(BYTES_SIZE) {
+        let bytes_starts_at = 8;
+        let bytes_end_at = number_rows * BYTES_SIZE + 8;
+        let entids_start_at = bytes_end_at;
+        let entids_end_at = bytes_end_at + PIDX_SIZE * number_rows;
+        let ticks_start_at = entids_end_at;
+
+        for bytes in data[bytes_starts_at..bytes_end_at].chunks(BYTES_SIZE) {
             starting_bytes.push(usize::from_le_bytes(bytes.try_into().unwrap()));
         }
-        for bytes in data[number_rows * BYTES_SIZE + 8
-            ..(number_rows * BYTES_SIZE + 8) + number_rows * PIDX_SIZE + 8]
-            .chunks(PIDX_SIZE)
-        {
+        for bytes in data[entids_start_at..entids_end_at].chunks(PIDX_SIZE) {
             entids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
-        for bytes in
-            data[(number_rows * BYTES_SIZE + 8) + number_rows * PIDX_SIZE + 8..].chunks(PIDX_SIZE)
-        {
+        for bytes in data[ticks_start_at..].chunks(PIDX_SIZE) {
             ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
+
+        assert_eq!(number_rows, starting_bytes.len());
+        assert_eq!(number_rows, entids.len());
+        assert_eq!(number_rows, ticks.len());
+        /*
+        println!(
+            "{} {} {} {}",
+            starting_bytes.len(),
+            entids.len(),
+            ticks.len(),
+            number_rows
+        );
+        */
         use itertools::izip;
 
         let p = &sv_cls_map[&40];
         for prop in &p.props {
             let key = prop.table.to_owned() + "." + &prop.name.to_owned();
-            self.deltas.insert(key, vec![]);
+            if !self.deltas.contains_key(&key) {
+                self.deltas.insert(key, vec![]);
+            }
         }
         self.deltas.insert("m_vecOrigin_X".to_owned(), vec![]);
 
-        let mut v = self.deltas.get_mut(wanted_name).unwrap();
+        let v = self.deltas.get_mut(wanted_name).unwrap();
 
         for (byte, entid, tick) in izip!(&starting_bytes, &ticks, &entids) {
             v.push(Delta {
@@ -424,19 +440,63 @@ impl ReadCache {
     */
     pub fn filter_delta_ticks_wanted(
         &self,
-        temp_ticks: &Vec<(u64, i32)>,
+        temp_ticks: &Vec<(u64, i32, u32)>,
         wanted_ticks: &Vec<i32>,
+        uid: u32,
     ) -> Vec<u64> {
         let mut wanted_bytes = Vec::with_capacity(wanted_ticks.len());
         let mut all_ticks = temp_ticks.clone();
+
         all_ticks.sort_by_key(|x| x.1);
+        //all_ticks.reverse();
+
+        // println!("{:?}", temp_ticks);
 
         if all_ticks.len() == 0 {
+            // println!("EMPTY ALL TICKS");
             return vec![];
         }
+        let before = Instant::now();
+
+        let mut idx = 0;
+
+        /*
+
+        57
+        58
+        59
+
+        */
 
         for wanted_tick in wanted_ticks {
+            for j in all_ticks.windows(2) {
+                //println!("{:?}", j);
+                if j[0].1 <= *wanted_tick && j[1].1 > *wanted_tick {
+                    wanted_bytes.push(j[0].0);
+                    break;
+                }
+            }
+
+            /*
+            if idx == 0 && all_ticks.len() == 1 {
+                wanted_bytes.push(all_ticks[0].0);
+                continue;
+            }
+            if idx == all_ticks.len() - 1 {
+                wanted_bytes.push(all_ticks[idx - 1].0);
+                continue;
+            }
+            while wanted_tick < &all_ticks[idx].1 {
+                idx += 1;
+                if idx == all_ticks.len() - 1 {
+                    break;
+                }
+            }
+            wanted_bytes.push(all_ticks[idx].0);
+            */
+            /*
             let idx = all_ticks.binary_search_by(|x| x.1.partial_cmp(&wanted_tick).unwrap());
+            // println!("{:?} {}", idx, wanted_tick);
 
             let p = match idx {
                 Ok(i) => {
@@ -454,28 +514,76 @@ impl ReadCache {
                     }
                 }
             };
+
             wanted_bytes.push(p.0);
+            */
         }
+        // println!("{:2?}", before.elapsed());
         wanted_bytes
     }
 
     pub fn find_delta_ticks(
         &mut self,
-        entid: u32,
+        userid: u32,
         prop_name: String,
         wanted_ticks: &Vec<i32>,
+        players: &Players,
     ) -> Vec<u64> {
-        println!("DELTA {}", prop_name);
         let delta_vec = self.deltas.get(&prop_name).unwrap();
 
-        let all_deltas: Vec<(u64, i32)> = delta_vec
+        // players.entid_to_sid(x.2 as u32, x.1)
+
+        let wanted_sid = players.uid_to_steamid(userid).unwrap();
+
+        let all_deltas: Vec<(u64, i32, u32)> = delta_vec
             .iter()
-            .filter(|x| x.entid == entid)
-            .map(|x| (x.byte, x.tick))
+            .filter(|x| players.eid_to_sid(x.entid, x.tick) == Some(wanted_sid))
+            .map(|x| (x.byte, x.tick, x.entid))
             .collect();
-        self.filter_delta_ticks_wanted(&all_deltas, wanted_ticks)
+        /*
+            println!(
+                "TTTTTTTTTTTTTTTTTTTTTTTTT {:?}",
+                players.eid_to_sid(2, 39910)
+            );
+
+
+        0    0.527344  76561198029122943     40000
+        1  359.011230  76561198048924300     40000
+        2    3.570557  76561198055893769     40000
+        3    3.054199  76561198061642773     40000
+        4    8.618774  76561198112665670     40000
+        5   11.876221  76561198122925075     40000
+        6    1.027222  76561198134270402     40000
+        7    1.186523  76561198189245325     40000
+        8    0.087891  76561198829733633     40000
+        9    1.230469  76561198845955287     40000
+
+
+
+
+            */
+
+        if wanted_sid == 76561198829733633 {
+            for x in delta_vec {
+                if x.tick < 40040 {
+                    //println!("OG {:?}", x);
+                }
+            }
+            //panic!("done");
+        }
+
+        let v: Vec<u32> = all_deltas.iter().map(|x| x.2).collect();
+        let x: Vec<&u32> = v.iter().unique().collect();
+
+        // @@@@@@@@@@2 40000 (0.087890625, 39910, 2) 76561198829733633
+
+        //println!("ALL DELTAS {}", all_deltas.len());
+        let mut x = self.filter_delta_ticks_wanted(&all_deltas, wanted_ticks, userid);
         // println!("{:?}", all_deltas);
-        //all_deltas.iter().map(|x| x.0).collect()
+        let y: Vec<u64> = all_deltas.iter().map(|x| x.0).collect();
+        //println!("BYTLEN {}", x.len());
+        // println!("{:?}", x);
+        x
     }
     /*
     #[inline]
@@ -511,3 +619,37 @@ impl ReadCache {
     }
     */
 }
+/*
+#[cfg(test)]
+mod tests {
+    use crate::parsing::cache::Delta;
+    use crate::parsing::cache::ReadCache;
+
+    pub fn init_cache() -> ReadCache {
+        //pub fn new(path: &String, jobresults: Vec<JobResult>, dt_start: u64, ge_start: u64) -> Self {
+
+        let mut cache = ReadCache::new(&"/home/laiho/Documents/cache/testcache".to_string());
+
+        let entids = vec![7, 7, 7, 21, 21, 21, 21];
+        let ticks = vec![69, 78, 79, 80, 120, 150, 200];
+
+        for (eid, tick) in entids.iter().zip(ticks) {
+            cache
+                .deltas
+                .entry("data".to_string())
+                .or_insert(vec![])
+                .push(Delta {
+                    byte: 69,
+                    entid: *eid,
+                    tick: tick,
+                });
+        }
+        cache
+    }
+    pub fn test1() {
+        let cache = init_cache();
+        cache.read_deltas_by_name("data", sv_cls_map)
+    }
+
+}
+*/

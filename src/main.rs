@@ -38,15 +38,15 @@ fn parse_demo(demo_path: String) -> i32 {
     // println!("{}", demo_path);
 
     let now = Instant::now();
-    let props_names = vec!["m_angEyeAngles[1]".to_string()];
+    let props_names = vec!["DT_CSPlayer.m_angEyeAngles[0]".to_string()];
 
     let mut parser = Parser::new(
         demo_path,
         true,
         //vec![],
-        (10000..10100).collect(),
+        (10000..10002).collect(),
         vec![],
-        vec!["m_angEyeAngles[1]".to_string()],
+        vec!["DT_CSPlayer.m_angEyeAngles[0]".to_string()],
         "player_death".to_string(),
         false,
         false,
@@ -68,8 +68,8 @@ fn parse_demo(demo_path: String) -> i32 {
 fn main() {
     let now = Instant::now();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/").unwrap();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
-    //let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
+    // let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     let mut paths_v = vec![];
     for path in paths {
         let p = path.as_ref().unwrap().path().to_str().unwrap().to_string();
@@ -96,7 +96,7 @@ fn main() {
     */
     let x: Vec<i32> = single
         .into_iter()
-        .map(|f| parse_demo("/home/laiho/Documents/demos/faceits/cu/3547161142704996465_76561198805521514 (1).dem".to_string()))
+        .map(|f| parse_demo(f.to_string()))
         .collect();
 
     // 145

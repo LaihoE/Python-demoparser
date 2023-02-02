@@ -178,16 +178,19 @@ pub fn parse_ent_props(
 
         // DEADFLAG
         /*
-        if false == true {
-            let data = SingleEntOutput {
-                ent_id: entity_id,
-                prop_inx: idx,
-                data: pdata,
-            };
-            props.push(data);
-            continue;
-        }
+                if true == true {
+                    let data = SingleEntOutput {
+                        ent_id: entity_id,
+                        prop_inx: idx,
+                        data: pdata,
+                    };
+                    props.push(data);
+                    continue;
+                }
         */
+        //if tick == 39910 {
+        //println!("ENTITY: {} {}", entity_id, idx);
+        //}
         match pdata {
             PropData::VecXY(v) => {
                 let x = SingleEntOutput {
@@ -203,7 +206,6 @@ pub fn parse_ent_props(
                 props.push(x);
                 props.push(y);
             }
-
             _ => {
                 let data = SingleEntOutput {
                     ent_id: entity_id,

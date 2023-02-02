@@ -76,24 +76,11 @@ impl Players {
                     byte: player.byte,
                     tick: player.tick,
                 });
-            /*
-            if player.xuid == 76561198829733633 {
-                eid_to_sid
-                    .entry(player.entity_id)
-                    .or_insert(vec![])
-                    .push(ReverseConnection {
-                        sid: 76561198829733633,
-                        byte: 9999999999,
-                        tick: 99999999,
-                    });
-            }
-            */
-            //if player.xuid != 0 {
+
             steamids.insert(player.xuid);
             uids.insert(player.user_id);
             uid_to_steamid.insert(player.user_id, player.xuid);
             uid_to_name.insert(player.user_id, player.name.clone());
-            //}
         }
 
         Players {
@@ -146,26 +133,6 @@ impl Players {
         }
     }
 
-    /*
-    #[inline(always)]
-    pub fn uid_to_entid(&self, uid: u32, tick: i32) -> Option<u32> {
-        match self.sid_to_eid.get(&uid) {
-            None => None, //panic!("NO USERID MAPPING TO ENTID: {}", uid),
-            Some(player_mapping) => {
-                for mapping in player_mapping.windows(2) {
-                    //println!("{} {:?} {}", sid, mapping, tick);
-
-                    if mapping[1].tick > tick {
-                        //println!("RETURN upper:{}", mapping[0].entid);
-                        return Some(mapping[0].entid);
-                    }
-                }
-                //println!("RETURN: {}", player_mapping.last().unwrap().entid);
-                return Some(player_mapping.last().unwrap().entid);
-            }
-        }
-    }
-    */
     #[inline(always)]
     pub fn entid_to_uid(&self, eid: u32, tick: i32) -> Option<u32> {
         match self.entid_to_uid.get(&eid) {

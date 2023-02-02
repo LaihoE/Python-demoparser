@@ -1,7 +1,9 @@
-use super::cache::ReadCache;
-use super::cache::WriteCache;
 use super::game_events::GameEvent;
 use super::utils::TYPEHM;
+use crate::parsing::cache::cache_reader::ReadCache;
+use crate::parsing::cache::cache_reader::*;
+use crate::parsing::cache::cache_writer::WriteCache;
+
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::entities::parse_packet_entities;
 use crate::parsing::entities::PacketEntsOutput;
@@ -48,11 +50,6 @@ pub enum JobResult {
     StringTables(Vec<UserInfo>),
     None,
 }
-pub struct DataMapping<T> {
-    pub data: T,
-    pub tick: i32,
-    pub entid: i32,
-}
 
 /*
 FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
@@ -71,52 +68,23 @@ impl Parser {
         }
         return readers;
     }
-    pub fn get_cache_path(&self) -> String {
-        let file_hash = sha256::digest(&self.bytes[..10000]);
-        let path = "/home/laiho/Documents/cache/".to_owned();
-        path + &file_hash + &".zip"
-    }
-
-    pub fn get_cache_if_exists(&self) -> Option<ReadCache> {
-        let cache_path = self.get_cache_path();
-        // println!("{}", cache_path);
-        // If file exists
-        match Path::new(&cache_path).exists() {
-            true => Some(ReadCache::new(&cache_path)),
-            false => None,
-        }
-    }
-    pub fn get_wanted_bytes(&self, cache: &mut ReadCache) -> Vec<u64> {
-        cache.read_stringtables();
-        cache.read_game_events();
-
-        let (ge_start, dt_start) = cache.read_maps();
-        let mut wanted_bytes = vec![];
-        wanted_bytes.push(ge_start as u64);
-        wanted_bytes.push(dt_start as u64);
-
-        wanted_bytes.extend(cache.get_stringtables());
-        wanted_bytes
-    }
 
     pub fn start_parsing(&mut self) -> Vec<Series> {
-        match self.get_cache_if_exists() {
+        match ReadCache::get_cache_if_exists(&self.bytes) {
             Some(mut cache) => {
                 // println!("Using cache");
                 // Bytes where our wanted ticks start
-                let wanted_bytes = self.get_wanted_bytes(&mut cache);
+                let wanted_bytes = cache.get_player_messages();
                 self.parse_bytes(wanted_bytes);
 
                 let jobresults = self.compute_jobs(&mut cache);
                 jobresults
             }
+            // NO CACHE FOUND
             None => {
-                // println!("No cache found");
-
-                // Empty vec == parse entire demo
                 self.parse_bytes(vec![]);
                 let jobresults = self.compute_jobs_no_cache();
-                let cache_path = self.get_cache_path();
+                let cache_path = ReadCache::get_cache_path(&self.bytes);
 
                 let mut wc = WriteCache::new(
                     &cache_path,
@@ -125,14 +93,18 @@ impl Parser {
                     self.state.ge_map_started_at,
                 );
                 wc.write_all_caches(&self.maps.serverclass_map);
-                vec![]
+                drop(wc);
+                match ReadCache::get_cache_if_exists(&self.bytes) {
+                    Some(mut cache) => self.compute_jobs(&mut cache),
+                    None => panic!("FAILED TO READ WRITTEN CACHE"),
+                }
             }
         }
     }
     pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>) -> Vec<MsgBluePrint> {
-        // Todo dt map idx mutability
         let v = vec![];
         let byte_readers = self.get_byte_readers(wanted_bytes);
+
         for mut byte_reader in byte_readers {
             let mut frames_parsed = 0;
             while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
@@ -163,7 +135,7 @@ impl Parser {
             self.parse_game_event_map(&opt.unwrap());
         }
         use rayon::iter::ParallelIterator;
-        println!("TASKLEN {:?}", self.tasks.len());
+
         self.tasks
             .iter()
             .map(|t| {
@@ -217,244 +189,7 @@ impl Parser {
             }
         }
     }
-    pub fn compute_jobs_no_cache(&mut self) -> Vec<JobResult> {
-        let results: Vec<JobResult> = self.parse_blueprints();
-        results
-    }
 
-    pub fn compute_jobs(&mut self, cache: &mut ReadCache) -> Vec<Series> {
-        // Special msg that is needed for parsing game events.
-        // Event comes one time per demo sometime in the beginning
-
-        let tik = match self.settings.wanted_ticks.len() {
-            0 => (0..self.settings.playback_frames as i32).collect(),
-            _ => self.settings.wanted_ticks.clone(),
-        };
-
-        let results_old: Vec<JobResult> = self.parse_blueprints();
-        let players = Players::new(&results_old);
-
-        // let wanted_props = self.settings.); //vec!["DT_CSPlayer.m_angEyeAngles[1]".to_owned()];
-        // let wanted_props = vec!["m_vecOrigin_X".to_string()];
-
-        let mut wanted_bytes = vec![];
-        let mut wanted_props = self.settings.wanted_props.clone();
-
-        let uniq_uids = players.get_uids();
-
-        // println!("{:?} {:?}", wanted_props, uniq_uids);
-
-        for prop in &wanted_props {
-            cache.read_deltas_by_name(prop, &self.maps.serverclass_map);
-        }
-        for uid in &uniq_uids {
-            for prop in &wanted_props {
-                wanted_bytes.extend(cache.find_delta_ticks(*uid, prop.to_owned(), &tik, &players));
-            }
-        }
-
-        wanted_bytes.sort();
-        wanted_bytes.dedup();
-
-        self.parse_bytes(wanted_bytes);
-        let mut results: Vec<JobResult> = self.parse_blueprints();
-        results.extend(results_old);
-
-        let mut ss = vec![];
-
-        for p in &wanted_props {
-            let (out, labels, ticks) =
-                self.functional_searcher(&results, p.to_owned(), &tik, &players);
-
-            let s = Series::new("yaw", out);
-            let ls = Series::new("steamid", labels);
-            let ts = Series::new("ticks", ticks);
-            ss.push(s);
-            ss.push(ls);
-            ss.push(ts);
-        }
-        ss
-    }
-    //#[inline(always)]
-    pub fn filter_jobs_by_pidx(
-        &self,
-        results: &Vec<JobResult>,
-        prop_idx: i32,
-        prop_name: &String,
-    ) -> Vec<(f32, i32, i32)> {
-        /*
-        Filters the raw parser outputs into form:
-        Vec<Val, Tick>
-        That can then be binary searched.
-        */
-        // let prop_name = self.maps.serverclass_map.get(&40).unwrap().props[prop_name as us];
-
-        let mut v = vec![];
-        for x in results {
-            if let JobResult::PacketEntities(pe) = x {
-                v.push(pe);
-            }
-        }
-
-        let mut vector = vec![];
-
-        let prop_type = TYPEHM.get(&prop_name).unwrap();
-        for pe in v {
-            match prop_type {
-                0 => self.match_int(pe, prop_idx, &mut vector),
-                1 => self.match_float(pe, prop_idx, &mut vector),
-                // 2 => self.match_str(pe, prop_idx, &mut vector),
-                _ => panic!("Unsupported prop type: {}", prop_type),
-            }
-        }
-        // println!("VECLEN {}", vector.len());
-        // let x: Vec<(f32, i32, i32)> = v.into_iter().flat_map(|x| self.matcher(x, pidx)).collect();
-        vector
-    }
-    #[inline(always)]
-    pub fn match_float(&self, pe: &PacketEntsOutput, pidx: i32, v: &mut Vec<(f32, i32, i32)>) {
-        for x in &pe.data {
-            /*
-            if x.ent_id == 11 {
-                println!("{} {:?} {} {}", x.prop_inx, x.data, pe.tick, x.ent_id);
-            }
-            */
-            if x.prop_inx == pidx && x.ent_id < 64 {
-                match x.data {
-                    PropData::F32(f) => {
-                        if pe.tick < 40005 {
-                            //println!("({} {} {} {} {})", x.prop_inx, f, pe.tick, x.ent_id, pidx);
-                        }
-                        v.push((f, pe.tick, x.ent_id));
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn match_int(&self, pe: &PacketEntsOutput, pidx: i32, v: &mut Vec<(f32, i32, i32)>) {
-        for x in &pe.data {
-            if x.prop_inx == pidx && x.ent_id < 64 {
-                match x.data {
-                    PropData::I32(i) => {
-                        v.push((i as f32, pe.tick, x.ent_id));
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn match_str(&self, pe: &PacketEntsOutput, pidx: i32, v: &mut Vec<(String, i32, i32)>) {
-        for x in &pe.data {
-            if x.prop_inx == pidx && x.ent_id < 64 {
-                match &x.data {
-                    PropData::String(s) => {
-                        v.push((s.to_owned(), pe.tick, x.ent_id));
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    pub fn binary_search_val(
-        &self,
-        data: &mut Vec<&(f32, i32, i32)>,
-        ticks: &Vec<i32>,
-        steamid: u64,
-    ) -> Vec<f32> {
-        let mut output = Vec::with_capacity(ticks.len());
-
-        data.sort_by_key(|x| x.1);
-        data.reverse();
-
-        for tick in ticks {
-            for j in &mut *data {
-                if j.1 <= *tick {
-                    output.push(j.0);
-                    break;
-                }
-            }
-        }
-        output
-    }
-
-    pub fn str_name_to_idx(&self, str_name: String) -> Option<i32> {
-        if str_name == "m_vecOrigin_X" {
-            return Some(10000);
-        }
-        let sv_map = self.maps.serverclass_map.get(&40).unwrap();
-        for (idx, prop) in sv_map.props.iter().enumerate() {
-            if prop.table.to_owned() + "." + &prop.name.to_owned() == str_name {
-                return Some(idx as i32);
-            }
-        }
-        None
-    }
-
-    #[inline(always)]
-    pub fn functional_searcher(
-        &self,
-        results: &Vec<JobResult>,
-        prop_name: String,
-        ticks: &Vec<i32>,
-        players: &Players,
-    ) -> (Vec<f32>, Vec<u64>, Vec<i32>) {
-        // Here we convert string name to idx
-        let idx = self.str_name_to_idx(prop_name.clone()).unwrap();
-        // println!("IDX {}", idx);
-
-        let mut uiv: HashMap<Option<u64>, Vec<i32>> = HashMap::default();
-
-        for x in results {
-            match x {
-                JobResult::PacketEntities(pe) => {
-                    for i in &pe.data {
-                        uiv.entry(players.eid_to_sid(i.ent_id as u32, pe.tick))
-                            .or_insert(vec![])
-                            .push(i.prop_inx)
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        let mut filtered = self.filter_jobs_by_pidx(results, idx, &prop_name);
-
-        filtered.sort_by_key(|x| x.1);
-
-        let grouped_by_sid = filtered
-            .iter()
-            .into_group_map_by(|x| players.eid_to_sid(x.2 as u32, x.1));
-
-        let mut tasks: Vec<(u64, Vec<&(f32, i32, i32)>)> = vec![];
-        let mut labels = vec![];
-        let mut out_ticks = vec![];
-
-        for (sid, data) in grouped_by_sid {
-            // println!("{:?} {}", sid, data.len());
-            if sid != None && sid != Some(0) {
-                tasks.push((sid.unwrap(), data));
-            }
-        }
-
-        tasks.sort_by_key(|x| x.0);
-
-        for i in &tasks {
-            labels.extend(vec![i.0; ticks.len()]);
-            out_ticks.extend(ticks.clone());
-        }
-
-        // Vec<Vec<(data, entid, tick)>>    -->  entid -> (data, tick)
-        let out: Vec<f32> = tasks
-            .iter_mut()
-            .flat_map(|(entid, data)| self.binary_search_val(data, ticks, *entid))
-            .collect();
-
-        (out, labels, out_ticks)
-    }
     #[inline(always)]
     pub fn msg_handler(
         blueprint: &MsgBluePrint,

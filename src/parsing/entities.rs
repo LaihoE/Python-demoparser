@@ -4,10 +4,8 @@ use super::stringtables::UserInfo;
 use crate::parsing::data_table::ServerClass;
 use crate::parsing::parser::Parser;
 use crate::parsing::read_bits::MyBitreader;
-use crate::parsing::variants::create_default_from_pdata;
 use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
-use crate::VarVec;
 use ahash::RandomState;
 use bitter::BitReader;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
@@ -117,11 +115,9 @@ impl Parser {
 }
 #[inline(always)]
 fn get_cls_id(ent_id: i32) -> u16 {
-    // Returns correct serverclass id based on entityid
+    // Returns correct serverclass id based on entity id
     // This is the key to being able to go parallel across ticks
-    // assert!(ent_id < 65);
-    // MANAGER 70
-    // RULES 71
+    assert!(ent_id < 72);
 
     match ent_id {
         // WORLD

@@ -208,7 +208,6 @@ impl Parser {
             cnt += 1;
         }
         flat.sort_by_key(|x| x.col);
-        //println!("{:?}", flat.len());
         return flat;
     }
 }

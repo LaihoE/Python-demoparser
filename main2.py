@@ -18,7 +18,7 @@ def coordinates(file):
     before = time.time()
     df = pd.DataFrame(parser.parse_ticks(["DT_CSPlayer.m_angEyeAngles[0]"], ticks=[x for x in range(40000, 40001)]))
     #print(df["column_1"].unique())
-    #print(df)
+    print(df)
 
 
 

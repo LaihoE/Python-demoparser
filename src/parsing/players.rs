@@ -1,7 +1,7 @@
 use ahash::{HashMap, HashSet};
 
 use super::parser::JobResult;
-use crate::parsing::stringtables::UserInfo;
+use crate::parsing::demo_parsing::*;
 use itertools::{Itertools, Unique};
 
 #[derive(Debug, Clone)]
@@ -53,12 +53,6 @@ impl Players {
         let mut uids = HashSet::default();
 
         for player in &players {
-            /*
-            println!(
-                "{} {} {} {}",
-                player.entity_id, player.tick, player.xuid, player.user_id
-            );
-            */
             uid_to_entid
                 .entry(player.user_id)
                 .or_insert(vec![])
@@ -123,6 +117,7 @@ impl Players {
             }
         }
     }
+
     pub fn eid_to_sid(&self, eid: u32, tick: i32) -> Option<u64> {
         match self.entid_to_uid(eid, tick) {
             Some(uid) => self.uid_to_steamid(uid),
@@ -137,27 +132,11 @@ impl Players {
     pub fn entid_to_uid(&self, eid: u32, tick: i32) -> Option<u32> {
         match self.entid_to_uid.get(&eid) {
             None => {
-                //println!("SID NO MAP{}", eid);
                 return None;
-            } //panic!("NO USERID MAPPING TO ENTID: {}", uid),
+            }
             Some(player_mapping) => {
                 for mapping in player_mapping.windows(2) {
                     if mapping[1].tick > tick && mapping[0].tick <= tick {
-                        /*
-                        if eid == 21234 && tick < 40000 && tick > 39000 {
-                            println!("{} > {}", mapping[1].tick, tick);
-                            println!("{:?}", player_mapping);
-                            println!("{:?}", mapping[0].uid);
-                            println!("{:?}", self.uid_to_steamid(mapping[0].uid));
-                        }
-                        */
-                        /*
-                        12 101052 76561198829733633 23
-                        2 105534 0 24
-                        12 106194 76561198829733633 25
-
-                        */
-
                         return Some(mapping[0].uid);
                     }
                 }

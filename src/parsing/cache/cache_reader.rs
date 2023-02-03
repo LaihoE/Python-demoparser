@@ -1,22 +1,13 @@
-use crate::parsing::data_table::ServerClass;
-use crate::parsing::players::Players;
+use crate::parsing::demo_parsing::ServerClass;
 use ahash::HashMap;
+use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use itertools::izip;
-use itertools::Itertools;
-use rayon::prelude::IntoParallelIterator;
-use rayon::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_cbor;
-use std::error::Error;
 use std::fs::File;
-use std::fs::OpenOptions;
-use std::fs::{create_dir, metadata};
 use std::io::Read;
-use std::io::Write;
 use std::path::Path;
 use std::{fs, time::Instant};
-use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -73,6 +64,35 @@ impl ReadCache {
             true => Some(ReadCache::new(&cache_path)),
             false => None,
         }
+    }
+    fn find_id_from_map(
+        &self,
+        name: &String,
+        event_map: &Option<HashMap<i32, Descriptor_t>>,
+    ) -> Option<i32> {
+        let map = event_map.as_ref().unwrap();
+        for (k, v) in map {
+            if v.name() == name {
+                return Some(*k);
+            }
+        }
+        None
+    }
+
+    pub fn event_bytes_by_name(
+        &self,
+        name: String,
+        event_map: &Option<HashMap<i32, Descriptor_t>>,
+    ) -> Vec<u64> {
+        let wanted_id = match self.find_id_from_map(&name, event_map) {
+            Some(id) => id,
+            None => panic!("No id found for game event: {}", name),
+        };
+        self.game_events
+            .iter()
+            .filter(|x| x.id == wanted_id)
+            .map(|x| x.byte)
+            .collect()
     }
 
     pub fn get_player_messages(&mut self) -> Vec<u64> {
@@ -162,6 +182,7 @@ impl ReadCache {
             }
         }
         self.deltas.insert("m_vecOrigin_X".to_owned(), vec![]);
+        self.deltas.insert("m_vecOrigin_Y".to_owned(), vec![]);
 
         let v = self.deltas.get_mut(wanted_name).unwrap();
 

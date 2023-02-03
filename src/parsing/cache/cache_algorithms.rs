@@ -1,27 +1,38 @@
-use crate::parsing::cache::*;
-use crate::parsing::data_table::ServerClass;
-use crate::parsing::game_events;
-use ahash::HashMap;
-use itertools::Itertools;
-use rayon::prelude::IntoParallelIterator;
-use rayon::prelude::*;
-use serde::Deserialize;
-use serde::Serialize;
-use serde_cbor;
-use std::error::Error;
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::fs::{create_dir, metadata};
-use std::io::Read;
-use std::io::Write;
-use std::{fs, time::Instant};
-use zip::write::FileOptions;
-use zip::{ZipArchive, ZipWriter};
-
 use crate::parsing::cache::cache_reader::ReadCache;
+use crate::parsing::demo_parsing::*;
 use crate::parsing::players::Players;
+use ahash::HashMap;
+use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
+use itertools::Itertools;
 
 impl ReadCache {
+    pub fn find_game_event_ticks(
+        &self,
+        name: String,
+        event_map: &Option<HashMap<i32, Descriptor_t>>,
+    ) {
+        let event_bytes = self.event_bytes_by_name(name, event_map);
+    }
+
+    pub fn find_wanted_bytes(
+        &mut self,
+        ticks: &Vec<i32>,
+        props: &Vec<String>,
+        uids: &Vec<u32>,
+        svc_map: &HashMap<u16, ServerClass>,
+        players: &Players,
+    ) -> Vec<u64> {
+        let mut wanted_bytes = vec![];
+        for prop in props {
+            self.read_deltas_by_name(prop, &svc_map);
+            for uid in uids {
+                wanted_bytes.extend(self.find_delta_ticks(*uid, prop.to_owned(), &ticks, &players));
+            }
+        }
+        // Unique bytes
+        wanted_bytes.iter().map(|x| x.clone()).unique().collect()
+    }
+
     pub fn find_delta_ticks(
         &mut self,
         userid: u32,
@@ -37,7 +48,6 @@ impl ReadCache {
             .filter(|x| players.eid_to_sid(x.entid, x.tick) == Some(wanted_sid))
             .map(|x| (x.byte, x.tick, x.entid))
             .collect();
-
         self.filter_delta_ticks_wanted(&all_deltas, wanted_ticks)
     }
 
@@ -52,18 +62,30 @@ impl ReadCache {
 
         let mut wanted_bytes = Vec::with_capacity(wanted_ticks.len());
         let mut sorted_ticks = temp_ticks.clone();
-
         sorted_ticks.sort_by_key(|x| x.1);
 
+        let mut last_idx = 0;
+
         for wanted_tick in wanted_ticks {
-            for j in sorted_ticks.windows(2) {
+            for j in sorted_ticks[last_idx..].windows(2) {
+                last_idx += 1;
                 if j[0].1 <= *wanted_tick && j[1].1 > *wanted_tick {
                     wanted_bytes.push(j[0].0);
                     break;
                 }
             }
         }
-        wanted_bytes
+
+        let mut bin = vec![];
+        for wanted_tick in wanted_ticks {
+            let idx = sorted_ticks.partition_point(|x| x.1 < *wanted_tick);
+            let byte = sorted_ticks[idx - 1].0;
+            bin.push(byte);
+        }
+        //println!("1 {:?}", wanted_bytes);
+        //println!("2 {:?}", bin);
+        //println!("{:?}", wanted_ticks);
+        bin
     }
 
     pub fn get_stringtables(&self) -> Vec<u64> {

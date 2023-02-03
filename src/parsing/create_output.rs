@@ -1,32 +1,12 @@
-use super::game_events::GameEvent;
 use super::utils::TYPEHM;
 use crate::parsing::cache::cache_reader::ReadCache;
-use crate::parsing::cache::cache_reader::*;
-use crate::parsing::cache::cache_writer::WriteCache;
-
-use crate::parsing::data_table::ServerClass;
-use crate::parsing::entities::parse_packet_entities;
-use crate::parsing::entities::PacketEntsOutput;
+use crate::parsing::demo_parsing::entities::PacketEntsOutput;
 use crate::parsing::parser::*;
-use crate::parsing::parser_settings::*;
 use crate::parsing::players::Players;
-use crate::parsing::read_bytes::ByteReader;
-use crate::parsing::stringtables::UserInfo;
 pub use crate::parsing::variants::*;
-use ahash::HashSet;
-use ahash::RandomState;
-use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use itertools::Itertools;
-use memmap2::Mmap;
-use polars::export::num::NumCast;
 use polars::prelude::NamedFrom;
 use polars::series::Series;
-use rayon::prelude::IntoParallelRefIterator;
-use sha256;
-use std::collections::HashMap;
-use std::path::Path;
-use std::sync::Arc;
-use std::u8;
 
 impl Parser {
     pub fn compute_jobs_no_cache(&mut self) -> Vec<JobResult> {
@@ -34,66 +14,60 @@ impl Parser {
         results
     }
 
-    pub fn compute_jobs(&mut self, cache: &mut ReadCache) -> Vec<Series> {
-        let tik = match self.settings.wanted_ticks.len() {
+    pub fn compute_jobs_with_cache(&mut self, cache: &mut ReadCache) -> Vec<Series> {
+        // Need to parse players to understand cache. This is fast
+        let player_results: Vec<JobResult> = self.parse_blueprints();
+        let players = Players::new(&player_results);
+        let ticks = self.get_wanted_ticks();
+
+        let wanted_bytes = cache.find_wanted_bytes(
+            &ticks,
+            &self.settings.wanted_props,
+            &players.get_uids(),
+            &self.maps.serverclass_map,
+            &players,
+        );
+        self.parse_bytes(wanted_bytes);
+        let results: Vec<JobResult> = self.parse_blueprints();
+        println!("{}", results.len());
+        self.create_series(&results, &self.settings.wanted_props, &ticks, &players)
+    }
+    fn get_wanted_ticks(&self) -> Vec<i32> {
+        // If len wanted ticks == 0 then all ticks should be parsed
+        match self.settings.wanted_ticks.len() {
             0 => (0..self.settings.playback_frames as i32).collect(),
             _ => self.settings.wanted_ticks.clone(),
-        };
-
-        let results_old: Vec<JobResult> = self.parse_blueprints();
-        let players = Players::new(&results_old);
-
-        let mut wanted_bytes = vec![];
-        let mut wanted_props = self.settings.wanted_props.clone();
-
-        let uniq_uids = players.get_uids();
-
-        // println!("{:?} {:?}", wanted_props, uniq_uids);
-
-        for prop in &wanted_props {
-            cache.read_deltas_by_name(prop, &self.maps.serverclass_map);
         }
-        for uid in &uniq_uids {
-            for prop in &wanted_props {
-                wanted_bytes.extend(cache.find_delta_ticks(*uid, prop.to_owned(), &tik, &players));
-            }
-        }
+    }
 
-        wanted_bytes.sort();
-        wanted_bytes.dedup();
-        self.parse_bytes(wanted_bytes);
-
-        let mut results: Vec<JobResult> = self.parse_blueprints();
-        results.extend(results_old);
-
-        let mut ss = vec![];
-
-        for p in &wanted_props {
+    fn create_series(
+        &self,
+        results: &Vec<JobResult>,
+        props: &Vec<String>,
+        ticks: &Vec<i32>,
+        players: &Players,
+    ) -> Vec<Series> {
+        let mut all_series = vec![];
+        for p in props {
             let (out, labels, ticks) =
-                self.functional_searcher(&results, p.to_owned(), &tik, &players);
+                self.functional_searcher(&results, p.to_owned(), &ticks, &players);
 
             let s = Series::new("yaw", out);
             let ls = Series::new("steamid", labels);
             let ts = Series::new("ticks", ticks);
-            ss.push(s);
-            ss.push(ls);
-            ss.push(ts);
+            all_series.push(s);
+            all_series.push(ls);
+            all_series.push(ts);
         }
-        ss
+        all_series
     }
-    //#[inline(always)]
+
     pub fn filter_jobs_by_pidx(
         &self,
         results: &Vec<JobResult>,
         prop_idx: i32,
         prop_name: &String,
     ) -> Vec<(f32, i32, i32)> {
-        /*
-        Filters the raw parser outputs into form:
-        Vec<Val, Tick>
-        That can then be binary searched.
-        */
-
         let mut v = vec![];
         for x in results {
             if let JobResult::PacketEntities(pe) = x {
@@ -102,7 +76,6 @@ impl Parser {
         }
 
         let mut vector = vec![];
-
         let prop_type = TYPEHM.get(&prop_name).unwrap();
         for pe in v {
             match prop_type {
@@ -118,11 +91,8 @@ impl Parser {
     pub fn match_float(&self, pe: &PacketEntsOutput, pidx: i32, v: &mut Vec<(f32, i32, i32)>) {
         for x in &pe.data {
             if x.prop_inx == pidx && x.ent_id < 64 {
-                match x.data {
-                    PropData::F32(f) => {
-                        v.push((f, pe.tick, x.ent_id));
-                    }
-                    _ => {}
+                if let PropData::F32(f) = x.data {
+                    v.push((f, pe.tick, x.ent_id));
                 }
             }
         }
@@ -131,11 +101,8 @@ impl Parser {
     pub fn match_int(&self, pe: &PacketEntsOutput, pidx: i32, v: &mut Vec<(f32, i32, i32)>) {
         for x in &pe.data {
             if x.prop_inx == pidx && x.ent_id < 64 {
-                match x.data {
-                    PropData::I32(i) => {
-                        v.push((i as f32, pe.tick, x.ent_id));
-                    }
-                    _ => {}
+                if let PropData::I32(i) = x.data {
+                    v.push((i as f32, pe.tick, x.ent_id));
                 }
             }
         }
@@ -183,6 +150,9 @@ impl Parser {
         if str_name == "m_vecOrigin_X" {
             return Some(10000);
         }
+        if str_name == "m_vecOrigin_Y" {
+            return Some(10001);
+        }
         let sv_map = self.maps.serverclass_map.get(&40).unwrap();
         for (idx, prop) in sv_map.props.iter().enumerate() {
             if prop.table.to_owned() + "." + &prop.name.to_owned() == str_name {
@@ -200,9 +170,7 @@ impl Parser {
         ticks: &Vec<i32>,
         players: &Players,
     ) -> (Vec<f32>, Vec<u64>, Vec<i32>) {
-        // Here we convert string name to idx
         let idx = self.str_name_to_idx(prop_name.clone()).unwrap();
-
         let mut filtered = self.filter_jobs_by_pidx(results, idx, &prop_name);
         filtered.sort_by_key(|x| x.1);
 
@@ -215,7 +183,6 @@ impl Parser {
         let mut out_ticks = vec![];
 
         for (sid, data) in grouped_by_sid {
-            // println!("{:?} {}", sid, data.len());
             if sid != None && sid != Some(0) {
                 tasks.push((sid.unwrap(), data));
             }

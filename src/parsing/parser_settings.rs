@@ -1,8 +1,4 @@
-use super::game_events::GameEvent;
-use crate::parsing::data_table::ServerClass;
-use crate::parsing::entities::Entity;
-use crate::parsing::stringtables::StringTable;
-use crate::parsing::stringtables::UserInfo;
+use crate::parsing::demo_parsing::*;
 use crate::parsing::utils::read_file;
 use crate::parsing::utils::TYPEHM;
 use crate::parsing::variants::BytesVariant::Mmap3;
@@ -85,7 +81,6 @@ impl Parser {
             }
         }
 
-        wanted_props.extend(extra_wanted_props);
         match read_file(demo_path) {
             Err(e) => Err(e),
             Ok(data) => {

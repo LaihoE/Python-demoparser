@@ -1,21 +1,19 @@
-use crate::parsing::entities::Entity;
+use crate::parsing::demo_parsing::*;
+use crate::parsing::parser::Parser;
 pub use crate::parsing::variants::*;
 use flate2::read::GzDecoder;
 use memmap2::MmapOptions;
 use phf::phf_map;
+use pyo3::Py;
+use pyo3::PyAny;
+use pyo3::ToPyObject;
+use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use std::u8;
-
-use crate::parsing::parser::Parser;
-use pyo3::Py;
-use std::collections::HashMap;
-use std::convert::TryInto;
 use std::str;
-//use hashbrown::HashMap;
-use pyo3::PyAny;
-use pyo3::ToPyObject;
+use std::u8;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -135,7 +133,7 @@ pub fn create_mmap(demo_path: String) -> Result<BytesVariant, std::io::Error> {
         Ok(f) => match unsafe { MmapOptions::new().map(&f) } {
             Err(e) => Err(e),
             Ok(m) => {
-                // m.advise(memmap2::Advice::Random).unwrap();
+                m.advise(memmap2::Advice::Random).unwrap();
                 Ok(BytesVariant::Mmap3(m))
             }
         },
@@ -160,6 +158,8 @@ pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
     }
 }
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
+    "m_vecOrigin_X" => 1,
+    "m_vecOrigin_Y" => 1,
     "DT_CSLocalPlayerExclusive.m_vecOrigin[2]" => 1,
     "DT_LocalPlayerExclusive.m_vecVelocity[0]" => 1,
     "DT_LocalPlayerExclusive.m_vecVelocity[1]" => 1,

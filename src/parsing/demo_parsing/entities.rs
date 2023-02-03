@@ -1,9 +1,8 @@
-use super::parser::JobResult;
-use super::parser::MsgBluePrint;
 use super::stringtables::UserInfo;
-use crate::parsing::data_table::ServerClass;
+use crate::parsing::demo_parsing::*;
+use crate::parsing::parser::JobResult;
+use crate::parsing::parser::MsgBluePrint;
 use crate::parsing::parser::Parser;
-use crate::parsing::read_bits::MyBitreader;
 use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
 use ahash::RandomState;
@@ -52,27 +51,25 @@ pub struct Prop {
     pub priority: i32,
     pub p_type: i32,
 }
-
-pub fn parse_packet_entities(
-    blueprint: &MsgBluePrint,
-    mmap: &Mmap,
-    sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
-) -> JobResult {
-    let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
-    let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
-
-    let result = Parser::_parse_packet_entities(msg, sv_cls_map, blueprint.tick);
-    match result {
-        None => JobResult::None,
-        Some(p) => JobResult::PacketEntities(PacketEntsOutput {
-            data: p,
-            tick: blueprint.tick,
-            byte: blueprint.byte,
-        }),
-    }
-}
-
 impl Parser {
+    pub fn parse_packet_entities(
+        blueprint: &MsgBluePrint,
+        mmap: &Mmap,
+        sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+    ) -> JobResult {
+        let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
+        let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
+        let result = Parser::_parse_packet_entities(msg, sv_cls_map, blueprint.tick);
+        match result {
+            None => JobResult::None,
+            Some(p) => JobResult::PacketEntities(PacketEntsOutput {
+                data: p,
+                tick: blueprint.tick,
+                byte: blueprint.byte,
+            }),
+        }
+    }
+
     pub fn _parse_packet_entities(
         pack_ents: CSVCMsg_PacketEntities,
         sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
@@ -166,41 +163,25 @@ pub fn parse_ent_props(
     let sv_cls = m.get(&cls_id).unwrap();
     let indicies = parse_indicies(b);
 
-    let mut props: Vec<SingleEntOutput> = Vec::with_capacity(4);
+    let mut props: Vec<SingleEntOutput> = vec![];
 
     for idx in indicies {
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
 
-        // DEADFLAG
-        /*
-                if true == true {
-                    let data = SingleEntOutput {
-                        ent_id: entity_id,
-                        prop_inx: idx,
-                        data: pdata,
-                    };
-                    props.push(data);
-                    continue;
-                }
-        */
-        //if tick == 39910 {
-        //println!("ENTITY: {} {}", entity_id, idx);
-        //}
         match pdata {
             PropData::VecXY(v) => {
-                let x = SingleEntOutput {
+                // Extract vec into their own props
+                props.push(SingleEntOutput {
                     ent_id: entity_id,
                     prop_inx: 10000,
                     data: PropData::F32(v[0]),
-                };
-                let y = SingleEntOutput {
+                });
+                props.push(SingleEntOutput {
                     ent_id: entity_id,
                     prop_inx: 10001,
                     data: PropData::F32(v[1]),
-                };
-                props.push(x);
-                props.push(y);
+                });
             }
             _ => {
                 let data = SingleEntOutput {
@@ -212,7 +193,6 @@ pub fn parse_ent_props(
             }
         }
     }
-    //println!("{}", props.len());
     props
 }
 

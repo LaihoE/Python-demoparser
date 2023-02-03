@@ -11,6 +11,25 @@ pub struct ByteReader {
 }
 
 impl ByteReader {
+    pub fn get_byte_readers(bytes: &Arc<Mmap>, start_pos: Vec<u64>) -> Vec<ByteReader> {
+        /*
+        Creates one byte reader per wanted start pos.
+
+        If no starting position is provided then one
+        big bytereader is returned. Starting from 1072 (header is 1072)
+        and ending at end of file. This happens when no cache is available
+        */
+
+        if start_pos.len() == 0 {
+            return vec![ByteReader::new(bytes.clone(), false, 1072)];
+        }
+        let mut readers = vec![];
+        for pos in start_pos {
+            readers.push(ByteReader::new(bytes.clone(), true, pos as usize));
+        }
+        return readers;
+    }
+
     pub fn new(bytes: Arc<Mmap>, single: bool, start_idx: usize) -> Self {
         ByteReader {
             bytes: bytes,

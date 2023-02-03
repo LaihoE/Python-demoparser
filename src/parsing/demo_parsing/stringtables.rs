@@ -1,8 +1,8 @@
-use super::parser::JobResult;
-use super::parser::MsgBluePrint;
+use crate::parsing::parser::JobResult;
+use crate::parsing::parser::MsgBluePrint;
 //use crate::parsing::read_bits_old::BitReader;
 use super::read_bits::MyBitreader;
-use crate::parsing::entities::parse_baselines;
+use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::Parser;
 use bitter::BitReader;
 use core::num;
@@ -213,7 +213,6 @@ impl Parser {
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
 
-                    //println!("{:?}", ui);
                     new_userinfo.push(ui);
                 }
             }

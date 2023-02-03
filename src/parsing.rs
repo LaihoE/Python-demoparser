@@ -1,13 +1,8 @@
 pub mod cache;
 pub mod create_output;
-pub mod data_table;
-pub mod entities;
-pub mod game_events;
+pub mod demo_parsing;
 pub mod parser;
 pub mod parser_settings;
 pub mod players;
-pub mod read_bits;
-pub mod read_bytes;
-pub mod stringtables;
 pub mod utils;
 pub mod variants;

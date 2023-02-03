@@ -1,8 +1,5 @@
-use crate::parsing::data_table::ServerClass;
-use crate::parsing::entities::PacketEntsOutput;
+use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::JobResult;
-use crate::parsing::stringtables::UserInfo;
-use crate::GameEvent;
 use ahash::HashMap;
 use itertools::Itertools;
 use rayon::prelude::IntoParallelIterator;
@@ -93,8 +90,10 @@ impl WriteCache {
         for idx in 0..11000 {
             match m.get(&idx) {
                 Some(g) => {
-                    let prop_str_name = if idx >= 10000 {
+                    let prop_str_name = if idx == 10000 {
                         "m_vecOrigin_X".to_string()
+                    } else if idx == 10001 {
+                        "m_vecOrigin_Y".to_string()
                     } else {
                         self.to_str_name(sv_cls_map, idx)
                     };

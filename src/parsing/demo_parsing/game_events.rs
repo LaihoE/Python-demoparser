@@ -1,6 +1,6 @@
-use super::parser::MsgBluePrint;
 use super::stringtables::UserInfo;
-use crate::parsing::entities::Entity;
+use crate::parsing::demo_parsing::*;
+use crate::parsing::parser::MsgBluePrint;
 use crate::parsing::parser::Parser;
 use crate::parsing::parser::*;
 use crate::parsing::variants::*;

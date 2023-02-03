@@ -1,4 +1,4 @@
-use crate::parsing::entities::Prop;
+use crate::parsing::demo_parsing::Prop;
 use crate::parsing::parser::Parser;
 use crate::parsing::variants::PropData;
 use bitter::BitReader;

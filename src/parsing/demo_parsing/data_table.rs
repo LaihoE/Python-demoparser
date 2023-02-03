@@ -1,5 +1,4 @@
-use crate::parsing::entities::parse_baselines;
-use crate::parsing::entities::Prop;
+use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::Parser;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_SendTable;
@@ -22,6 +21,7 @@ impl Parser {
         /*
         Parse datatables. These are the tables that entities refer to for values. If this fails then gg?
         */
+        self.state.dt_started_at = (byte_reader.byte_idx - 6) as u64;
         let _ = byte_reader.read_i32();
 
         loop {

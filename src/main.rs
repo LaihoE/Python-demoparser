@@ -1,31 +1,8 @@
 mod parsing;
-use crate::parsing::game_events::GameEvent;
-use ahash::RandomState;
-use csgoproto::netmessages;
-use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
-use csgoproto::netmessages::*;
-use csv::Writer;
-use memmap2::Mmap;
-use memmap2::MmapOptions;
 use mimalloc::MiMalloc;
-use parsing::game_events::KeyData;
 use parsing::parser::Parser;
 use parsing::utils::Header;
-use phf::phf_map;
-use polars::prelude::ArrowField;
-use polars::prelude::NamedFrom;
-use polars::series::Series;
-use polars_arrow::export::arrow;
-use polars_arrow::prelude::ArrayRef;
-use protobuf;
-use protobuf::reflect::MessageDescriptor;
-use protobuf::Message;
-use rayon::iter::ParallelIterator;
-use rayon::prelude::IntoParallelIterator;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fs;
-use std::fs::File;
 use std::time::Instant;
 
 #[global_allocator]
@@ -34,7 +11,12 @@ static GLOBAL: MiMalloc = MiMalloc;
 fn parse_demo(demo_path: String) -> i32 {
     // m_iHealth
     // m_angEyeAngles[1]
-    // println!("{}", demo_path);
+    println!("{}", demo_path);
+    if demo_path
+        == "/home/laiho/Documents/demos/faceits/cu/003309131115255562271_1824323488 (1).dem"
+    {
+        return 69;
+    }
 
     let now = Instant::now();
     let props_names = vec!["DT_CSPlayer.m_angEyeAngles[0]".to_string()];
@@ -67,8 +49,10 @@ fn parse_demo(demo_path: String) -> i32 {
 fn main() {
     let now = Instant::now();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/").unwrap();
-    // let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
+    //let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
     let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
+    //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems").unwrap();
+
     let mut paths_v = vec![];
     for path in paths {
         let p = path.as_ref().unwrap().path().to_str().unwrap().to_string();
@@ -76,7 +60,7 @@ fn main() {
     }
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(12)
+        .num_threads(1)
         .build_global()
         .unwrap();
     println!("{:?}", paths_v.len());
@@ -101,4 +85,5 @@ fn main() {
     // 145
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 67);
+    // /home/laiho/Documents/demos/faceits/cu/003309131115255562271_1824323488 (1).dem
 }

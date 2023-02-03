@@ -10,8 +10,8 @@ impl ReadCache {
         &self,
         name: String,
         event_map: &Option<HashMap<i32, Descriptor_t>>,
-    ) {
-        let event_bytes = self.event_bytes_by_name(name, event_map);
+    ) -> Vec<u64> {
+        self.event_bytes_by_name(name, event_map)
     }
 
     pub fn find_wanted_bytes(
@@ -96,7 +96,7 @@ impl ReadCache {
         }
         // println!("1 {:?}", wanted_bytes);
         // println!("2 {:?}", bin);
-        // println!("{:?}", wanted_ticks);
+        // println!("  {:?}", wanted_ticks);
         bin
     }
 

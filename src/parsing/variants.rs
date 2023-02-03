@@ -20,6 +20,14 @@ pub struct PropAtom {
     pub data: PropData,
     pub tick: i32,
 }
+#[derive(Debug, Clone)]
+pub enum VarVec {
+    U64(Vec<Option<u64>>),
+    F32(Vec<Option<f32>>),
+    I64(Vec<Option<i64>>),
+    I32(Vec<Option<i32>>),
+    String(Vec<Option<String>>),
+}
 
 pub enum BytesVariant {
     Mmap3(Mmap),

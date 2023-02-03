@@ -9,6 +9,7 @@ use memmap2::Mmap;
 use polars::series::Series;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
+use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::u8;
@@ -32,6 +33,7 @@ pub struct MsgBluePrint {
 #[derive(Debug)]
 pub enum JobResult {
     PacketEntities(PacketEntsOutput),
+    //PacketEntitiesIndicies(Vec<SmallVec<>>)
     GameEvents(Vec<GameEvent>),
     StringTables(Vec<UserInfo>),
     None,
@@ -51,7 +53,6 @@ impl Parser {
                 // Bytes where our wanted ticks start
                 let wanted_bytes = cache.get_player_messages();
                 self.parse_bytes(wanted_bytes);
-
                 let jobresults = self.compute_jobs_with_cache(&mut cache);
                 jobresults
             }
@@ -87,7 +88,7 @@ impl Parser {
         match blueprint.msg {
             12 => Parser::create_string_table(blueprint, bytes),
             13 => Parser::update_string_table_msg(blueprint, bytes),
-            // 25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
+            25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
             26 => Parser::parse_packet_entities(blueprint, bytes, serverclass_map),
             _ => JobResult::None,
         }

@@ -139,13 +139,13 @@ impl<'a> MyBitreader<'a> {
     #[inline(always)]
     pub fn decode(&mut self, prop: &Prop) -> Option<PropData> {
         match prop.p_type {
-            1 => Some(PropData::F32(self.decode_float(prop)?)),
             0 => Some(PropData::I32(self.decode_int(prop)? as i32)),
-            3 => Some(PropData::VecXY(self.decode_vec_xy(prop)?)),
+            1 => Some(PropData::F32(self.decode_float(prop)?)),
             2 => Some(PropData::VecXYZ(self.decode_vec(prop)?)),
+            3 => Some(PropData::VecXY(self.decode_vec_xy(prop)?)),
             4 => Some(PropData::String(self.decode_string()?)),
             5 => Some(PropData::Vec(self.decode_array(prop)?)),
-            _ => panic!("EEK"),
+            _ => panic!("Prop had odd type: {}", prop.p_type),
         }
     }
 

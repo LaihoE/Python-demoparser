@@ -14,16 +14,16 @@ use protobuf::Message;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
-fn parse_key(key: &Key_t) -> Option<KeyData> {
+fn parse_key(key: &Key_t) -> KeyData {
     match key.type_() {
-        1 => Some(KeyData::Str(key.val_string().to_owned())),
-        2 => Some(KeyData::Float(key.val_float())),
-        3 => Some(KeyData::Long(key.val_long())),
-        4 => Some(KeyData::Short(key.val_short().try_into().unwrap())),
-        5 => Some(KeyData::Byte(key.val_byte().try_into().unwrap())),
-        6 => Some(KeyData::Bool(key.val_bool())),
-        7 => Some(KeyData::Uint64(key.val_uint64())),
-        _ => panic!("Unkown key type for game event key"),
+        1 => KeyData::Str(key.val_string().to_owned()),
+        2 => KeyData::Float(key.val_float()),
+        3 => KeyData::Long(key.val_long()),
+        4 => KeyData::Short(key.val_short().try_into().unwrap()),
+        5 => KeyData::Byte(key.val_byte().try_into().unwrap()),
+        6 => KeyData::Bool(key.val_bool()),
+        7 => KeyData::Uint64(key.val_uint64()),
+        _ => panic!("Unknown key type for game event key"),
     }
 }
 
@@ -68,7 +68,7 @@ impl KeyData {
 #[derive(Debug, Clone)]
 pub struct NameDataPair {
     pub name: String,
-    pub data: Option<KeyData>,
+    pub data: KeyData,
 }
 #[derive(Debug, Clone)]
 pub struct GameEvent {
@@ -77,50 +77,6 @@ pub struct GameEvent {
     pub tick: i32,
     pub byte: usize,
     pub id: i32,
-}
-
-impl GameEvent {
-    #[inline(always)]
-    pub fn get_key_by_name(&self, name: String) -> Option<KeyData> {
-        for k in &self.fields {
-            if k.name == name {
-                return k.data.clone();
-            }
-        }
-        None
-        //panic!("No key with that name found")
-    }
-    pub fn get_attacker_uid(&self) -> Option<i16> {
-        match self.get_key_by_name("attacker".to_string()) {
-            Some(uid) => match uid {
-                KeyData::Short(uid) => Some(uid),
-                _ => None,
-            },
-            None => None,
-        }
-    }
-    pub fn get_player_uid(&self) -> Option<i16> {
-        match self.get_key_by_name("userid".to_string()) {
-            Some(uid) => match uid {
-                KeyData::Short(uid) => Some(uid),
-                _ => None,
-            },
-            None => None,
-        }
-    }
-
-    pub fn to_py_tuples(&self, py: Python<'_>) -> Vec<(String, PyObject)> {
-        let mut py_tuples: Vec<(String, PyObject)> = Vec::new();
-        for pair in &self.fields {
-            let name = &pair.name;
-            let val = match &pair.data {
-                Some(d) => d.to_string_py(py),
-                None => "None".to_object(py),
-            };
-            py_tuples.push((name.to_string(), val));
-        }
-        py_tuples
-    }
 }
 
 pub fn gen_name_val_pairs(
@@ -142,7 +98,7 @@ pub fn gen_name_val_pairs(
     }
     kv_pairs.push(NameDataPair {
         name: "byte".to_owned(),
-        data: Some(KeyData::Uint64(*byte as u64)),
+        data: KeyData::Uint64(*byte as u64),
     });
     kv_pairs
 }
@@ -159,20 +115,18 @@ impl Parser {
         let mut game_events: Vec<GameEvent> = Vec::new();
         let event_desc = &game_events_map[&msg.eventid()];
 
-        if msg.eventid() == 24 {
-            let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.byte);
-            game_events.push({
-                GameEvent {
-                    name: event_desc.name().to_owned(),
-                    fields: name_data_pairs,
-                    tick: blueprint.tick,
-                    byte: blueprint.byte,
-                    id: msg.eventid(),
-                }
-            });
-            return JobResult::GameEvents(game_events);
-        }
-        JobResult::None
+        let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.byte);
+
+        game_events.push({
+            GameEvent {
+                name: event_desc.name().to_owned(),
+                fields: name_data_pairs,
+                tick: blueprint.tick,
+                byte: blueprint.byte,
+                id: msg.eventid(),
+            }
+        });
+        return JobResult::GameEvents(game_events);
     }
 
     pub fn parse_game_event_map(&mut self, blueprint: &MsgBluePrint) {

@@ -73,7 +73,7 @@ fn main() {
         .collect();
     */
     use rayon::iter::ParallelIterator;
-    let x: Vec<i32> = paths_v
+    let x: Vec<i32> = single
         .into_par_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();
@@ -82,4 +82,34 @@ fn main() {
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 67);
     // /home/laiho/Documents/demos/faceits/cu/003309131115255562271_1824323488 (1).dem
+    /*
+    pub enum KeyData{
+        Str(String),
+        Float(f32),
+        Long(i32),
+        Short(i16),
+        Byte(u8),
+        Bool(bool),
+        Uint64(u64),
+    }
+    fn enum_vec_to_vec(all_keydata: Vec<KeyData>, wanted_type: KeyData::Float) -> Vec<?> {
+        let v = vec![];
+        for kd in all_keydata {
+            if let KeyData::Float(l) = kd {
+                v.push(l)
+            }
+        }
+        v
+    }
+
+    fn enum_vec_to_FLOAT_vec(all_variants: Vec<Variant>) -> Vec<f32> {
+        let v = vec![];
+        for variant in all_variants {
+            if let Variant::Float(f) = variant{
+                v.push(f)
+            }
+        }
+        v
+    }
+    */
 }

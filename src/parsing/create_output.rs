@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::utils::TYPEHM;
 use crate::parsing::cache::cache_reader::ReadCache;
 use crate::parsing::demo_parsing::entities::PacketEntsOutput;
@@ -5,7 +7,7 @@ use crate::parsing::parser::*;
 use crate::parsing::players::Players;
 pub use crate::parsing::variants::*;
 use itertools::Itertools;
-use polars::prelude::NamedFrom;
+use polars::prelude::{NamedFrom, NamedFromOwned};
 use polars::series::Series;
 
 impl Parser {
@@ -20,6 +22,10 @@ impl Parser {
         let players = Players::new(&player_results);
         let ticks = self.get_wanted_ticks();
 
+        let event_ticks =
+            cache.find_game_event_ticks("player_death".to_string(), &self.maps.event_map);
+        self.parse_bytes(event_ticks);
+
         let wanted_bytes = cache.find_wanted_bytes(
             &ticks,
             &self.settings.wanted_props,
@@ -29,9 +35,34 @@ impl Parser {
         );
         self.parse_bytes(wanted_bytes);
         let results: Vec<JobResult> = self.parse_blueprints();
-        println!("{}", results.len());
+        self.get_game_events(&results);
         self.create_series(&results, &self.settings.wanted_props, &ticks, &players)
     }
+    fn get_game_events(&self, results: &Vec<JobResult>) {
+        let mut v = vec![];
+        for x in results {
+            if let JobResult::GameEvents(ge) = x {
+                v.push(ge[0].clone());
+            }
+        }
+        /*
+        let mut hm: HashMap<String, VarVec> = HashMap::default();
+        for g in v {
+            if g.id == 24 {
+                for field in g.fields {
+                    hm.entry(field.name)
+                        .or_insert(VarVec)
+                        .push(field.data.unwrap());
+                }
+            }
+        }
+
+        for (k, v) in hm {
+            println!("{} {:?}", k, v);
+        }
+        */
+    }
+
     fn get_wanted_ticks(&self) -> Vec<i32> {
         // If len wanted ticks == 0 then all ticks should be parsed
         match self.settings.wanted_ticks.len() {
@@ -52,9 +83,9 @@ impl Parser {
             let (out, labels, ticks) =
                 self.functional_searcher(&results, p.to_owned(), &ticks, &players);
 
-            let s = Series::new("yaw", out);
-            let ls = Series::new("steamid", labels);
-            let ts = Series::new("ticks", ticks);
+            let s = Series::from_vec("yaw", out);
+            let ls = Series::from_vec("steamid", labels);
+            let ts = Series::from_vec("ticks", ticks);
             all_series.push(s);
             all_series.push(ls);
             all_series.push(ts);

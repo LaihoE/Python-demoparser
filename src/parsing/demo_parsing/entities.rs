@@ -196,38 +196,6 @@ pub fn parse_ent_props(
     props
 }
 
-#[inline(always)]
-pub fn highest_wanted_entid(
-    entids_not_connected: &HashSet<u32>,
-    players: &HashMap<u64, UserInfo, RandomState>,
-    wanted_players: &Vec<u64>,
-) -> i32 {
-    /*
-    Returns highest wanted entity_id to be able to
-    early exit parsing packet entites after all our
-    wanted players are parsed
-    */
-    let mut highest_wanted = 0;
-    for player in players {
-        if wanted_players.contains(&player.0) {
-            let wanted_ent_id = player.1.entity_id;
-            if highest_wanted < wanted_ent_id {
-                highest_wanted = wanted_ent_id;
-            }
-            for eid in 1..wanted_ent_id {
-                if entids_not_connected.contains(&eid) {
-                    return 999999;
-                }
-            }
-        }
-    }
-    if highest_wanted > 0 {
-        return highest_wanted as i32;
-    } else {
-        return 999999;
-    }
-}
-
 pub fn parse_baselines(
     data: &[u8],
     sv_cls: &ServerClass,

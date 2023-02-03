@@ -185,6 +185,7 @@ impl ReadCache {
         self.deltas.insert("m_vecOrigin_Y".to_owned(), vec![]);
 
         let v = self.deltas.get_mut(wanted_name).unwrap();
+        v.reserve(number_structs);
 
         for (byte, entid, tick) in izip!(&starting_bytes, &ticks, &entids) {
             v.push(Delta {

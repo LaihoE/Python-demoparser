@@ -54,7 +54,7 @@ impl Parser {
             let id = byte_reader.read_short();
             let _ = byte_reader.read_string();
             let dt = byte_reader.read_string();
-
+            // Ids for classes we use
             if id == 275 || id == 43 || id == 41 || id == 39 || id == 40 {
                 let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
                 let server_class = ServerClass { id, dt, props };

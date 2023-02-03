@@ -43,12 +43,22 @@ impl ReadCache {
         let delta_vec = self.deltas.get(&prop_name).unwrap();
         let wanted_sid = players.uid_to_steamid(userid).unwrap();
 
-        let all_deltas: Vec<(u64, i32, u32)> = delta_vec
-            .iter()
-            .filter(|x| players.eid_to_sid(x.entid, x.tick) == Some(wanted_sid))
-            .map(|x| (x.byte, x.tick, x.entid))
-            .collect();
-        self.filter_delta_ticks_wanted(&all_deltas, wanted_ticks)
+        if players.is_easy_uid[userid as usize] {
+            let eid = players.uid_to_entid(userid, 55555).unwrap();
+            let all_deltas: Vec<(u64, i32, u32)> = delta_vec
+                .iter()
+                .filter(|x| x.entid == eid)
+                .map(|x| (x.byte, x.tick, x.entid))
+                .collect();
+            self.filter_delta_ticks_wanted(&all_deltas, wanted_ticks)
+        } else {
+            let all_deltas: Vec<(u64, i32, u32)> = delta_vec
+                .iter()
+                .filter(|x| players.eid_to_sid(x.entid, x.tick) == Some(wanted_sid))
+                .map(|x| (x.byte, x.tick, x.entid))
+                .collect();
+            self.filter_delta_ticks_wanted(&all_deltas, wanted_ticks)
+        }
     }
 
     pub fn filter_delta_ticks_wanted(
@@ -63,7 +73,6 @@ impl ReadCache {
         let mut wanted_bytes = Vec::with_capacity(wanted_ticks.len());
         let mut sorted_ticks = temp_ticks.clone();
         sorted_ticks.sort_by_key(|x| x.1);
-
         let mut last_idx = 0;
 
         for wanted_tick in wanted_ticks {
@@ -79,12 +88,15 @@ impl ReadCache {
         let mut bin = vec![];
         for wanted_tick in wanted_ticks {
             let idx = sorted_ticks.partition_point(|x| x.1 < *wanted_tick);
-            let byte = sorted_ticks[idx - 1].0;
-            bin.push(byte);
+            if idx > 0 {
+                bin.push(sorted_ticks[idx - 1].0);
+            } else {
+                bin.push(sorted_ticks[0].0);
+            }
         }
-        //println!("1 {:?}", wanted_bytes);
-        //println!("2 {:?}", bin);
-        //println!("{:?}", wanted_ticks);
+        // println!("1 {:?}", wanted_bytes);
+        // println!("2 {:?}", bin);
+        // println!("{:?}", wanted_ticks);
         bin
     }
 

@@ -104,7 +104,6 @@ impl Parser {
             uds: data.user_data_size(),
             data: Vec::new(),
         };
-        //  || st.name == "instancebaseline"
         if st.name == "userinfo" {
             let mut st = StringTable {
                 userinfo: true,

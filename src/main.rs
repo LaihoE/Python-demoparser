@@ -2,6 +2,7 @@ mod parsing;
 use mimalloc::MiMalloc;
 use parsing::parser::Parser;
 use parsing::utils::Header;
+use rayon::prelude::IntoParallelIterator;
 use std::fs;
 use std::time::Instant;
 
@@ -19,7 +20,7 @@ fn parse_demo(demo_path: String) -> i32 {
     }
 
     let now = Instant::now();
-    let props_names = vec!["DT_CSPlayer.m_angEyeAngles[0]".to_string()];
+    let props_names = vec!["DT_BasePlayer.m_iFOV".to_string()];
 
     let mut parser = Parser::new(
         demo_path,
@@ -27,7 +28,7 @@ fn parse_demo(demo_path: String) -> i32 {
         //vec![],
         (10000..10002).collect(),
         vec![],
-        vec!["DT_CSPlayer.m_angEyeAngles[0]".to_string()],
+        vec!["DT_BasePlayer.m_iFOV".to_string()],
         "player_death".to_string(),
         false,
         false,
@@ -63,22 +64,17 @@ fn main() {
         .num_threads(1)
         .build_global()
         .unwrap();
-    println!("{:?}", paths_v.len());
-    use kdam::tqdm;
 
-    fn main() {
-        for _ in tqdm!(0..100) {}
-    }
-
-    let this_p = &paths_v[0];
+    let this_p = &paths_v[5];
     let single = vec![this_p];
     /*
     let x: Vec<i32> = tqdm!(paths_v.into_iter())
         .map(|f| parse_demo(f.to_owned()))
         .collect();
     */
-    let x: Vec<i32> = single
-        .into_iter()
+    use rayon::iter::ParallelIterator;
+    let x: Vec<i32> = paths_v
+        .into_par_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();
 

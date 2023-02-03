@@ -113,12 +113,10 @@ impl GameEvent {
         let mut py_tuples: Vec<(String, PyObject)> = Vec::new();
         for pair in &self.fields {
             let name = &pair.name;
-            //println!("{} {:?}", name, pair.data);
             let val = match &pair.data {
                 Some(d) => d.to_string_py(py),
                 None => "None".to_object(py),
             };
-            //let val = pair.data.to_string_py(py);
             py_tuples.push((name.to_string(), val));
         }
         py_tuples
@@ -162,10 +160,7 @@ impl Parser {
         let event_desc = &game_events_map[&msg.eventid()];
 
         if msg.eventid() == 24 {
-            //println!("GE {}", blueprint.tick);
-
             let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.byte);
-
             game_events.push({
                 GameEvent {
                     name: event_desc.name().to_owned(),
@@ -181,7 +176,6 @@ impl Parser {
     }
 
     pub fn parse_game_event_map(&mut self, blueprint: &MsgBluePrint) {
-        //println!("GEEEEEEEEEEe {} {}", blueprint.start_idx, );
         self.state.ge_map_started_at = (blueprint.byte) as u64;
 
         let wanted_bytes = &self.bytes[blueprint.start_idx..blueprint.end_idx];

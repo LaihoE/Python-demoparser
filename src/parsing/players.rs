@@ -1,7 +1,6 @@
-use ahash::{HashMap, HashSet};
-
 use super::parser::JobResult;
 use crate::parsing::demo_parsing::*;
+use ahash::{HashMap, HashSet};
 use itertools::{Itertools, Unique};
 
 #[derive(Debug, Clone)]
@@ -15,6 +14,9 @@ pub struct Players {
     pub entid_to_uid: HashMap<u32, Vec<ReverseConnection>>,
     pub steamids: HashSet<u64>,
     pub uids: HashSet<u32>,
+    pub is_easy: Vec<bool>,
+    pub eid_sid_easy: Vec<u64>,
+    pub is_easy_uid: Vec<bool>,
 }
 #[derive(Debug, Clone)]
 pub struct Connection {
@@ -51,8 +53,26 @@ impl Players {
         let mut eid_to_uid = HashMap::default();
         let mut steamids = HashSet::default();
         let mut uids = HashSet::default();
+        let mut is_easy = vec![false; 128];
+        let mut is_easy_uid = vec![false; 1024];
+
+        let mut eid_to_sid_easy = vec![0; 128];
+        let mut eid_to_sid_simple = HashMap::default();
+
+        let mut overlap = HashMap::default();
+        let mut overlap_uid = HashMap::default();
 
         for player in &players {
+            overlap
+                .entry(player.entity_id)
+                .or_insert(HashSet::default())
+                .insert(player.user_id);
+
+            overlap_uid
+                .entry(player.user_id)
+                .or_insert(HashSet::default())
+                .insert(player.entity_id);
+
             uid_to_entid
                 .entry(player.user_id)
                 .or_insert(vec![])
@@ -70,11 +90,23 @@ impl Players {
                     byte: player.byte,
                     tick: player.tick,
                 });
+            eid_to_sid_simple.insert(player.entity_id, player.xuid);
 
             steamids.insert(player.xuid);
             uids.insert(player.user_id);
             uid_to_steamid.insert(player.user_id, player.xuid);
             uid_to_name.insert(player.user_id, player.name.clone());
+        }
+        for (k, v) in overlap {
+            if v.len() == 1 {
+                is_easy[k as usize] = true;
+                eid_to_sid_easy[k as usize] = eid_to_sid_simple[&k];
+            }
+        }
+        for (k, v) in overlap_uid {
+            if v.len() == 1 {
+                is_easy_uid[k as usize] = true;
+            }
         }
 
         Players {
@@ -86,6 +118,9 @@ impl Players {
             steamids: steamids,
             uids: uids,
             entid_to_uid: eid_to_uid,
+            is_easy: is_easy,
+            eid_sid_easy: eid_to_sid_easy,
+            is_easy_uid: is_easy_uid,
         }
     }
     pub fn uid_to_entid(&self, uid: u32, byte: usize) -> Option<u32> {
@@ -117,14 +152,17 @@ impl Players {
             }
         }
     }
-
+    #[inline(always)]
     pub fn eid_to_sid(&self, eid: u32, tick: i32) -> Option<u64> {
+        if self.is_easy[eid as usize] {
+            // println!("OK {}", eid);
+            return Some(self.eid_sid_easy[eid as usize]);
+        }
+        // println!("FAIL {}", eid);
+
         match self.entid_to_uid(eid, tick) {
             Some(uid) => self.uid_to_steamid(uid),
-            None => {
-                //println!("NO SID MAP{:?} {}", eid, tick);
-                None
-            }
+            None => None,
         }
     }
 

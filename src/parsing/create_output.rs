@@ -49,7 +49,7 @@ impl Parser {
         let before = Instant::now();
         //println!("{}", results.len());
         let df = self.create_series(&results, &self.settings.wanted_props, &ticks, &players);
-        //println!("{:2?}", before.elapsed());
+        println!("here {:2?}", before.elapsed());
 
         let events = if self.settings.only_events {
             let event_ticks =
@@ -314,17 +314,15 @@ impl Parser {
         ticks: &Vec<i32>,
     ) -> Vec<f32> {
         let mut output = Vec::with_capacity(ticks.len());
-        let before = Instant::now();
         // Fast due to mostly sorted already
         data.sort_by_key(|x| x.1);
-        data.reverse();
 
         for tick in ticks {
-            for j in &mut *data {
-                if j.1 <= *tick {
-                    output.push(j.0);
-                    break;
-                }
+            let idx = data.partition_point(|x| x.1 <= *tick);
+            if idx > 0 {
+                output.push(data[idx - 1].0);
+            } else {
+                output.push(data[0].0);
             }
         }
         output

@@ -136,6 +136,19 @@ impl Players {
             }
         }
     }
+    pub fn uid_to_entid_tick(&self, uid: u32, tick: i32) -> Option<u32> {
+        match self.uid_to_eid.get(&uid) {
+            None => None, //panic!("NO USERID MAPPING TO ENTID: {}", uid),
+            Some(player_mapping) => {
+                for mapping in player_mapping {
+                    if mapping.tick > tick {
+                        return Some(mapping.entid);
+                    }
+                }
+                return Some(player_mapping.last().unwrap().entid);
+            }
+        }
+    }
     pub fn uid_to_steamid(&self, uid: u32) -> Option<u64> {
         match self.uid_to_steamid.get(&uid) {
             None => None, //panic!("NO USERID MAPPING TO ENTID: {}", uid),

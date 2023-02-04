@@ -70,13 +70,10 @@ impl Parser {
                 );
                 wc.write_all_caches(&self.maps.serverclass_map);
                 drop(wc);
-                /*
                 match ReadCache::get_cache_if_exists(&self.bytes) {
                     Some(mut cache) => self.compute_jobs_with_cache(&mut cache),
                     None => panic!("FAILED TO READ WRITTEN CACHE"),
                 }
-                */
-                vec![]
             }
         }
     }

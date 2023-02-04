@@ -1,4 +1,5 @@
 use crate::parsing::cache::cache_reader::ReadCache;
+use crate::parsing::create_output::ExtraEventRequest;
 use crate::parsing::demo_parsing::*;
 use crate::parsing::players::Players;
 use ahash::HashMap;
@@ -12,6 +13,33 @@ impl ReadCache {
         event_map: &Option<HashMap<i32, Descriptor_t>>,
     ) -> Vec<u64> {
         self.event_bytes_by_name(name, event_map)
+    }
+
+    pub fn event_name_to_id(
+        &self,
+        name: &String,
+        event_map: &Option<HashMap<i32, Descriptor_t>>,
+    ) -> Option<i32> {
+        let map = event_map.as_ref().unwrap();
+        for (k, v) in map {
+            if v.name() == name {
+                return Some(*k);
+            }
+        }
+        None
+    }
+
+    pub fn find_request_bytes(
+        &mut self,
+        requests: &Vec<ExtraEventRequest>,
+        svc_map: &HashMap<u16, ServerClass>,
+        players: &Players,
+    ) -> Vec<u64> {
+        let uids: Vec<u32> = requests.into_iter().map(|x| x.userid).unique().collect();
+        let props: Vec<String> = requests.iter().map(|x| x.prop.clone()).unique().collect();
+        let ticks: Vec<i32> = requests.iter().map(|x| x.tick).unique().collect();
+
+        self.find_wanted_bytes(&ticks, &props, &uids, svc_map, players)
     }
 
     pub fn find_wanted_bytes(
@@ -41,7 +69,10 @@ impl ReadCache {
         players: &Players,
     ) -> Vec<u64> {
         let delta_vec = self.deltas.get(&prop_name).unwrap();
-        let wanted_sid = players.uid_to_steamid(userid).unwrap();
+        let sid = match players.uid_to_steamid(userid) {
+            Some(sid) => sid,
+            None => return vec![],
+        };
 
         if players.is_easy_uid[userid as usize] {
             let eid = players.uid_to_entid(userid, 55555).unwrap();
@@ -54,7 +85,7 @@ impl ReadCache {
         } else {
             let all_deltas: Vec<(u64, i32, u32)> = delta_vec
                 .iter()
-                .filter(|x| players.eid_to_sid(x.entid, x.tick) == Some(wanted_sid))
+                .filter(|x| players.eid_to_sid(x.entid, x.tick) == Some(sid))
                 .map(|x| (x.byte, x.tick, x.entid))
                 .collect();
             self.filter_delta_ticks_wanted(&all_deltas, wanted_ticks)

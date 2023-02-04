@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use super::demo_parsing::NameDataPair;
+use super::demo_parsing::{GameEvent, NameDataPair};
 use super::utils::TYPEHM;
 use crate::parsing::cache::cache_reader::ReadCache;
 use crate::parsing::demo_parsing::entities::PacketEntsOutput;
@@ -9,9 +9,18 @@ use crate::parsing::demo_parsing::KeyData;
 use crate::parsing::parser::*;
 use crate::parsing::players::Players;
 pub use crate::parsing::variants::*;
+use derive_more::TryInto;
 use itertools::Itertools;
-use polars::prelude::{NamedFrom, NamedFromOwned};
+use polars::df;
+use polars::prelude::{DataFrame, Int64Type, NamedFrom, NamedFromOwned};
 use polars::series::Series;
+
+#[derive(Debug, Clone)]
+pub struct ExtraEventRequest {
+    pub tick: i32,
+    pub userid: u32,
+    pub prop: String,
+}
 
 impl Parser {
     pub fn compute_jobs_no_cache(&mut self) -> Vec<JobResult> {
@@ -39,100 +48,149 @@ impl Parser {
         self.parse_bytes(wanted_bytes);
 
         let results: Vec<JobResult> = self.parse_blueprints();
-        self.create_series(&results, &self.settings.wanted_props, &ticks, &players)
-
-        //self.get_game_events(&results)
+        // self.create_series(&results, &self.settings.wanted_props, &ticks, &players)
+        self.get_game_events(&results, &players, cache)
     }
-    fn get_game_events(&self, results: &Vec<JobResult>) -> Vec<Series> {
+
+    fn filter_to_vec<Wanted>(v: impl IntoIterator<Item = impl TryInto<Wanted>>) -> Vec<Wanted> {
+        v.into_iter().filter_map(|x| x.try_into().ok()).collect()
+    }
+
+    fn temp(pairs: Vec<&NameDataPair>, name: &String) -> Series {
+        let only_data: Vec<KeyData> = pairs.iter().map(|x| x.data.clone()).collect();
+        match pairs[0].data_type {
+            1 => Series::new(name, &Parser::filter_to_vec::<String>(only_data)),
+            2 => Series::new(name, &Parser::filter_to_vec::<f32>(only_data)),
+            3 => Series::new(name, &Parser::filter_to_vec::<i64>(only_data)),
+            4 => Series::new(name, &Parser::filter_to_vec::<i64>(only_data)),
+            5 => Series::new(name, &Parser::filter_to_vec::<i64>(only_data)),
+            6 => Series::new(name, &Parser::filter_to_vec::<bool>(only_data)),
+            7 => Series::new(name, &Parser::filter_to_vec::<u64>(only_data)),
+            _ => panic!("Keydata got unknown type: {}", pairs[0].data_type),
+        }
+    }
+
+    fn series_from_events(&self, events: Vec<GameEvent>) -> Vec<Series> {
+        // Vec<GameEvent> is ~ Vec<HashMap> where each hashmap has the same keys.
+        // Transform these into one hashmap: HashMap<name, Vec<data>> and
+        // then extract each (k, v) from hashmap into Series.
+        // This is tricky due to hashmap vals being enum type and need to
+        // map to "native" datatype to create Series.
+        // Example [Hashmap<"distance": 21.0>, Hashmap<"distance": 24.0>, Hashmap<"name": "Steve">]
+        // ->
+        // Hashmap<"distance": [21.0, 24.0], "name": ["Steve"]>,
+        // -> Series::new("distance", [21.0, 24.0]) <-- needs to be mapped as "f32" not as enum(KeyData)
+        let pairs: Vec<NameDataPair> = events.iter().map(|x| x.fields.clone()).flatten().collect();
+        let per_key_name = pairs.iter().into_group_map_by(|x| &x.name);
+        let mut series = vec![];
+        for (name, vals) in per_key_name {
+            series.push(Parser::temp(vals, name));
+        }
+        series
+    }
+
+    fn convert_to_requests(
+        &self,
+        ticks: Vec<i64>,
+        userids: Vec<i64>,
+        attackers: Vec<i64>,
+        wanted_props: &Vec<String>,
+    ) -> Vec<ExtraEventRequest> {
+        let mut requests = vec![];
+        for prop in wanted_props {
+            if ticks.len() > 0 && attackers.len() > 0 {
+                for (tick, uid) in ticks.iter().zip(&attackers) {
+                    requests.push(ExtraEventRequest {
+                        tick: *tick as i32 - 1,
+                        userid: *uid as u32,
+                        prop: prop.to_string(),
+                    });
+                }
+            }
+            if ticks.len() > 0 && userids.len() > 0 {
+                for (tick, uid) in ticks.iter().zip(&userids) {
+                    requests.push(ExtraEventRequest {
+                        tick: *tick as i32 - 1,
+                        userid: *uid as u32,
+                        prop: prop.to_string(),
+                    });
+                }
+            }
+        }
+        requests
+    }
+
+    fn fill_wanted_extra_props(
+        &self,
+        series: &Vec<Series>,
+        wanted_props: &Vec<String>,
+    ) -> Vec<ExtraEventRequest> {
+        let mut ticks: Vec<i64> = vec![];
+        let mut userids: Vec<i64> = vec![];
+        let mut attackers: Vec<i64> = vec![];
+
+        for s in series {
+            match s.name() {
+                "tick" => ticks.extend(s.i64().unwrap().into_no_null_iter()),
+                //"userid" => userids.extend(s.i64().unwrap().into_no_null_iter()),
+                "attacker" => attackers.extend(s.i64().unwrap().into_no_null_iter()),
+                _ => {}
+            }
+        }
+        self.convert_to_requests(ticks, userids, attackers, &wanted_props)
+    }
+
+    fn get_game_events(
+        &mut self,
+        results: &Vec<JobResult>,
+        players: &Players,
+        cache: &mut ReadCache,
+    ) -> Vec<Series> {
+        let event_id = cache
+            .event_name_to_id(&self.settings.event_name, &self.maps.event_map)
+            .unwrap();
+
         let mut v = vec![];
         for x in results {
             if let JobResult::GameEvents(ge) = x {
-                if ge[0].id == 24 {
+                if ge[0].id == event_id {
                     v.push(ge[0].clone());
                 }
             }
         }
-        // Convert game events to vector of k,v pairs
-        let pairs: Vec<NameDataPair> = v.iter().map(|x| x.fields.clone()).flatten().collect();
-        let uniq_keys: Vec<&String> = pairs.iter().map(|x| &x.name).unique().collect();
-        let mut series = vec![];
-        let before = Instant::now();
-        for u in uniq_keys {
-            let mut v = vec![];
-            for pair in &pairs {
-                if &pair.name == u {
-                    v.push(pair.data.clone());
-                }
-            }
-            let out = match &v[0] {
-                KeyData::Float(f) => {
-                    let mut x: Vec<f32> = vec![];
-                    for data in v {
-                        x.push(data.try_into().unwrap())
-                    }
-                    Series::new(&u.clone(), x)
-                }
-                KeyData::Long(f) => {
-                    let mut x: Vec<i64> = vec![];
-                    for data in v {
-                        x.push(data.try_into().unwrap())
-                    }
-                    Series::new(&u.clone(), x)
-                }
-                KeyData::Bool(f) => {
-                    let mut x: Vec<bool> = vec![];
-                    for data in v {
-                        x.push(data.try_into().unwrap())
-                    }
-                    Series::new(&u.clone(), x)
-                }
-                KeyData::Byte(f) => {
-                    let mut x: Vec<i64> = vec![];
-                    for data in v {
-                        x.push(data.try_into().unwrap())
-                    }
-                    Series::new(&u.clone(), x)
-                }
-                KeyData::Uint64(f) => {
-                    let mut x: Vec<u64> = vec![];
-                    for data in v {
-                        x.push(data.try_into().unwrap())
-                    }
-                    Series::new(&u.clone(), x)
-                }
-                KeyData::Str(f) => {
-                    let mut x: Vec<String> = vec![];
-                    for data in v {
-                        x.push(data.try_into().unwrap())
-                    }
-                    Series::new(&u.clone(), x)
-                }
-                KeyData::Short(f) => {
-                    let mut x: Vec<i64> = vec![];
-                    for data in v {
-                        x.push(data.try_into().unwrap())
-                    }
-                    Series::new(&u.clone(), x)
-                }
-            };
-            series.push(out);
-        }
-        /*
-        let mut hm: HashMap<String, VarVec> = HashMap::default();
-        for g in v {
-            if g.id == 24 {
-                for field in g.fields {
-                    hm.entry(field.name)
-                        .or_insert(VarVec)
-                        .push(field.data.unwrap());
-                }
-            }
-        }
 
-        for (k, v) in hm {
-            println!("{} {:?}", k, v);
+        let mut series = self.series_from_events(v);
+        let requests = self.fill_wanted_extra_props(&series, &self.settings.wanted_props.clone());
+        let extra_bytes = cache.find_request_bytes(&requests, &self.maps.serverclass_map, players);
+        self.parse_bytes(extra_bytes);
+        let results = self.parse_blueprints();
+        let s = self.find_requested_vals(requests, &results, &players);
+        series.extend(s);
+        series
+    }
+
+    fn find_requested_vals(
+        &mut self,
+        requests: Vec<ExtraEventRequest>,
+        results: &Vec<JobResult>,
+        players: &Players,
+    ) -> Vec<Series> {
+        let mut series = vec![];
+        let request_per_prop = requests.iter().into_group_map_by(|x| x.prop.clone());
+
+        for (name, requests) in request_per_prop {
+            let mut v = vec![];
+            for request in requests {
+                v.push(self.find_one_value(
+                    results,
+                    request.prop.clone(),
+                    request.tick,
+                    players,
+                    request.userid,
+                ));
+            }
+            series.push(Series::new(&name, v))
         }
-        */
         series
     }
 
@@ -154,7 +212,7 @@ impl Parser {
         let mut all_series = vec![];
         for p in props {
             let (out, labels, ticks) =
-                self.functional_searcher(&results, p.to_owned(), &ticks, &players);
+                self.find_multiple_values(&results, p.to_owned(), &ticks, &players);
 
             let s = Series::from_vec("yaw", out);
             let ls = Series::from_vec("steamid", labels);
@@ -225,15 +283,23 @@ impl Parser {
         }
     }
 
-    pub fn find_wanted_value(
+    pub fn find_wanted_value(&self, data: &mut Vec<&(f32, i32, i32)>, tick: i32) -> Option<f32> {
+        data.sort_by_key(|x| x.1);
+        data.reverse();
+
+        for j in &mut *data {
+            if j.1 <= tick {
+                return Some(j.0);
+            }
+        }
+        None
+    }
+
+    pub fn find_wanted_values(
         &self,
         data: &mut Vec<&(f32, i32, i32)>,
         ticks: &Vec<i32>,
     ) -> Vec<f32> {
-        /*
-        Goes trough wanted data backwards to find correct values
-        */
-
         let mut output = Vec::with_capacity(ticks.len());
 
         data.sort_by_key(|x| x.1);
@@ -265,9 +331,30 @@ impl Parser {
         }
         None
     }
+    pub fn find_one_value(
+        &self,
+        results: &Vec<JobResult>,
+        prop_name: String,
+        tick: i32,
+        players: &Players,
+        userid: u32,
+    ) -> Option<f32> {
+        let idx = self.str_name_to_idx(prop_name.clone()).unwrap();
+        let mut filtered = self.filter_jobs_by_pidx(results, idx, &prop_name);
+        let mut filtered_uid: Vec<&(f32, i32, i32)> = filtered
+            .iter()
+            .filter(|x| Some(x.2 as u32) == players.uid_to_entid_tick(userid, tick))
+            .collect();
+
+        filtered_uid.sort_by_key(|x| x.1);
+        for i in &filtered_uid {
+            //println!("{:?}", i);
+        }
+        self.find_wanted_value(&mut filtered_uid, tick)
+    }
 
     #[inline(always)]
-    pub fn functional_searcher(
+    pub fn find_multiple_values(
         &self,
         results: &Vec<JobResult>,
         prop_name: String,
@@ -301,7 +388,7 @@ impl Parser {
 
         let out: Vec<f32> = tasks
             .iter_mut()
-            .flat_map(|(_, data)| self.find_wanted_value(data, ticks))
+            .flat_map(|(_, data)| self.find_wanted_values(data, ticks))
             .collect();
 
         (out, labels, out_ticks)

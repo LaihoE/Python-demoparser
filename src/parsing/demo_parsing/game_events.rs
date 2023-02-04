@@ -7,6 +7,7 @@ use csgoproto::netmessages::csvcmsg_game_event::Key_t;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::CSVCMsg_GameEvent;
 use csgoproto::netmessages::CSVCMsg_GameEventList;
+use derive_more::TryInto;
 use memmap2::Mmap;
 use protobuf::Message;
 use pyo3::prelude::*;
@@ -25,7 +26,8 @@ fn parse_key(key: &Key_t) -> KeyData {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, TryInto)]
+#[try_into(owned, ref)]
 pub enum KeyData {
     Str(String),
     Float(f32),
@@ -35,61 +37,23 @@ pub enum KeyData {
     Bool(bool),
     Uint64(u64),
 }
-impl TryInto<f32> for KeyData {
-    type Error = ();
 
-    fn try_into(self) -> Result<f32, Self::Error> {
-        match self {
-            Self::Float(f) => Ok(f),
-            _ => Err(()),
-        }
+impl Default for KeyData {
+    fn default() -> Self {
+        KeyData::Bool(false)
     }
 }
-impl TryInto<String> for KeyData {
-    type Error = ();
 
-    fn try_into(self) -> Result<String, Self::Error> {
-        match self {
-            Self::Str(s) => Ok(s),
-            _ => Err(()),
-        }
-    }
-}
-impl TryInto<bool> for KeyData {
-    type Error = ();
-
-    fn try_into(self) -> Result<bool, Self::Error> {
-        match self {
-            Self::Bool(f) => Ok(f),
-            _ => Err(()),
-        }
-    }
-}
 impl TryInto<i64> for KeyData {
     type Error = ();
 
     fn try_into(self) -> Result<i64, Self::Error> {
         match self {
-            Self::Short(s) => Ok(s.into()),
-            Self::Long(l) => Ok(l.into()),
-            Self::Byte(b) => Ok(b.into()),
+            Self::Long(l) => Ok(l as i64),
+            Self::Byte(b) => Ok(b as i64),
+            Self::Short(s) => Ok(s as i64),
             _ => Err(()),
         }
-    }
-}
-impl TryInto<u64> for KeyData {
-    type Error = ();
-    fn try_into(self) -> Result<u64, Self::Error> {
-        match self {
-            Self::Uint64(u) => Ok(u.into()),
-            _ => Err(()),
-        }
-    }
-}
-
-impl Default for KeyData {
-    fn default() -> Self {
-        KeyData::Bool(false)
     }
 }
 
@@ -119,6 +83,7 @@ impl KeyData {
 pub struct NameDataPair {
     pub name: String,
     pub data: KeyData,
+    pub data_type: i32,
 }
 #[derive(Debug, Clone)]
 pub struct GameEvent {
@@ -133,6 +98,7 @@ pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
     byte: &usize,
+    tick: &i32,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
     let mut kv_pairs: Vec<NameDataPair> = Vec::new();
@@ -144,11 +110,18 @@ pub fn gen_name_val_pairs(
         kv_pairs.push(NameDataPair {
             name: desc.name().to_owned(),
             data: val,
+            data_type: ge.type_(),
         })
     }
     kv_pairs.push(NameDataPair {
         name: "byte".to_owned(),
         data: KeyData::Uint64(*byte as u64),
+        data_type: 7,
+    });
+    kv_pairs.push(NameDataPair {
+        name: "tick".to_owned(),
+        data: KeyData::Long(*tick),
+        data_type: 3,
     });
     kv_pairs
 }
@@ -165,7 +138,8 @@ impl Parser {
         let mut game_events: Vec<GameEvent> = Vec::new();
         let event_desc = &game_events_map[&msg.eventid()];
 
-        let name_data_pairs = gen_name_val_pairs(&msg, event_desc, &blueprint.byte);
+        let name_data_pairs =
+            gen_name_val_pairs(&msg, event_desc, &blueprint.byte, &blueprint.tick);
 
         game_events.push({
             GameEvent {

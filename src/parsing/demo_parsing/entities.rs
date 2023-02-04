@@ -106,7 +106,7 @@ impl Parser {
                 all_props.extend(parse_ent_props(entity_id, &mut b, sv_cls_map, tick));
             }
         }
-        //println!("{}", all_props.len());
+
         return Some(all_props);
     }
 }

@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::time::Instant;
 
+use super::demo_parsing::NameDataPair;
 use super::utils::TYPEHM;
 use crate::parsing::cache::cache_reader::ReadCache;
 use crate::parsing::demo_parsing::entities::PacketEntsOutput;
+use crate::parsing::demo_parsing::KeyData;
 use crate::parsing::parser::*;
 use crate::parsing::players::Players;
 pub use crate::parsing::variants::*;
@@ -34,16 +37,85 @@ impl Parser {
             &players,
         );
         self.parse_bytes(wanted_bytes);
+
         let results: Vec<JobResult> = self.parse_blueprints();
-        self.get_game_events(&results);
         self.create_series(&results, &self.settings.wanted_props, &ticks, &players)
+
+        //self.get_game_events(&results)
     }
-    fn get_game_events(&self, results: &Vec<JobResult>) {
+    fn get_game_events(&self, results: &Vec<JobResult>) -> Vec<Series> {
         let mut v = vec![];
         for x in results {
             if let JobResult::GameEvents(ge) = x {
-                v.push(ge[0].clone());
+                if ge[0].id == 24 {
+                    v.push(ge[0].clone());
+                }
             }
+        }
+        // Convert game events to vector of k,v pairs
+        let pairs: Vec<NameDataPair> = v.iter().map(|x| x.fields.clone()).flatten().collect();
+        let uniq_keys: Vec<&String> = pairs.iter().map(|x| &x.name).unique().collect();
+        let mut series = vec![];
+        let before = Instant::now();
+        for u in uniq_keys {
+            let mut v = vec![];
+            for pair in &pairs {
+                if &pair.name == u {
+                    v.push(pair.data.clone());
+                }
+            }
+            let out = match &v[0] {
+                KeyData::Float(f) => {
+                    let mut x: Vec<f32> = vec![];
+                    for data in v {
+                        x.push(data.try_into().unwrap())
+                    }
+                    Series::new(&u.clone(), x)
+                }
+                KeyData::Long(f) => {
+                    let mut x: Vec<i64> = vec![];
+                    for data in v {
+                        x.push(data.try_into().unwrap())
+                    }
+                    Series::new(&u.clone(), x)
+                }
+                KeyData::Bool(f) => {
+                    let mut x: Vec<bool> = vec![];
+                    for data in v {
+                        x.push(data.try_into().unwrap())
+                    }
+                    Series::new(&u.clone(), x)
+                }
+                KeyData::Byte(f) => {
+                    let mut x: Vec<i64> = vec![];
+                    for data in v {
+                        x.push(data.try_into().unwrap())
+                    }
+                    Series::new(&u.clone(), x)
+                }
+                KeyData::Uint64(f) => {
+                    let mut x: Vec<u64> = vec![];
+                    for data in v {
+                        x.push(data.try_into().unwrap())
+                    }
+                    Series::new(&u.clone(), x)
+                }
+                KeyData::Str(f) => {
+                    let mut x: Vec<String> = vec![];
+                    for data in v {
+                        x.push(data.try_into().unwrap())
+                    }
+                    Series::new(&u.clone(), x)
+                }
+                KeyData::Short(f) => {
+                    let mut x: Vec<i64> = vec![];
+                    for data in v {
+                        x.push(data.try_into().unwrap())
+                    }
+                    Series::new(&u.clone(), x)
+                }
+            };
+            series.push(out);
         }
         /*
         let mut hm: HashMap<String, VarVec> = HashMap::default();
@@ -61,6 +133,7 @@ impl Parser {
             println!("{} {:?}", k, v);
         }
         */
+        series
     }
 
     fn get_wanted_ticks(&self) -> Vec<i32> {

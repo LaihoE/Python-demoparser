@@ -257,7 +257,9 @@ impl DemoParser {
                 parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
                 let mut ss = vec![];
                 let series_vec = parser.start_parsing();
-                for s in series_vec {
+                let mut column_names: Vec<&str> =
+                    series_vec.iter().map(|x| x.name().clone()).collect();
+                for s in &series_vec {
                     let py_series = rust_series_to_py_series(&s).unwrap();
                     ss.push(py_series);
                 }
@@ -266,7 +268,7 @@ impl DemoParser {
                 let polars = py.import("polars").unwrap();
                 // let all_series_py = ss.to_object(py);
                 let df = polars.call_method1("DataFrame", (ss,)).unwrap();
-                // df.setattr("columns", wanted_props.to_object(py)).unwrap();
+                df.setattr("columns", column_names.to_object(py)).unwrap();
                 let pandas_df = df.call_method0("to_pandas").unwrap();
                 Ok(pandas_df.to_object(py))
             }

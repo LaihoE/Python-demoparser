@@ -84,21 +84,14 @@ impl<'a> MyBitreader<'a> {
             let index = self.read_nbits(3)?;
             Some(last + 1 + index as i32)
         } else {
-            let mut index = self.read_nbits(7)?;
+            let index = self.read_nbits(7)?;
             let val = index & (32 | 64);
-            match val {
-                32 => {
-                    index = (index & !96) | (self.read_nbits(2)? << 5);
-                }
-                64 => {
-                    index = (index & !96) | (self.read_nbits(4)? << 5);
-                }
-                96 => {
-                    let t = self.read_nbits(7)? << 5;
-                    index = (index & !96) | (t);
-                }
-                _ => {}
-            }
+            let index = match val {
+                32 => (index & !96) | (self.read_nbits(2)? << 5),
+                64 => (index & !96) | (self.read_nbits(4)? << 5),
+                96 => (index & !96) | (self.read_nbits(7)? << 5),
+                _ => index,
+            };
             if index == 0xfff {
                 return Some(-1);
             }

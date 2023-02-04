@@ -33,7 +33,7 @@ pub struct MsgBluePrint {
 #[derive(Debug)]
 pub enum JobResult {
     PacketEntities(PacketEntsOutput),
-    //PacketEntitiesIndicies(Vec<SmallVec<>>)
+    PacketEntitiesIndicies(Vec<EntityIndicies>),
     GameEvents(Vec<GameEvent>),
     StringTables(Vec<UserInfo>),
     None,
@@ -70,10 +70,13 @@ impl Parser {
                 );
                 wc.write_all_caches(&self.maps.serverclass_map);
                 drop(wc);
+                /*
                 match ReadCache::get_cache_if_exists(&self.bytes) {
                     Some(mut cache) => self.compute_jobs_with_cache(&mut cache),
                     None => panic!("FAILED TO READ WRITTEN CACHE"),
                 }
+                */
+                vec![]
             }
         }
     }
@@ -90,6 +93,7 @@ impl Parser {
             13 => Parser::update_string_table_msg(blueprint, bytes),
             25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
             26 => Parser::parse_packet_entities(blueprint, bytes, serverclass_map),
+            //26 => Parser::parse_packet_entities_indicies(blueprint, bytes, serverclass_map),
             _ => JobResult::None,
         }
     }

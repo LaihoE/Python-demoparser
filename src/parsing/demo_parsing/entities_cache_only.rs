@@ -33,7 +33,13 @@ pub struct Prop {
     pub p_type: i32,
 }
 
-pub struct EntityIndicies {}
+#[derive(Debug)]
+pub struct EntityIndicies {
+    pub byte: u64,
+    pub entid: i32,
+    pub tick: i32,
+    pub prop_indicies: SmallVec<[i32; 32]>,
+}
 
 impl Parser {
     pub fn parse_packet_entities_indicies(
@@ -43,22 +49,21 @@ impl Parser {
     ) -> JobResult {
         let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
         let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
-        let result = Parser::_parse_packet_entities(msg, sv_cls_map, blueprint.tick);
-        match result {
-            None => JobResult::None,
-            Some(p) => JobResult::PacketEntities(PacketEntsOutput {
-                data: p,
-                tick: blueprint.tick,
-                byte: blueprint.byte,
-            }),
-        }
+        let result = Parser::_parse_packet_entities_indicies(
+            msg,
+            sv_cls_map,
+            blueprint.tick,
+            blueprint.byte as u64,
+        );
+        JobResult::PacketEntitiesIndicies(result)
     }
 
     fn _parse_packet_entities_indicies(
         pack_ents: CSVCMsg_PacketEntities,
         sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
         tick: i32,
-    ) -> SmallVec<[i32; 32]> {
+        byte: u64,
+    ) -> Vec<EntityIndicies> {
         /*
         Main thing to understand here is that entity ids are
         sorted so we can break out early. Also first ~70 entids
@@ -68,28 +73,41 @@ impl Parser {
         */
         let n_upd_ents = pack_ents.updated_entries();
         let mut b = MyBitreader::new(pack_ents.entity_data());
-        let mut indicies = vec![];
+        let mut outputs = Vec::with_capacity(12);
         let mut entity_id: i32 = -1;
         for _ in 0..n_upd_ents {
-            entity_id += 1 + (b.read_u_bit_var()? as i32);
+            entity_id += 1 + (b.read_u_bit_var().unwrap() as i32);
 
             if entity_id > 71 {
                 break;
             }
-            if b.read_boolie()? {
+            if b.read_boolie().unwrap() {
                 // Checks if entity should be destroyed, don't see this being useful for parser
                 b.read_boolie();
-            } else if b.read_boolie()? {
+            } else if b.read_boolie().unwrap() {
                 // IF ENTITY DOES NOT EXIST
                 // These bits are for creating the ent but we use hack for it so not needed
-                let _ = b.read_nbits(19)?;
-                indicies.extend(parse_ent_props(entity_id, &mut b, sv_cls_map, tick));
+                let _ = b.read_nbits(19).unwrap();
+                let indicies = parse_ent_props(entity_id, &mut b, sv_cls_map, tick);
+                outputs.push(EntityIndicies {
+                    byte: byte,
+                    tick: tick,
+                    entid: entity_id,
+                    prop_indicies: indicies,
+                });
             } else {
                 // IF ENTITY DOES EXIST
-                indicies.extend(parse_ent_props(entity_id, &mut b, sv_cls_map, tick));
+                let indicies = parse_ent_props(entity_id, &mut b, sv_cls_map, tick);
+                outputs.push(EntityIndicies {
+                    byte: byte,
+                    tick: tick,
+                    entid: entity_id,
+                    prop_indicies: indicies,
+                });
             }
         }
-        return Some(indicies);
+
+        return outputs;
     }
 }
 #[inline(always)]
@@ -145,8 +163,8 @@ fn parse_ent_props(
     let sv_cls = m.get(&cls_id).unwrap();
     let indicies = parse_indicies(b);
 
-    for idx in indicies {
-        let _ = b.decode(&sv_cls.props[idx as usize]).unwrap();
+    for idx in &indicies {
+        let _ = b.decode(&sv_cls.props[*idx as usize]).unwrap();
     }
     indicies
 }

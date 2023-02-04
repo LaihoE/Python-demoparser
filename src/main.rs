@@ -50,8 +50,8 @@ fn parse_demo(demo_path: String) -> i32 {
 fn main() {
     let now = Instant::now();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/").unwrap();
-    //let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
+    //let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems").unwrap();
 
     let mut paths_v = vec![];
@@ -61,7 +61,7 @@ fn main() {
     }
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(1)
+        .num_threads(12)
         .build_global()
         .unwrap();
 
@@ -73,14 +73,15 @@ fn main() {
         .collect();
     */
     use rayon::iter::ParallelIterator;
-    let x: Vec<i32> = single
+
+    let x: Vec<i32> = paths_v
         .into_par_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();
 
     // 145
     let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 67);
+    println!("Elapsed: {:.2?} (avg: {:.2?})", elapsed, elapsed / 315);
     // /home/laiho/Documents/demos/faceits/cu/003309131115255562271_1824323488 (1).dem
     /*
     pub enum KeyData{

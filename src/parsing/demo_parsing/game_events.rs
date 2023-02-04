@@ -1,5 +1,3 @@
-use super::stringtables::UserInfo;
-use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::MsgBluePrint;
 use crate::parsing::parser::Parser;
 use crate::parsing::parser::*;
@@ -37,6 +35,58 @@ pub enum KeyData {
     Bool(bool),
     Uint64(u64),
 }
+impl TryInto<f32> for KeyData {
+    type Error = ();
+
+    fn try_into(self) -> Result<f32, Self::Error> {
+        match self {
+            Self::Float(f) => Ok(f),
+            _ => Err(()),
+        }
+    }
+}
+impl TryInto<String> for KeyData {
+    type Error = ();
+
+    fn try_into(self) -> Result<String, Self::Error> {
+        match self {
+            Self::Str(s) => Ok(s),
+            _ => Err(()),
+        }
+    }
+}
+impl TryInto<bool> for KeyData {
+    type Error = ();
+
+    fn try_into(self) -> Result<bool, Self::Error> {
+        match self {
+            Self::Bool(f) => Ok(f),
+            _ => Err(()),
+        }
+    }
+}
+impl TryInto<i64> for KeyData {
+    type Error = ();
+
+    fn try_into(self) -> Result<i64, Self::Error> {
+        match self {
+            Self::Short(s) => Ok(s.into()),
+            Self::Long(l) => Ok(l.into()),
+            Self::Byte(b) => Ok(b.into()),
+            _ => Err(()),
+        }
+    }
+}
+impl TryInto<u64> for KeyData {
+    type Error = ();
+    fn try_into(self) -> Result<u64, Self::Error> {
+        match self {
+            Self::Uint64(u) => Ok(u.into()),
+            _ => Err(()),
+        }
+    }
+}
+
 impl Default for KeyData {
     fn default() -> Self {
         KeyData::Bool(false)

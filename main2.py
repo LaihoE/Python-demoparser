@@ -12,20 +12,26 @@ import matplotlib.pyplot as plt
 
 
 def coordinates(file):
-    print(file)
-    # parser = DemoParser("/home/laiho/Documents/demos/mygames/match730_003449965367076585902_0881240613_184.dem")
+    #print(file)
+    before = time.time()
+    parser = DemoParser("/home/laiho/Documents/demos/mygames/match730_003449965367076585902_0881240613_184.dem")
     parser = DemoParser(file)
     before = time.time()
-    df = pd.DataFrame(parser.parse_ticks(["m_vecOrigin_X"], ticks=[x for x in range(80000, 80001)]))
-    print(df.loc[:, ["tick","m_vecOrigin_X", "m_vecOrigin_Y"]])
-
+    df = pd.DataFrame(parser.parse_ticks(["m_vecOrigin_X", "m_vecOrigin_Y"], ticks=[x for x in range(80000, 80001)]))
+    print(df[df["steamid"] == 76561198029122943])
+    #if 76561198029122943 in df["steamid"]:
+        #print(file)
+    #print(df.loc[:, ["tick","m_vecOrigin_X", "m_vecOrigin_Y"]])
+    
+    #print(df)
+    #print(time.time() - before)
 
 
 if __name__ == "__main__":
     import numpy as np
     # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[:1]
-    #files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5]
-    files = glob.glob("/home/laiho/Documents/demos/mygames/*")[1:2]
+    # files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5]
+    files = glob.glob("/home/laiho/Documents/demos/mygames/*")#[1:2]
     # print(files)
     with mp.Pool(processes=1) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(

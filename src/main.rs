@@ -25,6 +25,7 @@ fn parse_demo(demo_path: String) -> i32 {
     let mut parser = Parser::new(
         demo_path,
         true,
+        false,
         //vec![],
         (10000..10002).collect(),
         vec![],

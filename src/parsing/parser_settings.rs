@@ -40,6 +40,7 @@ pub struct Maps {
 pub struct ParserSettings {
     pub only_players: bool,
     pub only_header: bool,
+    pub only_events: bool,
     pub parse_props: bool,
     pub event_name: String,
     pub no_gameevents: bool,
@@ -55,6 +56,7 @@ impl Parser {
     pub fn new(
         demo_path: String,
         parse_props: bool,
+        only_events: bool,
         wanted_ticks: Vec<i32>,
         wanted_players: Vec<u64>,
         mut wanted_props: Vec<String>,
@@ -98,6 +100,7 @@ impl Parser {
                 let settings = ParserSettings {
                     only_players: only_players,
                     only_header: only_header,
+                    only_events: only_events,
                     parse_props: parse_props,
                     event_name: event_name,
                     no_gameevents: no_gameevents,

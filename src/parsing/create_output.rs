@@ -12,6 +12,7 @@ pub use crate::parsing::variants::*;
 use derive_more::TryInto;
 use itertools::Itertools;
 use polars::df;
+use polars::export::regex::internal::Inst;
 use polars::prelude::{DataFrame, Int64Type, NamedFrom, NamedFromOwned};
 use polars::series::Series;
 
@@ -28,15 +29,11 @@ impl Parser {
         results
     }
 
-    pub fn compute_jobs_with_cache(&mut self, cache: &mut ReadCache) -> Vec<Series> {
+    pub fn compute_jobs_with_cache(&mut self, cache: &mut ReadCache) -> ParsingOutPut {
         // Need to parse players to understand cache. This is fast
         let player_results: Vec<JobResult> = self.parse_blueprints();
         let players = Players::new(&player_results);
         let ticks = self.get_wanted_ticks();
-
-        let event_ticks =
-            cache.find_game_event_ticks("player_death".to_string(), &self.maps.event_map);
-        self.parse_bytes(event_ticks);
 
         let wanted_bytes = cache.find_wanted_bytes(
             &ticks,
@@ -45,11 +42,29 @@ impl Parser {
             &self.maps.serverclass_map,
             &players,
         );
-        self.parse_bytes(wanted_bytes);
+        //println!("{}", wanted_bytes.len());
 
+        self.parse_bytes(wanted_bytes);
         let results: Vec<JobResult> = self.parse_blueprints();
-        // self.create_series(&results, &self.settings.wanted_props, &ticks, &players)
-        self.get_game_events(&results, &players, cache)
+        let before = Instant::now();
+        //println!("{}", results.len());
+        let df = self.create_series(&results, &self.settings.wanted_props, &ticks, &players);
+        //println!("{:2?}", before.elapsed());
+
+        let events = if self.settings.only_events {
+            let event_ticks =
+                cache.find_game_event_ticks("player_death".to_string(), &self.maps.event_map);
+            self.parse_bytes(event_ticks);
+            let results: Vec<JobResult> = self.parse_blueprints();
+            self.get_game_events(&results, &players, cache)
+        } else {
+            vec![]
+        };
+
+        ParsingOutPut {
+            df: df,
+            events: events,
+        }
     }
 
     fn filter_to_vec<Wanted>(v: impl IntoIterator<Item = impl TryInto<Wanted>>) -> Vec<Wanted> {
@@ -71,11 +86,6 @@ impl Parser {
     }
 
     fn series_from_events(&self, events: Vec<GameEvent>) -> Vec<Series> {
-        // Vec<GameEvent> is ~ Vec<HashMap> where each hashmap has the same keys.
-        // Transform these into one hashmap: HashMap<name, Vec<data>> and
-        // then extract each (k, v) from hashmap into Series.
-        // This is tricky due to hashmap vals being enum type and need to
-        // map to "native" datatype to create Series.
         // Example [Hashmap<"distance": 21.0>, Hashmap<"distance": 24.0>, Hashmap<"name": "Steve">]
         // ->
         // Hashmap<"distance": [21.0, 24.0], "name": ["Steve"]>,
@@ -147,7 +157,7 @@ impl Parser {
         cache: &mut ReadCache,
     ) -> Vec<Series> {
         let event_id = cache
-            .event_name_to_id(&self.settings.event_name, &self.maps.event_map)
+            .event_name_to_id(&"player_death".to_string(), &self.maps.event_map)
             .unwrap();
 
         let mut v = vec![];
@@ -177,7 +187,7 @@ impl Parser {
     ) -> Vec<Series> {
         let mut series = vec![];
         let request_per_prop = requests.iter().into_group_map_by(|x| x.prop.clone());
-
+        let before = Instant::now();
         for (name, requests) in request_per_prop {
             let mut v = vec![];
             for request in requests {
@@ -191,6 +201,7 @@ impl Parser {
             }
             series.push(Series::new(&name, v))
         }
+        println!("{:2?}", before.elapsed());
         series
     }
 
@@ -210,16 +221,18 @@ impl Parser {
         players: &Players,
     ) -> Vec<Series> {
         let mut all_series = vec![];
-        for p in props {
+        for (idx, prop) in props.iter().enumerate() {
             let (out, labels, ticks) =
-                self.find_multiple_values(&results, p.to_owned(), &ticks, &players);
+                self.find_multiple_values(&results, prop.to_owned(), &ticks, &players);
 
-            let s = Series::from_vec("yaw", out);
-            let ls = Series::from_vec("steamid", labels);
-            let ts = Series::from_vec("ticks", ticks);
+            let s = Series::from_vec(prop, out);
+            if idx == 0 {
+                let ls = Series::from_vec("steamid", labels);
+                let ts = Series::from_vec("ticks", ticks);
+                all_series.push(ls);
+                all_series.push(ts);
+            }
             all_series.push(s);
-            all_series.push(ls);
-            all_series.push(ts);
         }
         all_series
     }
@@ -301,7 +314,8 @@ impl Parser {
         ticks: &Vec<i32>,
     ) -> Vec<f32> {
         let mut output = Vec::with_capacity(ticks.len());
-
+        let before = Instant::now();
+        // Fast due to mostly sorted already
         data.sort_by_key(|x| x.1);
         data.reverse();
 
@@ -347,9 +361,6 @@ impl Parser {
             .collect();
 
         filtered_uid.sort_by_key(|x| x.1);
-        for i in &filtered_uid {
-            //println!("{:?}", i);
-        }
         self.find_wanted_value(&mut filtered_uid, tick)
     }
 

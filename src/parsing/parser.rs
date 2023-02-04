@@ -39,6 +39,11 @@ pub enum JobResult {
     None,
 }
 
+pub struct ParsingOutPut {
+    pub df: Vec<Series>,
+    pub events: Vec<Series>,
+}
+
 /*
 FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
              -> DATATABLE                  --> Game events
@@ -46,7 +51,7 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 */
 
 impl Parser {
-    pub fn start_parsing(&mut self) -> Vec<Series> {
+    pub fn start_parsing(&mut self) -> ParsingOutPut {
         match ReadCache::get_cache_if_exists(&self.bytes) {
             Some(mut cache) => {
                 // println!("Using cache");

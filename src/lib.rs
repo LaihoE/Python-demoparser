@@ -230,6 +230,7 @@ impl DemoParser {
         let parser = Parser::new(
             self.path.clone(),
             true,
+            false,
             wanted_ticks.clone(),
             wanted_players,
             real_props.clone(),
@@ -256,13 +257,14 @@ impl DemoParser {
                 };
                 parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
                 let mut ss = vec![];
-                let series_vec = parser.start_parsing();
-                let mut column_names: Vec<&str> =
-                    series_vec.iter().map(|x| x.name().clone()).collect();
-                for s in &series_vec {
+                let output = parser.start_parsing();
+
+                let column_names: Vec<&str> = output.df.iter().map(|x| x.name().clone()).collect();
+                for s in &output.df {
                     let py_series = rust_series_to_py_series(&s).unwrap();
                     ss.push(py_series);
                 }
+                println!("{:?}", column_names);
                 wanted_props.push("steamid".to_string());
                 wanted_props.push("tick".to_string());
                 let polars = py.import("polars").unwrap();
@@ -343,6 +345,7 @@ impl DemoParser {
     pub fn parse_header(&self) -> PyResult<Py<PyAny>> {
         let parser = Parser::new(
             self.path.clone(),
+            false,
             false,
             vec![],
             vec![],

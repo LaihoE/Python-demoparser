@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-use std::time::Instant;
-
 use super::demo_parsing::{GameEvent, NameDataPair};
 use super::utils::TYPEHM;
 use crate::parsing::cache::cache_reader::ReadCache;
@@ -15,6 +12,7 @@ use polars::df;
 use polars::export::regex::internal::Inst;
 use polars::prelude::{DataFrame, Int64Type, NamedFrom, NamedFromOwned};
 use polars::series::Series;
+use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub struct ExtraEventRequest {

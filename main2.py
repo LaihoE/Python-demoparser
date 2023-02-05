@@ -17,13 +17,14 @@ def coordinates(file):
     parser = DemoParser("/home/laiho/Documents/demos/mygames/match730_003449965367076585902_0881240613_184.dem")
     parser = DemoParser(file)
     before = time.time()
-    df = pd.DataFrame(parser.parse_ticks(["m_vecOrigin_X", "m_vecOrigin_Y"], ticks=[x for x in range(70000, 80001)]))
+    df2 = pd.DataFrame(parser.parse_ticks(["DT_BasePlayer.m_iFOV"], ticks=[x for x in range(80000, 80001)]))
+    df = parser.parse_events("player_death")
     print(df)
+    print(df2)
     # print(df[df["steamid"] == 76561198029122943])
     # if 76561198029122943 in df["steamid"]:
-        #print(file)
+    # print(file)
     # print(df.loc[:, ["tick","m_vecOrigin_X", "m_vecOrigin_Y"]])
-    
     # print(df)
     print(time.time() - before)
 

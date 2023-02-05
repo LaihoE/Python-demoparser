@@ -121,6 +121,7 @@ impl ReadCache {
         let dt_map = usize::from_le_bytes(data[8..16].try_into().unwrap());
         return (ge_map, dt_map);
     }
+    pub fn read_other_deltas_by_name() {}
 
     pub fn read_deltas_by_name(
         &mut self,

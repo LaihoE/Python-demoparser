@@ -136,7 +136,7 @@ impl Parser {
             let size = byte_reader.read_varint();
             // Get byte boundaries for this msg
             let before_inx = byte_reader.byte_idx.clone();
-            byte_reader.byte_idx += size as usize;
+            byte_reader.skip_n_bytes(size);
             let after_inx = byte_reader.byte_idx.clone();
             // Information needed to parse a msg, passed to threads as a "job"
             let msg_blueprint = MsgBluePrint {

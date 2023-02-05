@@ -75,7 +75,7 @@ fn main() {
     */
     use rayon::iter::ParallelIterator;
 
-    let x: Vec<i32> = single
+    let x: Vec<i32> = paths_v[..5]
         .into_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();

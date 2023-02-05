@@ -60,27 +60,66 @@ impl WriteCache {
 
         self.zip.write_all(&byt).unwrap();
     }
-    pub fn to_str_name(&mut self, sv_cls_map: &HashMap<u16, ServerClass>, idx: i32) -> String {
+    pub fn to_str_name_player_prop(
+        &mut self,
+        sv_cls_map: &HashMap<u16, ServerClass>,
+        idx: i32,
+    ) -> String {
         let player_props = &sv_cls_map.get(&40).unwrap().props;
         let prop = player_props.get(idx as usize).unwrap();
-        prop.table.to_owned() + "." + &prop.name.to_owned()
+        "player_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
     }
+    pub fn to_str_name_team_prop(
+        &mut self,
+        sv_cls_map: &HashMap<u16, ServerClass>,
+        idx: i32,
+    ) -> String {
+        let player_props = &sv_cls_map.get(&43).unwrap().props;
+        let prop = player_props.get(idx as usize).unwrap();
+        "team_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+    }
+    pub fn to_str_name_manager_prop(
+        &mut self,
+        sv_cls_map: &HashMap<u16, ServerClass>,
+        idx: i32,
+    ) -> String {
+        let player_props = &sv_cls_map.get(&41).unwrap().props;
+        let prop = player_props.get(idx as usize).unwrap();
+        "manager_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+    }
+    pub fn to_str_name_rules_prop(
+        &mut self,
+        sv_cls_map: &HashMap<u16, ServerClass>,
+        idx: i32,
+    ) -> String {
+        let player_props = &sv_cls_map.get(&39).unwrap().props;
+        let prop = player_props.get(idx as usize).unwrap();
+        "rules_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+    }
+
+    fn write_bytes_to_zip(&self, data: &Vec<(usize, i32, i32)>) {}
 
     pub fn write_packet_ents(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
         let forbidden = vec![0, 1, 2, 37, 103, 93, 59, 58, 1343, 1297, 40, 41, 26, 27];
 
-        let mut v = vec![];
+        let mut player_props = vec![];
+        let mut other_props = vec![];
+
         for p in &self.packet_ents {
             for x in &p.data {
-                if !forbidden.contains(&x.prop_inx) || x.ent_id > 64 {
-                    if x.ent_id < 64 && x.ent_id > 0 {
-                        v.push((p.byte, x.prop_inx, x.ent_id, p.tick))
+                if x.ent_id < 64 && x.ent_id > 0 {
+                    if !forbidden.contains(&x.prop_inx) {
+                        player_props.push((p.byte, x.prop_inx, x.ent_id, p.tick))
                     }
+                } else {
+                    other_props.push((p.byte, x.prop_inx, x.ent_id, p.tick))
                 }
             }
         }
+        println!("PL {}", player_props.len());
+        println!("PL {}", other_props.len());
 
-        let m = v.iter().into_group_map_by(|x| x.1);
+        let m = player_props.iter().into_group_map_by(|x| x.1);
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
 
         /*
@@ -91,11 +130,11 @@ impl WriteCache {
             match m.get(&idx) {
                 Some(g) => {
                     let prop_str_name = if idx == 10000 {
-                        "m_vecOrigin_X".to_string()
+                        "player_m_vecOrigin_X".to_string()
                     } else if idx == 10001 {
-                        "m_vecOrigin_Y".to_string()
+                        "player_m_vecOrigin_Y".to_string()
                     } else {
-                        self.to_str_name(sv_cls_map, idx)
+                        self.to_str_name_player_prop(sv_cls_map, idx)
                     };
 
                     self.zip.start_file(prop_str_name, options).unwrap();
@@ -116,6 +155,61 @@ impl WriteCache {
                 None => {}
             }
         }
+        let mut teams = vec![];
+        let mut manager = vec![];
+        let mut rules = vec![];
+
+        for field in &other_props {
+            match field.2 {
+                // TEAM
+                65 => teams.push(field),
+                66 => teams.push(field),
+                67 => teams.push(field),
+                68 => teams.push(field),
+                69 => teams.push(field),
+                // MANAGER
+                70 => manager.push(field),
+                // RULES
+                71 => rules.push(field),
+                _ => {}
+            }
+        }
+        let grouped_by_pidx = teams.iter().into_group_map_by(|x| x.1);
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
+        for (pidx, data) in grouped_by_pidx {
+            let str_name = self.to_str_name_team_prop(sv_cls_map, pidx);
+
+            self.zip.start_file(str_name, options).unwrap();
+            let mut byt = vec![];
+
+            byt.extend(data.len().to_le_bytes());
+            for t in &data {
+                byt.extend(t.0.to_le_bytes());
+            }
+            for t in &data {
+                byt.extend(t.3.to_le_bytes());
+            }
+            for t in &data {
+                byt.extend(t.2.to_le_bytes());
+            }
+
+            self.zip.write_all(&byt).unwrap();
+        }
+        /*
+        self.zip.start_file("other_props", options).unwrap();
+
+        let mut byt = vec![];
+        for field in &other_props {
+            byt.extend(field.0.to_le_bytes());
+        }
+        for field in &other_props {
+            byt.extend(field.3.to_le_bytes());
+        }
+        for field in &other_props {
+            byt.extend(field.2.to_le_bytes());
+        }
+        self.zip.write_all(&byt).unwrap();
+        */
     }
     pub fn write_string_tables(&mut self) {
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);

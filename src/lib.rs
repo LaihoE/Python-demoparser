@@ -140,7 +140,7 @@ impl DemoParser {
     pub fn py_new(demo_path: String) -> PyResult<Self> {
         Ok(DemoParser { path: demo_path })
     }
-    /*
+
     #[args(py_kwargs = "**")]
     pub fn parse_events(
         &self,
@@ -161,6 +161,7 @@ impl DemoParser {
         let parser = Parser::new(
             self.path.clone(),
             parse_props,
+            true,
             vec![],
             vec![],
             real_props,
@@ -177,29 +178,29 @@ impl DemoParser {
                 e
             ))),
             Ok(mut parser) => {
-                let _: Header = parser.parse_demo_header();
+                let h: Header = parser.parse_demo_header();
 
-                let game_events = parser.start_parsing();
-                let mut game_evs: Vec<FxHashMap<String, PyObject>> = Vec::new();
+                parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
+                let mut ss = vec![];
+                let output = parser.start_parsing();
 
-                // Create Hashmap with <string, pyobject> to be able to convert to python dict
-                for ge in game_events {
-                    if ge.id != 24 {
-                        continue;
-                    }
-                    let mut hm: FxHashMap<String, PyObject> = FxHashMap::default();
-                    let tuples = ge.to_py_tuples(py);
-                    for (k, v) in tuples {
-                        hm.insert(k, v);
-                    }
-                    game_evs.push(hm);
+                let column_names: Vec<&str> =
+                    output.events.iter().map(|x| x.name().clone()).collect();
+                for s in &output.events {
+                    let py_series = rust_series_to_py_series(&s).unwrap();
+                    ss.push(py_series);
                 }
-                let dict = pyo3::Python::with_gil(|py| game_evs.to_object(py));
-                Ok(dict)
+                //wanted_props.push("steamid".to_string());
+                //wanted_props.push("tick".to_string());
+                let polars = py.import("polars").unwrap();
+                // let all_series_py = ss.to_object(py);
+                let df = polars.call_method1("DataFrame", (ss,)).unwrap();
+                df.setattr("columns", column_names.to_object(py)).unwrap();
+                let pandas_df = df.call_method0("to_pandas").unwrap();
+                Ok(pandas_df.to_object(py))
             }
         }
     }
-    */
 
     #[args(py_kwargs = "**")]
     pub fn parse_ticks(
@@ -208,9 +209,7 @@ impl DemoParser {
         mut wanted_props: Vec<String>,
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
-        //println!("WANTED PROPS {:?}", wanted_props);
         let mut real_props = rm_user_friendly_names(&wanted_props);
-        //println!("REAL PROPS {:?}", real_props);
 
         let unk_props = check_validity_props(&real_props);
         if !unk_props.is_empty() {

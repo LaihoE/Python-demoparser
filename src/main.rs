@@ -20,7 +20,7 @@ fn parse_demo(demo_path: String) -> i32 {
     }
 
     let now = Instant::now();
-    let props_names = vec!["m_vecOrigin_X".to_string()];
+    let props_names = vec!["manager_m_iPing.004".to_string()];
 
     let mut parser = Parser::new(
         demo_path,
@@ -29,7 +29,7 @@ fn parse_demo(demo_path: String) -> i32 {
         //vec![],
         (10000..10002).collect(),
         vec![],
-        vec!["m_vecOrigin_X".to_string()],
+        vec!["manager_m_iPing.004".to_string()],
         "player_death".to_string(),
         false,
         false,

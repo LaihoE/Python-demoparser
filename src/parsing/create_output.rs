@@ -26,28 +26,68 @@ impl Parser {
         let results: Vec<JobResult> = self.parse_blueprints();
         results
     }
+    pub fn other_outputs(
+        &mut self,
+        cache: &mut ReadCache,
+        ticks: &Vec<i32>,
+        players: &Players,
+        other_props: &Vec<String>,
+    ) -> Vec<Series> {
+        // cache.read_other_deltas_by_name(&self.settings.wanted_props[0], &self.maps.serverclass_map);
+        // self.parse_bytes(wanted_bytes);
+        // let results: Vec<JobResult> = self.parse_blueprints();
+        let mut wanted_ticks = vec![];
+        for i in 0..64 {
+            let p = if i < 10 {
+                self.settings.wanted_props[0].to_owned() + &".00" + &i.to_string()
+            } else {
+                self.settings.wanted_props[0].to_owned() + &".0" + &i.to_string()
+            };
+            cache.read_other_deltas_by_name(&p, &self.maps.serverclass_map, 41);
+            wanted_ticks.extend(cache.find_delta_ticks_others(55, p, ticks, players))
+        }
+        self.parse_bytes(wanted_ticks);
+        let results: Vec<JobResult> = self.parse_blueprints();
+        let ticks = self.get_wanted_ticks();
+        self.create_series_others(&results, &other_props, &ticks, players)
+    }
 
     pub fn compute_jobs_with_cache(&mut self, cache: &mut ReadCache) -> ParsingOutPut {
         // Need to parse players to understand cache. This is fast
+
         let player_results: Vec<JobResult> = self.parse_blueprints();
         let players = Players::new(&player_results);
         let ticks = self.get_wanted_ticks();
 
+        let mut player_props = vec![];
+        let mut other_props = vec![];
+
+        for prop in &self.settings.wanted_props {
+            let p: Vec<&str> = prop.split("_").collect();
+            if p[0] == "player" {
+                player_props.push(prop.clone());
+            } else {
+                other_props.push(prop.clone());
+            }
+        }
+
         let wanted_bytes = cache.find_wanted_bytes(
             &ticks,
-            &self.settings.wanted_props,
+            &player_props,
             &players.get_uids(),
             &self.maps.serverclass_map,
             &players,
         );
-        //println!("{}", wanted_bytes.len());
 
         self.parse_bytes(wanted_bytes);
         let results: Vec<JobResult> = self.parse_blueprints();
+
+        let other_s = self.other_outputs(cache, &ticks, &players, &other_props);
+
         let before = Instant::now();
-        //println!("{}", results.len());
-        let df = self.create_series(&results, &self.settings.wanted_props, &ticks, &players);
-        println!("here {:2?}", before.elapsed());
+
+        let mut df = self.create_series(&results, &player_props, &ticks, &players);
+        df.extend(other_s);
 
         let events = if self.settings.only_events {
             let event_ticks =
@@ -140,7 +180,7 @@ impl Parser {
         for s in series {
             match s.name() {
                 "tick" => ticks.extend(s.i64().unwrap().into_no_null_iter()),
-                //"userid" => userids.extend(s.i64().unwrap().into_no_null_iter()),
+                // "userid" => userids.extend(s.i64().unwrap().into_no_null_iter()),
                 "attacker" => attackers.extend(s.i64().unwrap().into_no_null_iter()),
                 _ => {}
             }
@@ -234,6 +274,29 @@ impl Parser {
         }
         all_series
     }
+    fn create_series_others(
+        &self,
+        results: &Vec<JobResult>,
+        props: &Vec<String>,
+        ticks: &Vec<i32>,
+        players: &Players,
+    ) -> Vec<Series> {
+        let mut all_series = vec![];
+        for (idx, prop) in props.iter().enumerate() {
+            let (out, labels, ticks) =
+                self.find_other_values(&results, prop.to_owned(), &ticks, &players);
+
+            let s = Series::from_vec(prop, out);
+            if idx == 477840 {
+                let ls = Series::from_vec("steamid", labels);
+                let ts = Series::from_vec("ticks", ticks);
+                all_series.push(ls);
+                all_series.push(ts);
+            }
+            all_series.push(s);
+        }
+        all_series
+    }
 
     pub fn filter_jobs_by_pidx(
         &self,
@@ -248,35 +311,116 @@ impl Parser {
             }
         }
 
-        let mut vector = vec![];
+        //let prop_type = TYPEHM.get(&prop_name[..&prop_name.len() - 4]).unwrap();
         let prop_type = TYPEHM.get(&prop_name).unwrap();
+
+        let prefix: Vec<&str> = prop_name.split("_").collect();
+
+        let wanted_entid_type = match prefix[0] {
+            "player" => 0,
+            "team" => 1,
+            "manager" => 2,
+            "rules" => 3,
+            _ => panic!("unknown prefix: {}", prefix[0]),
+        };
+        let mut vector = vec![];
+
         for pe in v {
             match prop_type {
-                0 => self.match_int(pe, prop_idx, &mut vector),
-                1 => self.match_float(pe, prop_idx, &mut vector),
+                0 => self.match_int(pe, prop_idx, &mut vector, wanted_entid_type),
+                1 => self.match_float(pe, prop_idx, &mut vector, wanted_entid_type),
                 // 2 => self.match_str(pe, prop_idx, &mut vector),
                 _ => panic!("Unsupported prop type: {}", prop_type),
             }
         }
-        vector
+        //println!("{:?}", vector);
+        return vector;
     }
     #[inline(always)]
-    pub fn match_float(&self, pe: &PacketEntsOutput, pidx: i32, v: &mut Vec<(f32, i32, i32)>) {
+    pub fn match_float(
+        &self,
+        pe: &PacketEntsOutput,
+        pidx: i32,
+        v: &mut Vec<(f32, i32, i32)>,
+        wanted_entid_type: i32,
+    ) {
         for x in &pe.data {
-            if x.prop_inx == pidx && x.ent_id < 64 {
-                if let PropData::F32(f) = x.data {
-                    v.push((f, pe.tick, x.ent_id));
+            match wanted_entid_type {
+                0 => {
+                    if x.prop_inx == pidx && x.ent_id < 64 {
+                        if let PropData::F32(f) = x.data {
+                            v.push((f, pe.tick, x.ent_id));
+                        }
+                    }
                 }
+                1 => {
+                    if x.prop_inx == pidx && x.ent_id > 64 && x.ent_id < 70 {
+                        if let PropData::F32(f) = x.data {
+                            v.push((f, pe.tick, x.ent_id));
+                        }
+                    }
+                }
+                2 => {
+                    if x.prop_inx == pidx && x.ent_id == 70 {
+                        if let PropData::F32(f) = x.data {
+                            v.push((f, pe.tick, x.ent_id));
+                        }
+                    }
+                }
+                3 => {
+                    if x.prop_inx == pidx && x.ent_id == 71 {
+                        if let PropData::F32(f) = x.data {
+                            v.push((f, pe.tick, x.ent_id));
+                        }
+                    }
+                }
+                _ => panic!(":/"),
             }
         }
     }
     #[inline(always)]
-    pub fn match_int(&self, pe: &PacketEntsOutput, pidx: i32, v: &mut Vec<(f32, i32, i32)>) {
+    pub fn match_int(
+        &self,
+        pe: &PacketEntsOutput,
+        pidx: i32,
+        v: &mut Vec<(f32, i32, i32)>,
+        wanted_entid_type: i32,
+    ) {
         for x in &pe.data {
-            if x.prop_inx == pidx && x.ent_id < 64 {
-                if let PropData::I32(i) = x.data {
-                    v.push((i as f32, pe.tick, x.ent_id));
+            match wanted_entid_type {
+                0 => {
+                    if x.prop_inx == pidx && x.ent_id < 64 {
+                        if let PropData::I32(f) = x.data {
+                            v.push((f as f32, pe.tick, x.ent_id));
+                        }
+                    }
                 }
+                1 => {
+                    if x.prop_inx == pidx && x.ent_id > 64 && x.ent_id < 70 {
+                        if let PropData::I32(f) = x.data {
+                            v.push((f as f32, pe.tick, x.ent_id));
+                        }
+                    }
+                }
+                2 => {
+                    if x.ent_id == 70 {
+                        //println!("{} == {} entid: {}", x.prop_inx, pidx, x.ent_id);
+                    }
+
+                    if x.prop_inx == pidx && x.ent_id == 70 {
+                        if let PropData::I32(f) = x.data {
+                            v.push((f as f32, pe.tick, x.ent_id));
+                        }
+                    }
+                }
+                3 => {
+                    if x.prop_inx == pidx && x.ent_id == 71 {
+                        if let PropData::I32(f) = x.data {
+                            v.push((f as f32, pe.tick, x.ent_id));
+                        }
+                    }
+                }
+                _ => panic!(":/"),
             }
         }
     }
@@ -325,21 +469,99 @@ impl Parser {
         }
         output
     }
+    pub fn find_wanted_values2(
+        &self,
+        data: &mut Vec<(f32, i32, i32)>,
+        ticks: &Vec<i32>,
+    ) -> Vec<f32> {
+        if data.len() == 0 {
+            return vec![];
+        }
+        let mut output = Vec::with_capacity(ticks.len());
+        // Fast due to mostly sorted already
+        data.sort_by_key(|x| x.1);
 
-    pub fn str_name_to_idx(&self, str_name: String) -> Option<i32> {
-        if str_name == "m_vecOrigin_X" {
-            return Some(10000);
-        }
-        if str_name == "m_vecOrigin_Y" {
-            return Some(10001);
-        }
-        let sv_map = self.maps.serverclass_map.get(&40).unwrap();
-        for (idx, prop) in sv_map.props.iter().enumerate() {
-            if prop.table.to_owned() + "." + &prop.name.to_owned() == str_name {
-                return Some(idx as i32);
+        for tick in ticks {
+            let idx = data.partition_point(|x| x.1 <= *tick);
+            if idx > 0 {
+                output.push(data[idx - 1].0);
+            } else {
+                output.push(data[0].0);
             }
         }
-        None
+        output
+    }
+
+    pub fn str_name_to_idx(&self, str_name: String) -> Option<i32> {
+        let prefix: Vec<&str> = str_name.split("_").collect();
+        match prefix[0] {
+            "player" => {
+                if str_name == "player_m_vecOrigin_X" {
+                    return Some(10000);
+                }
+                if str_name == "player_m_vecOrigin_Y" {
+                    return Some(10001);
+                }
+                let sv_map = self.maps.serverclass_map.get(&40).unwrap();
+                for (idx, prop) in sv_map.props.iter().enumerate() {
+                    if prop.table.to_owned() + "." + &prop.name.to_owned() == str_name {
+                        return Some(idx as i32);
+                    }
+                }
+                return None;
+            }
+            "manager" => {
+                let sv_map = self.maps.serverclass_map.get(&41).unwrap();
+                for (idx, prop) in sv_map.props.iter().enumerate() {
+                    /*
+                    println!(
+                        "{} == {}",
+                        "manager_".to_string()
+                            + &prop.table.to_owned()
+                            + "."
+                            + &prop.name.to_owned(),
+                        str_name
+                    );
+                    */
+                    if "manager_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+                        == str_name
+                    {
+                        return Some(idx as i32);
+                    }
+                }
+                return None;
+            }
+            "rules" => {
+                let sv_map = self.maps.serverclass_map.get(&39).unwrap();
+                for (idx, prop) in sv_map.props.iter().enumerate() {
+                    /*
+                    println!(
+                        "{} == {}",
+                        "rules_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned(),
+                        str_name
+                    );
+                    */
+                    if "rules_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+                        == str_name
+                    {
+                        return Some(idx as i32);
+                    }
+                }
+                return None;
+            }
+            "team" => {
+                let sv_map = self.maps.serverclass_map.get(&43).unwrap();
+                for (idx, prop) in sv_map.props.iter().enumerate() {
+                    if "team_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+                        == str_name
+                    {
+                        return Some(idx as i32);
+                    }
+                }
+                return None;
+            }
+            _ => panic!("UNKOWN PREFIX: {}", prefix[0]),
+        }
     }
     pub fn find_one_value(
         &self,
@@ -358,6 +580,48 @@ impl Parser {
 
         filtered_uid.sort_by_key(|x| x.1);
         self.find_wanted_value(&mut filtered_uid, tick)
+    }
+    pub fn find_other_values(
+        &self,
+        results: &Vec<JobResult>,
+        prop_name: String,
+        ticks: &Vec<i32>,
+        players: &Players,
+    ) -> (Vec<f32>, Vec<u64>, Vec<i32>) {
+        let mut v = vec![];
+        for i in 0..13 {
+            let p = if i < 10 {
+                prop_name.to_owned() + &".00" + &i.to_string()
+            } else {
+                prop_name.to_owned() + &".0" + &i.to_string()
+            };
+            let idx = self.str_name_to_idx(p.clone()).unwrap();
+            let mut filtered = self.filter_jobs_by_pidx(results, idx, &prop_name);
+            filtered.sort_by_key(|x| x.1);
+
+            let map = players.entid_to_uid(i, 50000);
+            match map {
+                Some(uid) => {
+                    let out = self.find_wanted_values2(&mut filtered, &ticks);
+                    let s = players.uid_to_steamid(uid).unwrap();
+                    v.push((s, out));
+                }
+                None => {}
+            }
+        }
+        let mut out = vec![];
+        let mut ids = vec![];
+        let mut out_ticks = vec![];
+
+        v.sort_by_key(|x| x.0);
+        for t in v {
+            if t.1.len() > 0 && t.0 != 0 {
+                out.extend(t.1);
+                ids.extend(vec![t.0; ticks.len()]);
+                out_ticks.extend(ticks.clone());
+            }
+        }
+        (out, ids, out_ticks)
     }
 
     #[inline(always)]

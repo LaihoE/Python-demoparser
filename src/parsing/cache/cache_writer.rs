@@ -97,7 +97,41 @@ impl WriteCache {
         "rules_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
     }
 
-    fn write_bytes_to_zip(&self, data: &Vec<(usize, i32, i32)>) {}
+    fn write_bytes_to_zip(&mut self, data: &Vec<&&(usize, i32, i32, i32)>, name: &String) {
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
+        self.zip.start_file(name, options).unwrap();
+        let mut byt = vec![];
+        byt.extend(data.len().to_le_bytes());
+        for t in data {
+            byt.extend(t.0.to_le_bytes());
+        }
+        for t in data {
+            byt.extend(t.3.to_le_bytes());
+        }
+        for t in data {
+            byt.extend(t.2.to_le_bytes());
+        }
+        self.zip.write_all(&byt).unwrap();
+    }
+    fn write_player_bytes_to_zip(&mut self, data: &Vec<&(usize, i32, i32, i32)>, name: &String) {
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
+        self.zip.start_file(name, options).unwrap();
+        let mut byt = vec![];
+        byt.extend(data.len().to_le_bytes());
+
+        for (idx, t) in data.iter().enumerate() {
+            byt.extend(t.0.to_le_bytes());
+        }
+
+        for t in data {
+            byt.extend(t.3.to_le_bytes());
+        }
+
+        for (idx, t) in data.iter().enumerate() {
+            byt.extend(t.2.to_le_bytes());
+        }
+        self.zip.write_all(&byt).unwrap();
+    }
 
     pub fn write_packet_ents(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
         let forbidden = vec![0, 1, 2, 37, 103, 93, 59, 58, 1343, 1297, 40, 41, 26, 27];
@@ -120,7 +154,6 @@ impl WriteCache {
         println!("PL {}", other_props.len());
 
         let m = player_props.iter().into_group_map_by(|x| x.1);
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
 
         /*
         Write data per prop. Also use SoA form for ~3x size reduction.
@@ -128,7 +161,7 @@ impl WriteCache {
 
         for idx in 0..11000 {
             match m.get(&idx) {
-                Some(g) => {
+                Some(data) => {
                     let prop_str_name = if idx == 10000 {
                         "player_m_vecOrigin_X".to_string()
                     } else if idx == 10001 {
@@ -136,21 +169,7 @@ impl WriteCache {
                     } else {
                         self.to_str_name_player_prop(sv_cls_map, idx)
                     };
-
-                    self.zip.start_file(prop_str_name, options).unwrap();
-                    let mut byt = vec![];
-                    byt.extend(g.len().to_le_bytes());
-                    for t in g {
-                        byt.extend(t.0.to_le_bytes());
-                    }
-                    for t in g {
-                        byt.extend(t.3.to_le_bytes());
-                    }
-                    for t in g {
-                        byt.extend(t.2.to_le_bytes());
-                    }
-
-                    self.zip.write_all(&byt).unwrap();
+                    self.write_player_bytes_to_zip(data, &prop_str_name)
                 }
                 None => {}
             }
@@ -174,27 +193,10 @@ impl WriteCache {
                 _ => {}
             }
         }
-        let grouped_by_pidx = teams.iter().into_group_map_by(|x| x.1);
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
-        for (pidx, data) in grouped_by_pidx {
-            let str_name = self.to_str_name_team_prop(sv_cls_map, pidx);
+        self.write_others(teams, sv_cls_map, "teams");
+        self.write_others(manager, sv_cls_map, "manager");
+        self.write_others(rules, sv_cls_map, "rules");
 
-            self.zip.start_file(str_name, options).unwrap();
-            let mut byt = vec![];
-
-            byt.extend(data.len().to_le_bytes());
-            for t in &data {
-                byt.extend(t.0.to_le_bytes());
-            }
-            for t in &data {
-                byt.extend(t.3.to_le_bytes());
-            }
-            for t in &data {
-                byt.extend(t.2.to_le_bytes());
-            }
-
-            self.zip.write_all(&byt).unwrap();
-        }
         /*
         self.zip.start_file("other_props", options).unwrap();
 
@@ -210,6 +212,23 @@ impl WriteCache {
         }
         self.zip.write_all(&byt).unwrap();
         */
+    }
+    fn write_others(
+        &mut self,
+        data: Vec<&(usize, i32, i32, i32)>,
+        sv_cls_map: &HashMap<u16, ServerClass>,
+        write_type: &str,
+    ) {
+        let grouped_by_pidx = data.iter().into_group_map_by(|x| x.1);
+        for (pidx, data) in grouped_by_pidx {
+            let str_name = match write_type {
+                "teams" => self.to_str_name_team_prop(sv_cls_map, pidx),
+                "manager" => self.to_str_name_manager_prop(sv_cls_map, pidx),
+                "rules" => self.to_str_name_rules_prop(sv_cls_map, pidx),
+                _ => panic!("unkown write type"),
+            };
+            self.write_bytes_to_zip(&data, &str_name);
+        }
     }
     pub fn write_string_tables(&mut self) {
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);

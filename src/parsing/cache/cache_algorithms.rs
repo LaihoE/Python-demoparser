@@ -52,13 +52,45 @@ impl ReadCache {
     ) -> Vec<u64> {
         let mut wanted_bytes = vec![];
         for prop in props {
-            self.read_deltas_by_name(prop, &svc_map);
-            for uid in uids {
-                wanted_bytes.extend(self.find_delta_ticks(*uid, prop.to_owned(), &ticks, &players));
+            let prefix: Vec<&str> = prop.split("_").collect();
+
+            match prefix[0] {
+                "player" => {
+                    self.read_deltas_by_name(prop, &svc_map);
+                    for uid in uids {
+                        wanted_bytes.extend(self.find_delta_ticks(
+                            *uid,
+                            prop.to_owned(),
+                            &ticks,
+                            &players,
+                        ));
+                    }
+                }
+                "rules" => self.read_other_deltas_by_name(prop, &svc_map, 39),
+                "manager" => self.read_other_deltas_by_name(prop, &svc_map, 41),
+                "team" => self.read_other_deltas_by_name(prop, &svc_map, 43),
+                _ => panic!("unknown prop prefix {:?}", prefix[0]),
             }
         }
         // Unique bytes
         wanted_bytes.iter().map(|x| x.clone()).unique().collect()
+    }
+
+    pub fn find_delta_ticks_others(
+        &mut self,
+        userid: u32,
+        prop_name: String,
+        wanted_ticks: &Vec<i32>,
+        players: &Players,
+    ) -> Vec<u64> {
+        // println!("Looking for: {:?}", prop_name);
+        let x = match self.deltas.get(&prop_name) {
+            Some(x) => {
+                let t: Vec<u64> = x.iter().map(|x| x.byte).collect();
+                return t;
+            }
+            None => return vec![],
+        };
     }
 
     pub fn find_delta_ticks(
@@ -125,9 +157,6 @@ impl ReadCache {
                 bin.push(sorted_ticks[0].0);
             }
         }
-        // println!("1 {:?}", wanted_bytes);
-        // println!("2 {:?}", bin);
-        // println!("  {:?}", wanted_ticks);
         bin
     }
 

@@ -210,7 +210,7 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
         let mut real_props = rm_user_friendly_names(&wanted_props);
-
+        println!("REAL {:?}", real_props);
         let unk_props = check_validity_props(&real_props);
         if !unk_props.is_empty() {
             return Err(PyKeyError::new_err(format!(

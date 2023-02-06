@@ -88,7 +88,6 @@ impl Parser {
         let mut entity_id: i32 = -1;
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var()? as i32);
-            //println!("{}", entity_id);
 
             if entity_id > 71 {
                 break;
@@ -139,8 +138,11 @@ pub fn parse_indicies(b: &mut MyBitreader) -> SmallVec<[i32; 64]> {
     For example Player serverclass (id=40) with index 20 gives m_angEyeAngles[0]
     */
     let mut val = -1;
+    let before = b.reader.bits_remaining().unwrap();
+    let p = b.reader.peek(54);
     let new_way = b.read_boolie().unwrap();
     let mut indicies: SmallVec<[_; 64]> = SmallVec::<[i32; 64]>::new();
+
     loop {
         val = b.read_inx(val, new_way).unwrap();
         if val == -1 {
@@ -148,6 +150,7 @@ pub fn parse_indicies(b: &mut MyBitreader) -> SmallVec<[i32; 64]> {
         }
         indicies.push(val);
     }
+
     indicies
 }
 #[inline(always)]
@@ -158,9 +161,8 @@ pub fn parse_ent_props(
     tick: i32,
 ) -> Vec<SingleEntOutput> {
     let cls_id = get_cls_id(entity_id);
-    let m = sv_cls_map;
-
-    let sv_cls = m.get(&cls_id).unwrap();
+    let svc_map = sv_cls_map;
+    let sv_cls = svc_map.get(&cls_id).unwrap();
     let indicies = parse_indicies(b);
 
     let mut props: Vec<SingleEntOutput> = vec![];

@@ -53,9 +53,8 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 impl Parser {
     pub fn start_parsing(&mut self) -> ParsingOutPut {
         match ReadCache::get_cache_if_exists(&self.bytes) {
+            // CACHE FOUND
             Some(mut cache) => {
-                // println!("Using cache");
-                // Bytes where our wanted ticks start
                 let wanted_bytes = cache.get_player_messages();
                 self.parse_bytes(wanted_bytes);
                 let jobresults = self.compute_jobs_with_cache(&mut cache);

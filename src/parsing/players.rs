@@ -7,7 +7,7 @@ use itertools::{Itertools, Unique};
 pub struct Players {
     pub players: Vec<UserInfo>,
     pub uid_to_eid: HashMap<u32, Vec<Connection>>,
-    pub sid_to_eid: HashMap<u64, Vec<Connection>>,
+    pub sid_to_entid: HashMap<u64, Vec<Connection>>,
     pub uid_to_steamid: HashMap<u32, u64>,
     pub uid_to_name: HashMap<u32, String>,
     //pub eid_to_uid: HashMap<u32>
@@ -45,11 +45,10 @@ impl Players {
                 _ => {}
             }
         }
-
+        let mut sid_to_entid = HashMap::default();
         let mut uid_to_entid = HashMap::default();
         let mut uid_to_steamid = HashMap::default();
         let mut uid_to_name = HashMap::default();
-        let mut sid_to_eid = HashMap::default();
         let mut eid_to_uid = HashMap::default();
         let mut steamids = HashSet::default();
         let mut uids = HashSet::default();
@@ -81,6 +80,14 @@ impl Players {
                     byte: player.byte,
                     tick: player.tick,
                 });
+            sid_to_entid
+                .entry(player.xuid)
+                .or_insert(vec![])
+                .push(Connection {
+                    entid: player.entity_id,
+                    byte: player.byte,
+                    tick: player.tick,
+                });
 
             eid_to_uid
                 .entry(player.entity_id)
@@ -101,6 +108,7 @@ impl Players {
             if v.len() == 1 {
                 is_easy[k as usize] = true;
                 eid_to_sid_easy[k as usize] = eid_to_sid_simple[&k];
+            } else {
             }
         }
         for (k, v) in overlap_uid {
@@ -114,7 +122,7 @@ impl Players {
             uid_to_eid: uid_to_entid,
             uid_to_steamid: uid_to_steamid,
             uid_to_name: uid_to_name,
-            sid_to_eid: sid_to_eid,
+            sid_to_entid: sid_to_entid,
             steamids: steamids,
             uids: uids,
             entid_to_uid: eid_to_uid,
@@ -123,6 +131,24 @@ impl Players {
             is_easy_uid: is_easy_uid,
         }
     }
+
+    #[inline(always)]
+    pub fn sid_to_entid(&self, sid: u64, tick: i32) -> Option<u32> {
+        match self.sid_to_entid.get(&sid) {
+            None => {
+                return None;
+            }
+            Some(player_mapping) => {
+                for mapping in player_mapping.windows(2) {
+                    if mapping[1].tick > tick && mapping[0].tick <= tick {
+                        return Some(mapping[0].entid);
+                    }
+                }
+                return Some(player_mapping.last().unwrap().entid);
+            }
+        }
+    }
+
     pub fn uid_to_entid(&self, uid: u32, byte: usize) -> Option<u32> {
         match self.uid_to_eid.get(&uid) {
             None => None, //panic!("NO USERID MAPPING TO ENTID: {}", uid),

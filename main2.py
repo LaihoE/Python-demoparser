@@ -12,30 +12,30 @@ import matplotlib.pyplot as plt
 
 
 def coordinates(file):
-    print(file)
+    #print(file)
     before = time.time()
     parser = DemoParser("/home/laiho/Documents/demos/mygames/match730_003449965367076585902_0881240613_184.dem")
     parser = DemoParser(file)
     before = time.time()
-    df2 = pd.DataFrame(parser.parse_ticks(["manager_m_iMatchStats_EnemiesFlashed_Total", "player_m_vecOrigin_X"], ticks=[x for x in range(80000, 80001)]))
+    df2 = pd.DataFrame(parser.parse_ticks(["manager_m_iMatchStats_EnemiesFlashed_Total"], ticks=[x for x in range(80000, 80001)]))
     #df = parser.parse_events("player_death")
     #print(df)
-    print(df2)
+    #print(df2)
     # print(df[df["steamid"] == 76561198029122943])
     # if 76561198029122943 in df["steamid"]:
     # print(file)
     # print(df.loc[:, ["tick","m_vecOrigin_X", "m_vecOrigin_Y"]])
     # print(df)
-    print(time.time() - before)
+    # print(time.time() - before)
 
 
 if __name__ == "__main__":
     import numpy as np
     # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[:1]
-    # files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5]
-    files = glob.glob("/home/laiho/Documents/demos/mygames/*")[15:16]
+    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5]
+    # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[15:16]
     # print(files)
-    with mp.Pool(processes=12) as pool:
+    with mp.Pool(processes=6) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(
             coordinates, files), total=len(files)))
     a = np.concatenate(results)

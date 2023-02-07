@@ -20,7 +20,7 @@ fn parse_demo(demo_path: String) -> i32 {
     }
 
     let now = Instant::now();
-    let props_names = vec!["manager_m_iPing.004".to_string()];
+    let props_names = vec!["manager_m_iKills".to_string()];
 
     let mut parser = Parser::new(
         demo_path,
@@ -29,7 +29,7 @@ fn parse_demo(demo_path: String) -> i32 {
         //vec![],
         (10000..10002).collect(),
         vec![],
-        vec!["manager_m_iPing.004".to_string()],
+        vec!["manager_m_iKills".to_string()],
         "player_death".to_string(),
         false,
         false,
@@ -62,7 +62,7 @@ fn main() {
     }
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(12)
+        .num_threads(6)
         .build_global()
         .unwrap();
 
@@ -75,8 +75,8 @@ fn main() {
     */
     use rayon::iter::ParallelIterator;
 
-    let x: Vec<i32> = paths_v[..5]
-        .into_iter()
+    let x: Vec<i32> = paths_v
+        .into_par_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();
 

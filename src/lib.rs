@@ -210,7 +210,7 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
         let mut real_props = rm_user_friendly_names(&wanted_props);
-        println!("REAL {:?}", real_props);
+
         let unk_props = check_validity_props(&real_props);
         if !unk_props.is_empty() {
             return Err(PyKeyError::new_err(format!(
@@ -263,7 +263,7 @@ impl DemoParser {
                     let py_series = rust_series_to_py_series(&s).unwrap();
                     ss.push(py_series);
                 }
-                println!("{:?}", column_names);
+
                 wanted_props.push("steamid".to_string());
                 wanted_props.push("tick".to_string());
                 let polars = py.import("polars").unwrap();

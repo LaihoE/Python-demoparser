@@ -97,7 +97,7 @@ impl ReadCache {
 
     pub fn get_player_messages(&mut self) -> Vec<u64> {
         self.read_stringtables();
-        self.read_game_events();
+        // self.read_game_events();
 
         let (ge_start, dt_start) = self.read_maps();
         let mut wanted_bytes = vec![];
@@ -169,14 +169,17 @@ impl ReadCache {
         assert_eq!(number_structs, entids.len());
         assert_eq!(number_structs, ticks.len());
 
-        let p: Vec<&str> = wanted_name.split("_").collect();
+        let p: Vec<&str> = wanted_name.split("@").collect();
+        let dot: Vec<&str> = wanted_name.split(".").collect();
+        let table_name_temp: Vec<&str> = p[1].split(".").collect();
+        let table_name = table_name_temp[0];
+        let prop_n = dot[dot.len() - 1];
         let prefix = p[0];
 
         let p = &sv_cls_map[&cls_id];
         for prop in &p.props {
-            let key =
-                prefix.to_string() + "_" + &prop.table.to_owned() + "." + &prop.name.to_owned();
-            if !self.deltas.contains_key(&key) {
+            if &prop.table == table_name && &prop.name == prop_n {
+                let key = prefix.to_owned() + "@" + &prop.table + "." + &prop.name;
                 self.deltas.insert(key, vec![]);
             }
         }

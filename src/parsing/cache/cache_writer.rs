@@ -67,7 +67,7 @@ impl WriteCache {
     ) -> String {
         let player_props = &sv_cls_map.get(&40).unwrap().props;
         let prop = player_props.get(idx as usize).unwrap();
-        "player_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+        "player@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
     }
     pub fn to_str_name_team_prop(
         &mut self,
@@ -76,7 +76,7 @@ impl WriteCache {
     ) -> String {
         let player_props = &sv_cls_map.get(&43).unwrap().props;
         let prop = player_props.get(idx as usize).unwrap();
-        "team_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+        "team@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
     }
     pub fn to_str_name_manager_prop(
         &mut self,
@@ -85,7 +85,7 @@ impl WriteCache {
     ) -> String {
         let player_props = &sv_cls_map.get(&41).unwrap().props;
         let prop = player_props.get(idx as usize).unwrap();
-        "manager_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+        "manager@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
     }
     pub fn to_str_name_rules_prop(
         &mut self,
@@ -94,7 +94,7 @@ impl WriteCache {
     ) -> String {
         let player_props = &sv_cls_map.get(&39).unwrap().props;
         let prop = player_props.get(idx as usize).unwrap();
-        "rules_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+        "rules@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
     }
 
     fn write_bytes_to_zip(&mut self, data: &Vec<&&(usize, i32, i32, i32)>, name: &String) {

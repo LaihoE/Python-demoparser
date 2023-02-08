@@ -12,30 +12,35 @@ import matplotlib.pyplot as plt
 
 
 def coordinates(file):
-    #print(file)
-    before = time.time()
-    parser = DemoParser("/home/laiho/Documents/demos/mygames/match730_003449965367076585902_0881240613_184.dem")
+
     parser = DemoParser(file)
-    before = time.time()
-    df2 = pd.DataFrame(parser.parse_ticks(["manager_m_iMatchStats_EnemiesFlashed_Total"], ticks=[x for x in range(80000, 80001)]))
-    #df = parser.parse_events("player_death")
-    #print(df)
-    #print(df2)
-    # print(df[df["steamid"] == 76561198029122943])
-    # if 76561198029122943 in df["steamid"]:
-    # print(file)
-    # print(df.loc[:, ["tick","m_vecOrigin_X", "m_vecOrigin_Y"]])
-    # print(df)
-    # print(time.time() - before)
+    df2 = pd.DataFrame(parser.parse_ticks(["manager@m_iKills"], ticks=[x for x in range(40000, 40001)]))
 
 
 if __name__ == "__main__":
     import numpy as np
     # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[:1]
-    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5]
+    # files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5]
     # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[15:16]
     # print(files)
-    with mp.Pool(processes=6) as pool:
+    files = glob.glob("/home/laiho/Documents/demos/mygames/*")#[80:81]
+    # files = glob.glob("/home/laiho/Documents/demos/ow/*")
+
+    with mp.Pool(processes=12) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(
             coordinates, files), total=len(files)))
     a = np.concatenate(results)
+
+
+"""
+0  76561198055893769  40000               8.0
+1  76561198134270402  40000               1.0
+2  76561198189245325  40000               7.0
+3  76561198211930059  40000               1.0
+4  76561198272632133  40000               3.0
+5  76561198362125234  40000               3.0
+6  76561198980562947  40000               1.0
+7  76561199005454535  40000               2.0
+8  76561199029155762  40000               3.0
+9  76561199066169302  40000               6.0
+"""

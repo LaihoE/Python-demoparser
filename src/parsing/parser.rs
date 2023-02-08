@@ -5,6 +5,7 @@ use crate::parsing::parser_settings::*;
 pub use crate::parsing::variants::*;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
+use itertools::Itertools;
 use memmap2::Mmap;
 use polars::series::Series;
 use rayon::iter::ParallelIterator;
@@ -92,7 +93,7 @@ impl Parser {
         match blueprint.msg {
             12 => Parser::create_string_table(blueprint, bytes),
             13 => Parser::update_string_table_msg(blueprint, bytes),
-            25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
+            //25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
             26 => Parser::parse_packet_entities(blueprint, bytes, serverclass_map),
             //26 => Parser::parse_packet_entities_indicies(blueprint, bytes, serverclass_map),
             _ => JobResult::None,
@@ -100,7 +101,8 @@ impl Parser {
     }
     #[inline(always)]
     pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>) {
-        let byte_readers = ByteReader::get_byte_readers(&self.bytes, wanted_bytes);
+        let uniq_bytes: Vec<&u64> = wanted_bytes.iter().dedup().collect();
+        let byte_readers = ByteReader::get_byte_readers(&self.bytes, uniq_bytes);
 
         for mut byte_reader in byte_readers {
             let mut frames_parsed = 0;

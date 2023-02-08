@@ -86,8 +86,24 @@ impl ReadCache {
         // println!("Looking for: {:?}", prop_name);
         let x = match self.deltas.get(&prop_name) {
             Some(x) => {
-                let t: Vec<u64> = x.iter().map(|x| x.byte).collect();
-                return t;
+                let mut last_idx = 0;
+                let mut out_bytes = vec![];
+
+                if x.len() == 0 {
+                    return vec![];
+                }
+
+                for wanted_tick in wanted_ticks {
+                    for j in x[last_idx..].windows(2) {
+                        last_idx += 1;
+                        if j[0].tick <= *wanted_tick && j[1].tick > *wanted_tick {
+                            out_bytes.push(j[0].byte);
+                            break;
+                        }
+                    }
+                    out_bytes.push(x[x.len() - 1].byte)
+                }
+                return out_bytes;
             }
             None => return vec![],
         };

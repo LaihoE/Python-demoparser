@@ -40,7 +40,7 @@ impl Parser {
         let mut wanted_ticks = vec![];
 
         for prop in other_props {
-            for i in 0..64 {
+            for i in 0..16 {
                 let p = if i < 10 {
                     prop.to_owned() + &".00" + &i.to_string()
                 } else {
@@ -50,6 +50,7 @@ impl Parser {
                 wanted_ticks.extend(cache.find_delta_ticks_others(55, p, ticks, players))
             }
         }
+        wanted_ticks.sort();
 
         self.parse_bytes(wanted_ticks);
         let results: Vec<JobResult> = self.parse_blueprints();
@@ -321,7 +322,7 @@ impl Parser {
         //let prop_type = TYPEHM.get(&prop_name[..&prop_name.len() - 4]).unwrap();
         let prop_type = TYPEHM.get(&prop_name).unwrap();
 
-        let prefix: Vec<&str> = prop_name.split("_").collect();
+        let prefix: Vec<&str> = prop_name.split("@").collect();
 
         let wanted_entid_type = match prefix[0] {
             "player" => 0,
@@ -539,7 +540,7 @@ impl Parser {
     }
 
     pub fn str_name_to_first_idx(&self, str_name: String) -> Option<i32> {
-        let prefix: Vec<&str> = str_name.split("_").collect();
+        let prefix: Vec<&str> = str_name.split("@").collect();
         match prefix[0] {
             "player" => {
                 panic!("PLAYER IN ARRAY IDX FUNC");
@@ -547,7 +548,7 @@ impl Parser {
             "manager" => {
                 let sv_map = self.maps.serverclass_map.get(&41).unwrap();
                 for (idx, prop) in sv_map.props.iter().enumerate() {
-                    if "manager_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+                    if "manager@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
                         == str_name.to_owned() + &".000"
                     {
                         return Some(idx as i32);
@@ -565,7 +566,7 @@ impl Parser {
                         str_name
                     );
                     */
-                    if "rules_".to_string()
+                    if "rules@".to_string()
                         + &prop.table.to_owned()
                         + "."
                         + &prop.name.to_owned()
@@ -580,7 +581,7 @@ impl Parser {
             "team" => {
                 let sv_map = self.maps.serverclass_map.get(&43).unwrap();
                 for (idx, prop) in sv_map.props.iter().enumerate() {
-                    if "team_".to_string()
+                    if "team@".to_string()
                         + &prop.table.to_owned()
                         + "."
                         + &prop.name.to_owned()
@@ -597,13 +598,13 @@ impl Parser {
     }
 
     pub fn str_name_to_idx(&self, str_name: String) -> Option<i32> {
-        let prefix: Vec<&str> = str_name.split("_").collect();
+        let prefix: Vec<&str> = str_name.split("@").collect();
         match prefix[0] {
             "player" => {
-                if str_name == "player_m_vecOrigin_X" {
+                if str_name == "player@m_vecOrigin_X" {
                     return Some(10000);
                 }
-                if str_name == "player_m_vecOrigin_Y" {
+                if str_name == "player@m_vecOrigin_Y" {
                     return Some(10001);
                 }
                 let sv_map = self.maps.serverclass_map.get(&40).unwrap();

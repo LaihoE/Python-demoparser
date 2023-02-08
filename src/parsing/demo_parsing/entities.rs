@@ -168,9 +168,11 @@ pub fn parse_ent_props(
     let mut props: Vec<SingleEntOutput> = vec![];
 
     for idx in indicies {
+        if idx as usize > sv_cls.props.len() {
+            println!(">>> {}", entity_id);
+        }
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
-
         match pdata {
             PropData::VecXY(v) => {
                 // Extract vec into their own props

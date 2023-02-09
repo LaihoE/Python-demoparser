@@ -65,6 +65,8 @@ impl Parser {
             None => {
                 self.parse_bytes(vec![]);
                 let jobresults = self.compute_jobs_no_cache();
+                println!("{:?}", jobresults.len());
+
                 let cache_path = ReadCache::get_cache_path(&self.bytes);
 
                 let mut wc = WriteCache::new(
@@ -75,9 +77,15 @@ impl Parser {
                 );
                 wc.write_all_caches(&self.maps.serverclass_map);
                 drop(wc);
+                /*
                 match ReadCache::get_cache_if_exists(&self.bytes) {
                     Some(mut cache) => self.compute_jobs_with_cache(&mut cache),
                     None => panic!("FAILED TO READ WRITTEN CACHE"),
+                }
+                */
+                ParsingOutPut {
+                    df: vec![],
+                    events: vec![],
                 }
             }
         }
@@ -94,8 +102,8 @@ impl Parser {
             12 => Parser::create_string_table(blueprint, bytes),
             13 => Parser::update_string_table_msg(blueprint, bytes),
             //25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
-            26 => Parser::parse_packet_entities(blueprint, bytes, serverclass_map),
-            //26 => Parser::parse_packet_entities_indicies(blueprint, bytes, serverclass_map),
+            //26 => Parser::parse_packet_entities(blueprint, bytes, serverclass_map),
+            26 => Parser::parse_packet_entities_indicies(blueprint, bytes, serverclass_map),
             _ => JobResult::None,
         }
     }

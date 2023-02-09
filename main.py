@@ -26,3 +26,26 @@ df = pd.DataFrame(parser.parse_ticks(["X", "Y"], ticks=[x for x in range(80000, 
 8  76561198829733633  80000           -765.008362                                         0.0
 9  76561198845955287  80000           -246.615295                                         0.0
 """
+from collections import Counter
+v = []
+with open("data.txt") as f:
+    data = f.readlines()
+    for x in data:
+        v.append((x.split("[")[-1].split("]")[0]))
+
+z = Counter(v).most_common()
+z.reverse()
+
+
+import pandas as pd
+
+df = pd.DataFrame(z, columns=["key","n"])
+df2 = df[df["n"] > 10000]
+
+print(df2["n"].sum())
+print(df["n"].sum())
+
+s = 0
+for (idx, x) in enumerate(z):
+    s += x[-1]
+    print(idx, x, s)

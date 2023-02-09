@@ -12,10 +12,10 @@ import matplotlib.pyplot as plt
 
 
 def coordinates(file):
-
+    print(file)
     parser = DemoParser(file)
-    df2 = pd.DataFrame(parser.parse_ticks(["manager@m_iKills"], ticks=[x for x in range(40000, 40001)]))
-
+    df2 = pd.DataFrame(parser.parse_ticks(["player@DT_CSPlayer.m_angEyeAngles[1]", "manager@m_iKills"], ticks=[x for x in range(40000, 40001)]))
+    print(df2)
 
 if __name__ == "__main__":
     import numpy as np
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     files = glob.glob("/home/laiho/Documents/demos/mygames/*")#[80:81]
     # files = glob.glob("/home/laiho/Documents/demos/ow/*")
 
-    with mp.Pool(processes=12) as pool:
+    with mp.Pool(processes=1) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(
             coordinates, files), total=len(files)))
     a = np.concatenate(results)

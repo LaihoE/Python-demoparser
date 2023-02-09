@@ -158,6 +158,7 @@ pub fn read_file(demo_path: String) -> Result<BytesVariant, std::io::Error> {
     }
 }
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
+    "player@DT_CSPlayer.m_angEyeAngles[1]" => 1,
     "manager@m_iCashSpentThisRound" => 0,
     "manager@m_iMatchStats_EnemiesFlashed_Total" => 0,
     "manager@m_iKills" => 0,

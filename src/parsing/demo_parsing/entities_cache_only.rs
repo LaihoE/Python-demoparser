@@ -115,7 +115,6 @@ fn get_cls_id(ent_id: i32) -> u16 {
     // Returns correct serverclass id based on entity id
     // This is the key to being able to go parallel across ticks
     assert!(ent_id < 72);
-
     match ent_id {
         // WORLD
         0 => 275,
@@ -167,44 +166,4 @@ fn parse_ent_props(
         let _ = b.decode(&sv_cls.props[*idx as usize]).unwrap();
     }
     indicies
-}
-
-fn parse_baselines(
-    data: &[u8],
-    sv_cls: &ServerClass,
-    baselines: &mut HashMap<u32, HashMap<String, PropData>>,
-) {
-    let mut b = MyBitreader::new(data);
-    let mut val = -1;
-    let new_way = b.read_boolie().unwrap();
-    let mut indicies = vec![];
-    let mut baseline: HashMap<String, PropData> = HashMap::default();
-    loop {
-        val = b.read_inx(val, new_way).unwrap();
-        if val == -1 {
-            break;
-        }
-        indicies.push(val);
-    }
-    for inx in indicies {
-        let prop = &sv_cls.props[inx as usize];
-        let pdata = b.decode(prop).unwrap();
-
-        baseline.insert(prop.name.to_owned(), pdata);
-    }
-    baselines.insert(sv_cls.id.try_into().unwrap(), baseline);
-}
-
-#[inline(always)]
-fn is_wanted_prop_name(this_prop: &Prop, wanted_props: &Vec<String>) -> bool {
-    for prop in wanted_props {
-        if prop == &this_prop.name
-            || this_prop.name == "m_hActiveWeapon"
-            || this_prop.name == "m_iClip1"
-            || this_prop.name == "m_iItemDefinitionIndex"
-        {
-            return true;
-        }
-    }
-    false
 }

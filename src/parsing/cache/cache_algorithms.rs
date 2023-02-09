@@ -52,7 +52,7 @@ impl ReadCache {
     ) -> Vec<u64> {
         let mut wanted_bytes = vec![];
         for prop in props {
-            let prefix: Vec<&str> = prop.split("_").collect();
+            let prefix: Vec<&str> = prop.split("@").collect();
 
             match prefix[0] {
                 "player" => {

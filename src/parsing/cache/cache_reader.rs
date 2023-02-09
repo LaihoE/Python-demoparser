@@ -213,6 +213,7 @@ impl ReadCache {
         We are storing the structs in SOA form.
         */
         // let wanted_name = "player_".to_owned() + &wanted_name;
+
         let mut data = vec![];
         let x = self
             .zip
@@ -251,17 +252,25 @@ impl ReadCache {
         assert_eq!(number_structs, entids.len());
         assert_eq!(number_structs, ticks.len());
 
+        let p: Vec<&str> = wanted_name.split("@").collect();
+        let dot: Vec<&str> = wanted_name.split(".").collect();
+        let table_name_temp: Vec<&str> = p[1].split(".").collect();
+        let table_name = table_name_temp[0];
+        let prop_n = dot[dot.len() - 1];
+        let prefix = p[0];
+
         let p = &sv_cls_map[&40];
         for prop in &p.props {
-            let key = "player_".to_owned() + &prop.table.to_owned() + "." + &prop.name.to_owned();
-            if !self.deltas.contains_key(&key) {
+            if &prop.table == table_name && &prop.name == prop_n {
+                let key = prefix.to_owned() + "@" + &prop.table + "." + &prop.name;
                 self.deltas.insert(key, vec![]);
             }
         }
+
         self.deltas
-            .insert("player_m_vecOrigin_X".to_owned(), vec![]);
+            .insert("player@m_vecOrigin_X".to_owned(), vec![]);
         self.deltas
-            .insert("player_m_vecOrigin_Y".to_owned(), vec![]);
+            .insert("player@m_vecOrigin_Y".to_owned(), vec![]);
 
         let v = self.deltas.get_mut(wanted_name).unwrap();
         v.reserve(number_structs);

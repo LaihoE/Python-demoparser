@@ -60,7 +60,6 @@ impl Parser {
 
     pub fn compute_jobs_with_cache(&mut self, cache: &mut ReadCache) -> ParsingOutPut {
         // Need to parse players to understand cache. This is fast
-
         let player_results: Vec<JobResult> = self.parse_blueprints();
         let players = Players::new(&player_results);
         let ticks = self.get_wanted_ticks();
@@ -69,14 +68,15 @@ impl Parser {
         let mut other_props = vec![];
 
         for prop in &self.settings.wanted_props {
-            let p: Vec<&str> = prop.split("_").collect();
+            let p: Vec<&str> = prop.split("@").collect();
             if p[0] == "player" {
                 player_props.push(prop.clone());
             } else {
                 other_props.push(prop.clone());
             }
         }
-        /*
+        let before = Instant::now();
+
         let wanted_bytes = cache.find_wanted_bytes(
             &ticks,
             &player_props,
@@ -84,16 +84,16 @@ impl Parser {
             &self.maps.serverclass_map,
             &players,
         );
-        println!("THIS {:?}", wanted_bytes);
+        println!("{:2?}", before.elapsed());
+        //if wanted_bytes.len() > 0 {
         self.parse_bytes(wanted_bytes);
+        //}
         let results: Vec<JobResult> = self.parse_blueprints();
-        */
+
         let other_s = self.other_outputs(cache, &ticks, &players, &other_props);
 
-        let before = Instant::now();
-
-        //let mut df = self.create_series(&results, &player_props, &ticks, &players);
-        //df.extend(other_s);
+        let mut df = self.create_series(&results, &player_props, &ticks, &players);
+        df.extend(other_s);
 
         let events = if self.settings.only_events {
             let event_ticks =
@@ -104,11 +104,12 @@ impl Parser {
         } else {
             vec![]
         };
-
+        /*
         ParsingOutPut {
-            df: other_s,
+            df: df,
             events: events,
         }
+        */
     }
 
     fn filter_to_vec<Wanted>(v: impl IntoIterator<Item = impl TryInto<Wanted>>) -> Vec<Wanted> {
@@ -270,7 +271,7 @@ impl Parser {
                 self.find_multiple_values(&results, prop.to_owned(), &ticks, &players);
 
             let s = Series::from_vec(prop, out);
-            if idx == 0 {
+            if idx == 9999990 {
                 let ls = Series::from_vec("steamid", labels);
                 let ts = Series::from_vec("ticks", ticks);
                 all_series.push(ls);
@@ -376,7 +377,7 @@ impl Parser {
         //let prop_type = TYPEHM.get(&prop_name[..&prop_name.len() - 4]).unwrap();
         let prop_type = TYPEHM.get(&prop_name).unwrap();
 
-        let prefix: Vec<&str> = prop_name.split("_").collect();
+        let prefix: Vec<&str> = prop_name.split("@").collect();
 
         let wanted_entid_type = match prefix[0] {
             "player" => 0,
@@ -389,18 +390,18 @@ impl Parser {
 
         for pe in v {
             match prop_type {
-                // 0 => self.match_int(pe, prop_idx, &mut vector, wanted_entid_type, ),
-                // 1 => self.match_float(pe, prop_idx, &mut vector, wanted_entid_type),
+                0 => self.match_int(pe, prop_idx, &mut vector),
+                1 => self.match_float(pe, prop_idx, &mut vector),
                 // 2 => self.match_str(pe, prop_idx, &mut vector),
                 _ => panic!("Unsupported prop type: {}", prop_type),
             }
         }
-        //println!("{:?}", vector);
+
         return vector;
     }
 
     #[inline(always)]
-    pub fn match_float(
+    pub fn match_float_junk(
         &self,
         pe: &PacketEntsOutput,
         pidx: i32,
@@ -468,6 +469,34 @@ impl Parser {
                     }
                 }
                 _ => panic!(":/"),
+            }
+        }
+    }
+    #[inline(always)]
+    pub fn match_float(&self, pe: &PacketEntsOutput, pidx: i32, v: &mut Vec<(f32, i32, i32)>) {
+        for x in &pe.data {
+            if x.prop_inx == pidx && x.ent_id < 64 {
+                // println!("{} == {}  {:?}", x.prop_inx, pidx, x);
+
+                match &x.data {
+                    PropData::F32(s) => {
+                        v.push((*s as f32, pe.tick, x.ent_id));
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    #[inline(always)]
+    pub fn match_int(&self, pe: &PacketEntsOutput, pidx: i32, v: &mut Vec<(f32, i32, i32)>) {
+        for x in &pe.data {
+            if x.prop_inx == pidx && x.ent_id < 64 {
+                match &x.data {
+                    PropData::I32(s) => {
+                        v.push((*s as f32, pe.tick, x.ent_id));
+                    }
+                    _ => {}
+                }
             }
         }
     }
@@ -599,8 +628,10 @@ impl Parser {
 
     pub fn str_name_to_idx(&self, str_name: String) -> Option<i32> {
         let prefix: Vec<&str> = str_name.split("@").collect();
+
         match prefix[0] {
             "player" => {
+                println!("{}", str_name);
                 if str_name == "player@m_vecOrigin_X" {
                     return Some(10000);
                 }
@@ -609,7 +640,15 @@ impl Parser {
                 }
                 let sv_map = self.maps.serverclass_map.get(&40).unwrap();
                 for (idx, prop) in sv_map.props.iter().enumerate() {
-                    if prop.table.to_owned() + "." + &prop.name.to_owned() == str_name {
+                    /*
+                    println!(
+                        "{} == {}",
+                        prop.table.to_owned() + "." + &prop.name.to_owned(),
+                        prefix[1]
+                    );
+                    */
+                    if prop.table.to_owned() + "." + &prop.name.to_owned() == prefix[1] {
+                        //println!("FOUND");
                         return Some(idx as i32);
                     }
                 }

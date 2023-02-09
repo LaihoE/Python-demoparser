@@ -16,10 +16,11 @@ use std::io::Write;
 use std::{fs, time::Instant};
 use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
+
 pub struct WriteCache {
     pub game_events: Vec<GameEvent>,
     pub string_tables: Vec<UserInfo>,
-    pub packet_ents: Vec<PacketEntsOutput>,
+    pub packet_ents: Vec<Vec<EntityIndicies>>,
     pub dt_start: u64,
     pub ge_start: u64,
     pub zip: ZipWriter<File>,
@@ -97,7 +98,7 @@ impl WriteCache {
         "rules@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
     }
 
-    fn write_bytes_to_zip(&mut self, data: &Vec<&&(usize, i32, i32, i32)>, name: &String) {
+    fn write_bytes_to_zip(&mut self, data: &Vec<&&(u64, i32, i32, i32)>, name: &String) {
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
         self.zip.start_file(name, options).unwrap();
         let mut byt = vec![];
@@ -113,7 +114,7 @@ impl WriteCache {
         }
         self.zip.write_all(&byt).unwrap();
     }
-    fn write_player_bytes_to_zip(&mut self, data: &Vec<&(usize, i32, i32, i32)>, name: &String) {
+    fn write_player_bytes_to_zip(&mut self, data: &Vec<&(u64, i32, i32, i32)>, name: &String) {
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
         self.zip.start_file(name, options).unwrap();
         let mut byt = vec![];
@@ -139,14 +140,26 @@ impl WriteCache {
         let mut player_props = vec![];
         let mut other_props = vec![];
 
-        for p in &self.packet_ents {
-            for x in &p.data {
-                if x.ent_id < 64 && x.ent_id > 0 {
-                    if !forbidden.contains(&x.prop_inx) {
-                        player_props.push((p.byte, x.prop_inx, x.ent_id, p.tick))
+        for indicies in &self.packet_ents {
+            for this_ents_indicies in indicies {
+                if this_ents_indicies.entid < 64 && this_ents_indicies.entid > 0 {
+                    for index in &this_ents_indicies.prop_indicies {
+                        if !forbidden.contains(&index) {
+                            player_props.push((
+                                this_ents_indicies.byte,
+                                *index,
+                                this_ents_indicies.entid,
+                                this_ents_indicies.tick,
+                            ))
+                        } else {
+                            other_props.push((
+                                this_ents_indicies.byte,
+                                *index,
+                                this_ents_indicies.entid,
+                                this_ents_indicies.tick,
+                            ))
+                        }
                     }
-                } else {
-                    other_props.push((p.byte, x.prop_inx, x.ent_id, p.tick))
                 }
             }
         }
@@ -163,13 +176,13 @@ impl WriteCache {
             match m.get(&idx) {
                 Some(data) => {
                     let prop_str_name = if idx == 10000 {
-                        "player_m_vecOrigin_X".to_string()
+                        "player@m_vecOrigin_X".to_string()
                     } else if idx == 10001 {
-                        "player_m_vecOrigin_Y".to_string()
+                        "player@m_vecOrigin_Y".to_string()
                     } else {
                         self.to_str_name_player_prop(sv_cls_map, idx)
                     };
-                    self.write_player_bytes_to_zip(data, &prop_str_name)
+                    self.write_player_bytes_to_zip(data, &prop_str_name);
                 }
                 None => {}
             }
@@ -215,7 +228,7 @@ impl WriteCache {
     }
     fn write_others(
         &mut self,
-        data: Vec<&(usize, i32, i32, i32)>,
+        data: Vec<&(u64, i32, i32, i32)>,
         sv_cls_map: &HashMap<u16, ServerClass>,
         write_type: &str,
     ) {
@@ -261,7 +274,7 @@ impl WriteCache {
 
     pub fn filter_per_result(
         jobresults: Vec<JobResult>,
-    ) -> (Vec<GameEvent>, Vec<UserInfo>, Vec<PacketEntsOutput>) {
+    ) -> (Vec<GameEvent>, Vec<UserInfo>, Vec<Vec<EntityIndicies>>) {
         let mut game_events = vec![];
         let mut string_tables = vec![];
         let mut packet_ents = vec![];
@@ -269,7 +282,7 @@ impl WriteCache {
         for jobresult in jobresults {
             match jobresult {
                 JobResult::GameEvents(ge) => game_events.extend(ge),
-                JobResult::PacketEntities(pe) => packet_ents.push(pe),
+                JobResult::PacketEntitiesIndicies(pe) => packet_ents.push(pe),
                 JobResult::StringTables(st) => string_tables.extend(st),
                 _ => {}
             }

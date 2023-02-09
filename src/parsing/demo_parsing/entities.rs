@@ -139,6 +139,7 @@ pub fn parse_indicies(b: &mut MyBitreader) -> SmallVec<[i32; 64]> {
     */
     let mut val = -1;
     let before = b.reader.bits_remaining().unwrap();
+    b.reader.refill_lookahead();
     let p = b.reader.peek(54);
     let new_way = b.read_boolie().unwrap();
     let mut indicies: SmallVec<[_; 64]> = SmallVec::<[i32; 64]>::new();
@@ -150,7 +151,14 @@ pub fn parse_indicies(b: &mut MyBitreader) -> SmallVec<[i32; 64]> {
         }
         indicies.push(val);
     }
-
+    /*
+    println!(
+        "{} {} {:?}",
+        before - b.reader.bits_remaining().unwrap(),
+        p,
+        indicies
+    );
+    */
     indicies
 }
 #[inline(always)]
@@ -168,9 +176,6 @@ pub fn parse_ent_props(
     let mut props: Vec<SingleEntOutput> = vec![];
 
     for idx in indicies {
-        if idx as usize > sv_cls.props.len() {
-            println!(">>> {}", entity_id);
-        }
         let prop = &sv_cls.props[idx as usize];
         let pdata = b.decode(prop).unwrap();
         match pdata {
@@ -207,6 +212,7 @@ pub fn parse_baselines(
 ) {
     let mut b = MyBitreader::new(data);
     let mut val = -1;
+
     let new_way = b.read_boolie().unwrap();
     let mut indicies = vec![];
     let mut baseline: HashMap<String, PropData> = HashMap::default();

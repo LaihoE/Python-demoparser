@@ -112,18 +112,27 @@ impl ReadCache {
     pub fn find_delta_ticks(
         &mut self,
         userid: u32,
-        prop_name: String,
+        prop_name_temp: String,
         wanted_ticks: &Vec<i32>,
         players: &Players,
     ) -> Vec<u64> {
-        let delta_vec = self.deltas.get(&prop_name).unwrap();
+        let prop_name = if prop_name_temp.contains("m_vecOrigin") {
+            "player@DT_CSNonLocalPlayerExclusive.m_vecOrigin"
+        } else {
+            &prop_name_temp
+        };
+
+        let delta_vec = match self.deltas.get(prop_name) {
+            Some(delta_v) => delta_v,
+            None => return vec![],
+        };
         let sid = match players.uid_to_steamid(userid) {
             Some(sid) => sid,
             None => return vec![],
         };
 
         if players.is_easy_uid[userid as usize] {
-            let eid = players.uid_to_entid(userid, 55555).unwrap();
+            let eid = players.uid_to_entid_tick(userid, 55555).unwrap();
             let all_deltas: Vec<(u64, i32, u32)> = delta_vec
                 .iter()
                 .filter(|x| x.entid == eid)

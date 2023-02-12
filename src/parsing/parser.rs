@@ -8,9 +8,6 @@ use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use itertools::Itertools;
 use memmap2::Mmap;
 use polars::series::Series;
-use rayon::iter::ParallelIterator;
-use rayon::prelude::IntoParallelRefIterator;
-use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::u8;
@@ -65,7 +62,6 @@ impl Parser {
             None => {
                 self.parse_bytes(vec![]);
                 let jobresults = self.compute_jobs_no_cache();
-                println!("{:?}", jobresults.len());
 
                 let cache_path = ReadCache::get_cache_path(&self.bytes);
 
@@ -77,15 +73,16 @@ impl Parser {
                 );
                 wc.write_all_caches(&self.maps.serverclass_map);
                 drop(wc);
-                /*
+                self.tasks = vec![];
+
                 match ReadCache::get_cache_if_exists(&self.bytes) {
-                    Some(mut cache) => self.compute_jobs_with_cache(&mut cache),
+                    Some(mut cache) => {
+                        let wanted_bytes = cache.get_player_messages();
+                        self.parse_bytes(wanted_bytes);
+                        let jobresults = self.compute_jobs_with_cache(&mut cache);
+                        jobresults
+                    }
                     None => panic!("FAILED TO READ WRITTEN CACHE"),
-                }
-                */
-                ParsingOutPut {
-                    df: vec![],
-                    events: vec![],
                 }
             }
         }
@@ -96,19 +93,24 @@ impl Parser {
         bytes: &Mmap,
         serverclass_map: &HashMap<u16, ServerClass, RandomState>,
         game_events_map: &HashMap<i32, Descriptor_t, RandomState>,
+        only_cache: bool,
     ) -> JobResult {
         let wanted_event = "player_death";
         match blueprint.msg {
             12 => Parser::create_string_table(blueprint, bytes),
             13 => Parser::update_string_table_msg(blueprint, bytes),
-            //25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
-            //26 => Parser::parse_packet_entities(blueprint, bytes, serverclass_map),
-            26 => Parser::parse_packet_entities_indicies(blueprint, bytes, serverclass_map),
+            25 => Parser::parse_game_events(blueprint, bytes, game_events_map, wanted_event),
+            26 => Parser::parse_packet_entities(blueprint, bytes, serverclass_map, only_cache),
             _ => JobResult::None,
         }
     }
     #[inline(always)]
     pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>) {
+        /*
+        if wanted_bytes.len() == 0 {
+            return;
+        }
+        */
         let uniq_bytes: Vec<&u64> = wanted_bytes.iter().dedup().collect();
         let byte_readers = ByteReader::get_byte_readers(&self.bytes, uniq_bytes);
 
@@ -161,8 +163,9 @@ impl Parser {
         }
     }
     #[inline(always)]
-    pub fn parse_blueprints(&mut self) -> Vec<JobResult> {
+    pub fn parse_blueprints(&mut self, only_cache: bool) -> Vec<JobResult> {
         let mut opt = None;
+
         for t in &self.tasks {
             if t.msg == 30 {
                 opt = Some(t.clone());
@@ -181,6 +184,7 @@ impl Parser {
                     &self.bytes,
                     &self.maps.serverclass_map,
                     &self.maps.event_map.as_ref().unwrap(),
+                    only_cache,
                 )
             })
             .collect()

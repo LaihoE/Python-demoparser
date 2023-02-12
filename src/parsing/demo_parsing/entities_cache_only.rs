@@ -47,6 +47,10 @@ impl Parser {
         mmap: &Mmap,
         sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
     ) -> JobResult {
+        // Demo is corrupt
+        if blueprint.end_idx > mmap.len() {
+            return JobResult::None;
+        }
         let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
         let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
         let result = Parser::_parse_packet_entities_indicies(
@@ -76,7 +80,10 @@ impl Parser {
         let mut outputs = Vec::with_capacity(12);
         let mut entity_id: i32 = -1;
         for _ in 0..n_upd_ents {
-            entity_id += 1 + (b.read_u_bit_var().unwrap() as i32);
+            entity_id += match b.read_u_bit_var() {
+                Some(eid_plus) => eid_plus as i32 + 1,
+                None => break,
+            };
 
             if entity_id > 71 {
                 break;
@@ -88,22 +95,32 @@ impl Parser {
                 // IF ENTITY DOES NOT EXIST
                 // These bits are for creating the ent but we use hack for it so not needed
                 let _ = b.read_nbits(19).unwrap();
-                let indicies = parse_ent_props(entity_id, &mut b, sv_cls_map, tick);
-                outputs.push(EntityIndicies {
-                    byte: byte,
-                    tick: tick,
-                    entid: entity_id,
-                    prop_indicies: indicies,
-                });
+                let indicies = parse_ent_props_indicies(entity_id, &mut b, sv_cls_map, tick);
+                match indicies {
+                    Some(idc) => {
+                        outputs.push(EntityIndicies {
+                            byte: byte,
+                            tick: tick,
+                            entid: entity_id,
+                            prop_indicies: idc,
+                        });
+                    }
+                    None => break,
+                }
             } else {
                 // IF ENTITY DOES EXIST
-                let indicies = parse_ent_props(entity_id, &mut b, sv_cls_map, tick);
-                outputs.push(EntityIndicies {
-                    byte: byte,
-                    tick: tick,
-                    entid: entity_id,
-                    prop_indicies: indicies,
-                });
+                let indicies = parse_ent_props_indicies(entity_id, &mut b, sv_cls_map, tick);
+                match indicies {
+                    Some(idc) => {
+                        outputs.push(EntityIndicies {
+                            byte: byte,
+                            tick: tick,
+                            entid: entity_id,
+                            prop_indicies: idc,
+                        });
+                    }
+                    None => break,
+                }
             }
         }
 
@@ -132,38 +149,51 @@ fn get_cls_id(ent_id: i32) -> u16 {
     }
 }
 #[inline(always)]
-fn parse_indicies(b: &mut MyBitreader) -> SmallVec<[i32; 32]> {
+fn parse_indicies(b: &mut MyBitreader) -> Option<SmallVec<[i32; 32]>> {
     /*
     Gets wanted prop indicies. The index maps to a Prop struct.
     For example Player serverclass (id=40) with index 20 gives m_angEyeAngles[0]
     */
     let mut val = -1;
-    let new_way = b.read_boolie().unwrap();
+    let new_way = b.read_boolie()?;
     let mut indicies: SmallVec<[_; 32]> = SmallVec::<[i32; 32]>::new();
     loop {
-        val = b.read_inx(val, new_way).unwrap();
+        val = b.read_inx(val, new_way)?;
         if val == -1 {
             break;
         }
         indicies.push(val);
     }
-    indicies
+    Some(indicies)
 }
 #[inline(always)]
-fn parse_ent_props(
+fn parse_ent_props_indicies(
     entity_id: i32,
     b: &mut MyBitreader,
     sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
     tick: i32,
-) -> SmallVec<[i32; 32]> {
+) -> Option<SmallVec<[i32; 32]>> {
     let cls_id = get_cls_id(entity_id);
     let m = sv_cls_map;
 
-    let sv_cls = m.get(&cls_id).unwrap();
-    let indicies = parse_indicies(b);
+    let sv_cls = match m.get(&cls_id) {
+        Some(svc) => svc,
+        None => {
+            return None;
+        }
+    };
+    let indicies = match parse_indicies(b) {
+        Some(idc) => idc,
+        None => return None,
+    };
 
     for idx in &indicies {
-        let _ = b.decode(&sv_cls.props[*idx as usize]).unwrap();
+        match sv_cls.props.get(*idx as usize) {
+            Some(x) => {
+                let _ = b.decode(x);
+            }
+            None => return None,
+        }
     }
-    indicies
+    Some(indicies)
 }

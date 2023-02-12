@@ -6,11 +6,11 @@ use flate2::read::GzDecoder;
 use parsing::demo_parsing::*;
 use parsing::parser::Parser;
 //use parsing::tick_cache::gather_props_backwards;
+use ahash::HashMap;
 use parsing::utils::Header;
 use parsing::variants::PropData;
 use phf::phf_map;
 use polars::prelude::ArrowField;
-
 use polars::series::Series;
 use polars_arrow::export::arrow;
 use polars_arrow::prelude::ArrayRef;
@@ -186,14 +186,24 @@ impl DemoParser {
 
                 let column_names: Vec<&str> =
                     output.events.iter().map(|x| x.name().clone()).collect();
+                let mut rows = 0;
                 for s in &output.events {
+                    rows = s.len().max(rows);
                     let py_series = rust_series_to_py_series(&s).unwrap();
                     ss.push(py_series);
                 }
-                //wanted_props.push("steamid".to_string());
-                //wanted_props.push("tick".to_string());
+                use pyo3::types::IntoPyDict;
+
+                if rows == 0 {
+                    let pandas = py.import("pandas")?;
+                    let mut dict = HashMap::default();
+                    dict.insert("columns", ["EVENT NOT FOUND"].to_object(py));
+                    let py_dict = dict.into_py_dict(py);
+                    let df = pandas.call_method("DataFrame", (), Some(py_dict)).unwrap();
+                    return Ok(df.to_object(py));
+                }
+
                 let polars = py.import("polars").unwrap();
-                // let all_series_py = ss.to_object(py);
                 let df = polars.call_method1("DataFrame", (ss,)).unwrap();
                 df.setattr("columns", column_names.to_object(py)).unwrap();
                 let pandas_df = df.call_method0("to_pandas").unwrap();

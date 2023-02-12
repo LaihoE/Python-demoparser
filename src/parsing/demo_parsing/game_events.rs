@@ -133,8 +133,15 @@ impl Parser {
         game_events_map: &HashMap<i32, Descriptor_t, RandomState>,
         wanted_event: &str,
     ) -> JobResult {
+        if blueprint.end_idx > mmap.len() {
+            return JobResult::None;
+        }
         let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
-        let msg: CSVCMsg_GameEvent = Message::parse_from_bytes(wanted_bytes).unwrap();
+
+        let msg: CSVCMsg_GameEvent = match Message::parse_from_bytes(wanted_bytes) {
+            Ok(ge) => ge,
+            Err(_) => return JobResult::None,
+        };
         let mut game_events: Vec<GameEvent> = Vec::new();
         let event_desc = &game_events_map[&msg.eventid()];
 

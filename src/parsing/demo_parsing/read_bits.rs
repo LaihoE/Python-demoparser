@@ -41,40 +41,7 @@ impl<'a> MyBitreader<'a> {
         }
         Some(ret)
     }
-    /*
-        pub fn read_idx_new_way(&mut self, last: i32) -> Option<i32> {
-            if self.read_boolie()? {
-                return Some(last + 1);
-            }
-            if self.read_boolie()? {
-                let index = self.read_nbits(3)?;
-                if index == 0xfff {
-                    return Some(-1);
-                }
-                Some(last + 1 + index as i32)
-            }
-        }
-        pub fn read_idx_old_way() {
-            let mut index = self.read_nbits(7)?;
-            let val = index & (32 | 64);
-            match val {
-                32 => {
-                    index = (index & !96) | (self.read_nbits(2)? << 5);
-                }
-                64 => {
-                    index = (index & !96) | (self.read_nbits(4)? << 5);
-                }
-                96 => {
-                    index = (index & !96) | (self.read_nbits(7)? << 5);
-                }
-                _ => {}
-            }
-            if index == 0xfff {
-                return Some(-1);
-            }
-            Some(last + 1 + index as i32)
-        }
-    */
+
     #[inline(always)]
     pub fn read_inx(&mut self, last: i32, new_way: bool) -> Option<i32> {
         if new_way && self.read_boolie()? {
@@ -106,7 +73,7 @@ impl<'a> MyBitreader<'a> {
 
         loop {
             if count >= 5 {
-                return result.try_into().unwrap();
+                return result.try_into().unwrap_or(None);
             }
             b = self.read_nbits(8)?;
             result |= (b & 127) << (7 * count);
@@ -127,7 +94,7 @@ impl<'a> MyBitreader<'a> {
         if length >= (1 << 9) {
             length = (1 << 9) - 1
         }
-        Some(self.read_string(length.try_into().unwrap()).unwrap())
+        Some(self.read_string(length as i32)?)
     }
     #[inline(always)]
     pub fn decode(&mut self, prop: &Prop) -> Option<PropData> {
@@ -138,7 +105,7 @@ impl<'a> MyBitreader<'a> {
             3 => Some(PropData::VecXY(self.decode_vec_xy(prop)?)),
             4 => Some(PropData::String(self.decode_string()?)),
             5 => Some(PropData::Vec(self.decode_array(prop)?)),
-            _ => panic!("Prop had odd type: {}", prop.p_type),
+            _ => panic!("Prop had impossible type: {}", prop.p_type),
         }
     }
 
@@ -146,7 +113,6 @@ impl<'a> MyBitreader<'a> {
         // SUS
         let b = (prop.num_elements as f32).log2().floor() + 1.0;
         let num_elements = self.read_nbits(b as u32)?;
-
         let p = prop.arr.as_ref().unwrap();
         let mut elems = vec![];
         for _ in 0..num_elements {
@@ -210,7 +176,7 @@ impl<'a> MyBitreader<'a> {
             let z = self.decode_float(prop)?;
             Some([x, y, z])
         } else {
-            let sign = self.reader.read_bit().unwrap();
+            let sign = self.reader.read_bit()?;
             let temp = (x * x) + (y * y);
             let mut z = 0.0;
             if temp < 1.0 {
@@ -231,17 +197,7 @@ impl<'a> MyBitreader<'a> {
         }
         Some(bytarr)
     }
-    #[inline(always)]
-    pub fn read_bits_old(&mut self, n: i32) -> Option<[u8; 340]> {
-        let mut res = 0;
-        let mut bitsleft = n;
-        let eight = 8.try_into().unwrap();
-        let mut bytarr: [u8; 340] = [0; 340];
-        for i in 0..340 {
-            bytarr[i] = self.read_nbits(eight)?.try_into().unwrap();
-        }
-        Some(bytarr)
-    }
+
     #[inline(always)]
     pub fn decode_vec_xy(&mut self, prop: &Prop) -> Option<[f32; 2]> {
         let x = self.decode_float(prop)?;
@@ -284,13 +240,13 @@ impl<'a> MyBitreader<'a> {
         let mut int_val = 0;
         let mut frac_val = 0;
 
-        let i2 = self.reader.read_bit().unwrap();
-        let f2 = self.reader.read_bit().unwrap();
+        let i2 = self.reader.read_bit()?;
+        let f2 = self.reader.read_bit()?;
 
         if !i2 && !f2 {
             return Some(0);
         }
-        let sign = self.reader.read_bit().unwrap();
+        let sign = self.reader.read_bit()?;
         if i2 {
             int_val = self.read_nbits(14)? + 1;
         }
@@ -313,7 +269,7 @@ impl<'a> MyBitreader<'a> {
         if flags & (1 << 1) != 0 {
             val = self.read_bit_coord()? as f32;
         } else if flags & (1 << 2) != 0 {
-            val = self.reader.read_f32().unwrap();
+            val = self.reader.read_f32()?;
         } else if flags & (1 << 5) != 0 {
             val = self.read_bit_normal()? as f32;
         } else if flags & (1 << 15) != 0 {

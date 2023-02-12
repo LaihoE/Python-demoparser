@@ -24,7 +24,7 @@ pub struct ExtraEventRequest {
 
 impl Parser {
     pub fn compute_jobs_no_cache(&mut self) -> Vec<JobResult> {
-        let results: Vec<JobResult> = self.parse_blueprints();
+        let results: Vec<JobResult> = self.parse_blueprints(true);
         results
     }
     pub fn other_outputs(
@@ -34,33 +34,31 @@ impl Parser {
         players: &Players,
         other_props: &Vec<String>,
     ) -> Vec<Series> {
-        // cache.read_other_deltas_by_name(&self.settings.wanted_props[0], &self.maps.serverclass_map);
-        // self.parse_bytes(wanted_bytes);
-        // let results: Vec<JobResult> = self.parse_blueprints();
-        let mut wanted_ticks = vec![];
+        let mut wanted_bytes = vec![];
 
         for prop in other_props {
-            for i in 0..16 {
+            for i in 0..32 {
                 let p = if i < 10 {
                     prop.to_owned() + &".00" + &i.to_string()
                 } else {
                     prop.to_owned() + &".0" + &i.to_string()
                 };
                 cache.read_other_deltas_by_name(&p, &self.maps.serverclass_map, 41);
-                wanted_ticks.extend(cache.find_delta_ticks_others(55, p, ticks, players))
+                wanted_bytes.extend(cache.find_delta_ticks_others(55, p, ticks, players))
             }
         }
-        wanted_ticks.sort();
-
-        self.parse_bytes(wanted_ticks);
-        let results: Vec<JobResult> = self.parse_blueprints();
+        wanted_bytes.sort();
+        if wanted_bytes.len() > 0 {
+            self.parse_bytes(wanted_bytes);
+        }
+        let results: Vec<JobResult> = self.parse_blueprints(false);
         let ticks = self.get_wanted_ticks();
         self.create_series_others(&results, &other_props, &ticks, players)
     }
 
     pub fn compute_jobs_with_cache(&mut self, cache: &mut ReadCache) -> ParsingOutPut {
         // Need to parse players to understand cache. This is fast
-        let player_results: Vec<JobResult> = self.parse_blueprints();
+        let player_results: Vec<JobResult> = self.parse_blueprints(false);
         let players = Players::new(&player_results);
         let ticks = self.get_wanted_ticks();
 
@@ -75,7 +73,6 @@ impl Parser {
                 other_props.push(prop.clone());
             }
         }
-        let before = Instant::now();
 
         let wanted_bytes = cache.find_wanted_bytes(
             &ticks,
@@ -84,41 +81,80 @@ impl Parser {
             &self.maps.serverclass_map,
             &players,
         );
-        println!("{:2?}", before.elapsed());
-        //if wanted_bytes.len() > 0 {
-        self.parse_bytes(wanted_bytes);
-        //}
-        let results: Vec<JobResult> = self.parse_blueprints();
-
+        if wanted_bytes.len() != 0 {
+            self.parse_bytes(wanted_bytes);
+        }
+        let results: Vec<JobResult> = self.parse_blueprints(false);
         let other_s = self.other_outputs(cache, &ticks, &players, &other_props);
-
         let mut df = self.create_series(&results, &player_props, &ticks, &players);
         df.extend(other_s);
 
         let events = if self.settings.only_events {
-            let event_ticks =
-                cache.find_game_event_ticks("player_death".to_string(), &self.maps.event_map);
+            cache.read_game_events();
+            let event_ticks = cache
+                .find_game_event_ticks(self.settings.event_name.to_string(), &self.maps.event_map);
             self.parse_bytes(event_ticks);
-            let results: Vec<JobResult> = self.parse_blueprints();
+            let results: Vec<JobResult> = self.parse_blueprints(false);
+
             self.get_game_events(&results, &players, cache)
         } else {
             vec![]
         };
-        /*
+
         ParsingOutPut {
             df: df,
             events: events,
         }
-        */
     }
 
     fn filter_to_vec<Wanted>(v: impl IntoIterator<Item = impl TryInto<Wanted>>) -> Vec<Wanted> {
         v.into_iter().filter_map(|x| x.try_into().ok()).collect()
     }
+    fn uid_to_sid_vec(v: &Vec<&NameDataPair>, players: &Players) -> Option<Series> {
+        let mut uids = vec![];
+        // Player death events have this
+        let mut attackers = vec![];
+        for name_data_pair in v {
+            match name_data_pair.name.as_str() {
+                "userid" => match name_data_pair.data {
+                    KeyData::Short(uid) => uids.push(uid),
+                    _ => {}
+                },
+                "attacker" => match name_data_pair.data {
+                    KeyData::Short(uid) => attackers.push(uid),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+        if uids.len() > 0 {
+            let steamids: Vec<u64> = uids
+                .iter()
+                .map(|uid| players.uid_to_steamid(*uid as u32).unwrap_or(0))
+                .collect();
+            return Some(Series::from_vec("steamid", steamids));
+        }
+        if attackers.len() > 0 {
+            let steamids: Vec<u64> = attackers
+                .iter()
+                .map(|uid| players.uid_to_steamid(*uid as u32).unwrap_or(0))
+                .collect();
+            return Some(Series::from_vec("attacker", steamids));
+        }
+        None
+    }
 
-    fn temp(pairs: Vec<&NameDataPair>, name: &String) -> Series {
+    fn temp(pairs: Vec<&NameDataPair>, name: &String, players: &Players) -> Series {
+        if name == "userid" || name == "attacker" {
+            match Self::uid_to_sid_vec(&pairs, players) {
+                Some(s) => {
+                    return s;
+                }
+                _ => {}
+            };
+        }
         let only_data: Vec<KeyData> = pairs.iter().map(|x| x.data.clone()).collect();
-        match pairs[0].data_type {
+        let s = match pairs[0].data_type {
             1 => Series::new(name, &Parser::filter_to_vec::<String>(only_data)),
             2 => Series::new(name, &Parser::filter_to_vec::<f32>(only_data)),
             3 => Series::new(name, &Parser::filter_to_vec::<i64>(only_data)),
@@ -127,10 +163,11 @@ impl Parser {
             6 => Series::new(name, &Parser::filter_to_vec::<bool>(only_data)),
             7 => Series::new(name, &Parser::filter_to_vec::<u64>(only_data)),
             _ => panic!("Keydata got unknown type: {}", pairs[0].data_type),
-        }
+        };
+        s
     }
 
-    fn series_from_events(&self, events: Vec<GameEvent>) -> Vec<Series> {
+    fn series_from_events(&self, events: Vec<GameEvent>, players: &Players) -> Vec<Series> {
         // Example [Hashmap<"distance": 21.0>, Hashmap<"distance": 24.0>, Hashmap<"name": "Steve">]
         // ->
         // Hashmap<"distance": [21.0, 24.0], "name": ["Steve"]>,
@@ -139,7 +176,7 @@ impl Parser {
         let per_key_name = pairs.iter().into_group_map_by(|x| &x.name);
         let mut series = vec![];
         for (name, vals) in per_key_name {
-            series.push(Parser::temp(vals, name));
+            series.push(Parser::temp(vals, name, players));
         }
         series
     }
@@ -148,7 +185,7 @@ impl Parser {
         &self,
         ticks: Vec<i64>,
         userids: Vec<i64>,
-        attackers: Vec<i64>,
+        attackers: Vec<u64>,
         wanted_props: &Vec<String>,
     ) -> Vec<ExtraEventRequest> {
         let mut requests = vec![];
@@ -182,13 +219,13 @@ impl Parser {
     ) -> Vec<ExtraEventRequest> {
         let mut ticks: Vec<i64> = vec![];
         let mut userids: Vec<i64> = vec![];
-        let mut attackers: Vec<i64> = vec![];
+        let mut attackers: Vec<u64> = vec![];
 
         for s in series {
             match s.name() {
                 "tick" => ticks.extend(s.i64().unwrap().into_no_null_iter()),
                 // "userid" => userids.extend(s.i64().unwrap().into_no_null_iter()),
-                "attacker" => attackers.extend(s.i64().unwrap().into_no_null_iter()),
+                //"attacker" => attackers.extend(s.u64().unwrap().into_no_null_iter()),
                 _ => {}
             }
         }
@@ -202,7 +239,7 @@ impl Parser {
         cache: &mut ReadCache,
     ) -> Vec<Series> {
         let event_id = cache
-            .event_name_to_id(&"player_death".to_string(), &self.maps.event_map)
+            .event_name_to_id(&self.settings.event_name.to_string(), &self.maps.event_map)
             .unwrap();
 
         let mut v = vec![];
@@ -214,13 +251,19 @@ impl Parser {
             }
         }
 
-        let mut series = self.series_from_events(v);
+        let mut series = self.series_from_events(v, players);
         let requests = self.fill_wanted_extra_props(&series, &self.settings.wanted_props.clone());
         let extra_bytes = cache.find_request_bytes(&requests, &self.maps.serverclass_map, players);
-        self.parse_bytes(extra_bytes);
-        let results = self.parse_blueprints();
+        if extra_bytes.len() > 0 {
+            self.parse_bytes(extra_bytes);
+        }
+
+        let results = self.parse_blueprints(false);
         let s = self.find_requested_vals(requests, &results, &players);
+
         series.extend(s);
+        // Sort game events to that columns are always in the same order
+        series.sort_by_key(|s| s.name().to_string());
         series
     }
 
@@ -232,7 +275,7 @@ impl Parser {
     ) -> Vec<Series> {
         let mut series = vec![];
         let request_per_prop = requests.iter().into_group_map_by(|x| x.prop.clone());
-        let before = Instant::now();
+
         for (name, requests) in request_per_prop {
             let mut v = vec![];
             for request in requests {
@@ -246,7 +289,6 @@ impl Parser {
             }
             series.push(Series::new(&name, v))
         }
-        // println!("{:2?}", before.elapsed());
         series
     }
 
@@ -267,15 +309,17 @@ impl Parser {
     ) -> Vec<Series> {
         let mut all_series = vec![];
         for (idx, prop) in props.iter().enumerate() {
-            let (out, labels, ticks) =
+            let (out, ids, names, ticks) =
                 self.find_multiple_values(&results, prop.to_owned(), &ticks, &players);
 
             let s = Series::from_vec(prop, out);
-            if idx == 9999990 {
-                let ls = Series::from_vec("steamid", labels);
+            if idx == 0 {
+                let ls = Series::from_vec("steamid", ids);
+                let names = Series::new("name", names);
                 let ts = Series::from_vec("ticks", ticks);
                 all_series.push(ls);
                 all_series.push(ts);
+                all_series.push(names);
             }
             all_series.push(s);
         }
@@ -290,15 +334,17 @@ impl Parser {
     ) -> Vec<Series> {
         let mut all_series = vec![];
         for (idx, prop) in props.iter().enumerate() {
-            let (out, labels, ticks) =
+            let (out, labels, names, ticks) =
                 self.find_other_values(&results, prop.to_owned(), &ticks, &players);
 
             let s = Series::from_vec(prop, out);
             if idx == 0 {
                 let ls = Series::from_vec("steamid", labels);
+                let names = Series::new("name", names);
                 let ts = Series::from_vec("ticks", ticks);
                 all_series.push(ls);
                 all_series.push(ts);
+                all_series.push(names);
             }
             all_series.push(s);
         }
@@ -631,7 +677,6 @@ impl Parser {
 
         match prefix[0] {
             "player" => {
-                println!("{}", str_name);
                 if str_name == "player@m_vecOrigin_X" {
                     return Some(10000);
                 }
@@ -640,15 +685,7 @@ impl Parser {
                 }
                 let sv_map = self.maps.serverclass_map.get(&40).unwrap();
                 for (idx, prop) in sv_map.props.iter().enumerate() {
-                    /*
-                    println!(
-                        "{} == {}",
-                        prop.table.to_owned() + "." + &prop.name.to_owned(),
-                        prefix[1]
-                    );
-                    */
                     if prop.table.to_owned() + "." + &prop.name.to_owned() == prefix[1] {
-                        //println!("FOUND");
                         return Some(idx as i32);
                     }
                 }
@@ -657,16 +694,6 @@ impl Parser {
             "manager" => {
                 let sv_map = self.maps.serverclass_map.get(&41).unwrap();
                 for (idx, prop) in sv_map.props.iter().enumerate() {
-                    /*
-                    println!(
-                        "{} == {}",
-                        "manager_".to_string()
-                            + &prop.table.to_owned()
-                            + "."
-                            + &prop.name.to_owned(),
-                        str_name
-                    );
-                    */
                     if "manager_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
                         == str_name
                     {
@@ -678,13 +705,6 @@ impl Parser {
             "rules" => {
                 let sv_map = self.maps.serverclass_map.get(&39).unwrap();
                 for (idx, prop) in sv_map.props.iter().enumerate() {
-                    /*
-                    println!(
-                        "{} == {}",
-                        "rules_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned(),
-                        str_name
-                    );
-                    */
                     if "rules_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
                         == str_name
                     {
@@ -732,7 +752,7 @@ impl Parser {
         prop_name: String,
         ticks: &Vec<i32>,
         players: &Players,
-    ) -> (Vec<f32>, Vec<u64>, Vec<i32>) {
+    ) -> (Vec<f32>, Vec<u64>, Vec<String>, Vec<i32>) {
         let mut v = vec![];
         let mut steamids = players.get_steamids();
 
@@ -760,6 +780,7 @@ impl Parser {
         let mut out = vec![];
         let mut ids = vec![];
         let mut out_ticks = vec![];
+        let mut names = vec![];
 
         v.sort_by_key(|x| x.0);
         for t in v {
@@ -767,9 +788,10 @@ impl Parser {
                 out.extend(t.1);
                 ids.extend(vec![t.0; ticks.len()]);
                 out_ticks.extend(ticks.clone());
+                names.extend(vec![players.steamid_to_name(t.0); ticks.len()]);
             }
         }
-        (out, ids, out_ticks)
+        (out, ids, names, out_ticks)
     }
 
     #[inline(always)]
@@ -779,8 +801,11 @@ impl Parser {
         prop_name: String,
         ticks: &Vec<i32>,
         players: &Players,
-    ) -> (Vec<f32>, Vec<u64>, Vec<i32>) {
-        let idx = self.str_name_to_idx(prop_name.clone()).unwrap();
+    ) -> (Vec<f32>, Vec<u64>, Vec<String>, Vec<i32>) {
+        let idx = match self.str_name_to_idx(prop_name.clone()) {
+            Some(i) => i,
+            None => return (vec![], vec![], vec![], vec![]),
+        };
         let mut filtered = self.filter_jobs_by_pidx(results, idx, &prop_name);
         filtered.sort_by_key(|x| x.1);
 
@@ -789,20 +814,29 @@ impl Parser {
             .into_group_map_by(|x| players.eid_to_sid(x.2 as u32, x.1));
 
         let mut tasks: Vec<(u64, Vec<&(f32, i32, i32)>)> = vec![];
-        let mut labels = vec![];
+        let mut ids = vec![];
         let mut out_ticks = vec![];
+        let mut names = vec![];
 
         for (sid, data) in grouped_by_sid {
             if sid != None && sid != Some(0) {
                 tasks.push((sid.unwrap(), data));
             }
         }
+        let found_sids: Vec<u64> = tasks.iter().map(|x| x.0).collect();
+        let all_sids = players.get_steamids();
+        for sid in all_sids {
+            if !found_sids.contains(&sid) && sid != 0 {
+                tasks.push((sid, vec![&(0.0, 0, 0)]));
+            }
+        }
 
         tasks.sort_by_key(|x| x.0);
 
         for i in &tasks {
-            labels.extend(vec![i.0; ticks.len()]);
+            ids.extend(vec![i.0; ticks.len()]);
             out_ticks.extend(ticks.clone());
+            names.extend(vec![players.steamid_to_name(i.0); ticks.len()]);
         }
 
         let out: Vec<f32> = tasks
@@ -810,6 +844,6 @@ impl Parser {
             .flat_map(|(_, data)| self.find_wanted_values(data, ticks))
             .collect();
 
-        (out, labels, out_ticks)
+        (out, ids, names, out_ticks)
     }
 }

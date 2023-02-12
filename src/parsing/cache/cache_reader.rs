@@ -133,7 +133,7 @@ impl ReadCache {
                 zip.read_to_end(&mut data).unwrap();
             }
             Err(e) => {
-                //println!("{:?} {}", e, wanted_name);
+                println!("not found {}", wanted_name);
                 return;
             }
         }
@@ -158,11 +158,11 @@ impl ReadCache {
         for bytes in data[bytes_starts_at..bytes_end_at].chunks(BYTES_SIZE) {
             starting_bytes.push(usize::from_le_bytes(bytes.try_into().unwrap()));
         }
-        for bytes in data[entids_start_at..entids_end_at].chunks(PIDX_SIZE) {
-            entids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
-        }
         for bytes in data[ticks_start_at..].chunks(PIDX_SIZE) {
             ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        }
+        for bytes in data[entids_start_at..entids_end_at].chunks(PIDX_SIZE) {
+            entids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
 
         assert_eq!(number_structs, starting_bytes.len());
@@ -185,8 +185,11 @@ impl ReadCache {
         }
         self.deltas.insert("m_vecOrigin_X".to_owned(), vec![]);
         self.deltas.insert("m_vecOrigin_Y".to_owned(), vec![]);
-
-        let v = self.deltas.get_mut(wanted_name).unwrap();
+        println!("WANTED {}", wanted_name);
+        let v = match self.deltas.get_mut(wanted_name) {
+            Some(dv) => dv,
+            None => return,
+        };
         v.reserve(number_structs);
 
         for (byte, entid, tick) in izip!(&starting_bytes, &ticks, &entids) {
@@ -201,7 +204,7 @@ impl ReadCache {
 
     pub fn read_deltas_by_name(
         &mut self,
-        wanted_name: &str,
+        wanted_name_temp: &str,
         sv_cls_map: &HashMap<u16, ServerClass>,
     ) {
         /*
@@ -212,15 +215,24 @@ impl ReadCache {
 
         We are storing the structs in SOA form.
         */
-        // let wanted_name = "player_".to_owned() + &wanted_name;
+
+        let wanted_name = if wanted_name_temp.contains("m_vecOrigin") {
+            "player@DT_CSNonLocalPlayerExclusive.m_vecOrigin"
+        } else {
+            wanted_name_temp
+        };
 
         let mut data = vec![];
-        let x = self
-            .zip
-            .by_name(&wanted_name)
-            .unwrap()
-            .read_to_end(&mut data)
-            .unwrap();
+        match self.zip.by_name(&wanted_name) {
+            Ok(mut zip) => {
+                zip.read_to_end(&mut data).unwrap();
+            }
+            Err(e) => {
+                println!("no found file {}", wanted_name);
+                return;
+            }
+        }
+
         // First 8 bytes = number of "rows"
         let number_structs = usize::from_le_bytes(data[..8].try_into().unwrap());
 
@@ -241,11 +253,11 @@ impl ReadCache {
         for bytes in data[bytes_starts_at..bytes_end_at].chunks(BYTES_SIZE) {
             starting_bytes.push(usize::from_le_bytes(bytes.try_into().unwrap()));
         }
-        for bytes in data[entids_start_at..entids_end_at].chunks(PIDX_SIZE) {
-            entids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
-        }
         for bytes in data[ticks_start_at..].chunks(PIDX_SIZE) {
             ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        }
+        for bytes in data[entids_start_at..entids_end_at].chunks(PIDX_SIZE) {
+            entids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
 
         assert_eq!(number_structs, starting_bytes.len());
@@ -267,15 +279,16 @@ impl ReadCache {
             }
         }
 
-        self.deltas
-            .insert("player@m_vecOrigin_X".to_owned(), vec![]);
-        self.deltas
-            .insert("player@m_vecOrigin_Y".to_owned(), vec![]);
+        self.deltas.insert(
+            "player@DT_CSNonLocalPlayerExclusive.m_vecOrigin".to_owned(),
+            vec![],
+        );
 
         let v = self.deltas.get_mut(wanted_name).unwrap();
         v.reserve(number_structs);
 
         for (byte, entid, tick) in izip!(&starting_bytes, &ticks, &entids) {
+            // println!("{} {} {}", byte, entid, tick);
             v.push(Delta {
                 byte: *byte as u64,
                 entid: *entid as u32,

@@ -6,41 +6,30 @@ import tqdm
 from collections import Counter
 import time
 import matplotlib.pyplot as plt
-
-
-# pd.set_option('display.max_rows', 500000)
+import numpy as np
 
 
 def coordinates(file):
-    print(file)
     parser = DemoParser(file)
-    df2 = pd.DataFrame(parser.parse_ticks(["player@DT_CSPlayer.m_angEyeAngles[1]", "manager@m_iKills"], ticks=[x for x in range(40000, 40001)]))
-    print(df2)
+    df = parser.parse_events("player_hurt")
+    #print(df)
 
 if __name__ == "__main__":
-    import numpy as np
-    # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[:1]
-    # files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5]
-    # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[15:16]
-    # print(files)
-    files = glob.glob("/home/laiho/Documents/demos/mygames/*")#[80:81]
-    # files = glob.glob("/home/laiho/Documents/demos/ow/*")
-
-    with mp.Pool(processes=1) as pool:
+    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5:6]
+    with mp.Pool(processes=12) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(
-            coordinates, files), total=len(files)))
-    a = np.concatenate(results)
-
+            coordinates, files), total=len(files), desc="Parsing demos"))
+    print(sum(results))
 
 """
-0  76561198055893769  40000               8.0
-1  76561198134270402  40000               1.0
-2  76561198189245325  40000               7.0
-3  76561198211930059  40000               1.0
-4  76561198272632133  40000               3.0
-5  76561198362125234  40000               3.0
-6  76561198980562947  40000               1.0
-7  76561199005454535  40000               2.0
-8  76561199029155762  40000               3.0
-9  76561199066169302  40000               6.0
-"""
+0  76561197993611582  10000                           50.0
+1  76561198089780719  10000                          450.0
+2  76561198134270402  10000                          150.0
+3  76561198147100782  10000                          150.0
+4  76561198189734257  10000                          150.0
+5  76561198194694750  10000                          150.0
+6  76561198201296319  10000                          400.0
+7  76561198229793868  10000                          150.0
+8  76561198258044111  10000                         1100.0
+9  76561198271657717  10000                          750.0
+""" 

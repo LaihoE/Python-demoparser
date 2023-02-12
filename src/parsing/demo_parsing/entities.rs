@@ -56,7 +56,12 @@ impl Parser {
         blueprint: &MsgBluePrint,
         mmap: &Mmap,
         sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+        only_cache: bool,
     ) -> JobResult {
+        // This will only return indicies no prop data
+        if only_cache {
+            return Parser::parse_packet_entities_indicies(blueprint, mmap, sv_cls_map);
+        }
         let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
         let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
         let result = Parser::_parse_packet_entities(msg, sv_cls_map, blueprint.tick);
@@ -99,10 +104,20 @@ impl Parser {
                 // IF ENTITY DOES NOT EXIST
                 // These bits are for creating the ent but we use hack for it so not needed
                 let _ = b.read_nbits(19)?;
-                all_props.extend(parse_ent_props(entity_id, &mut b, sv_cls_map, tick));
+                match parse_ent_props(entity_id, &mut b, sv_cls_map, tick) {
+                    Some(props) => {
+                        all_props.extend(props);
+                    }
+                    None => {}
+                };
             } else {
                 // IF ENTITY DOES EXIST
-                all_props.extend(parse_ent_props(entity_id, &mut b, sv_cls_map, tick));
+                match parse_ent_props(entity_id, &mut b, sv_cls_map, tick) {
+                    Some(props) => {
+                        all_props.extend(props);
+                    }
+                    None => {}
+                };
             }
         }
 
@@ -132,34 +147,26 @@ fn get_cls_id(ent_id: i32) -> u16 {
     }
 }
 #[inline(always)]
-pub fn parse_indicies(b: &mut MyBitreader) -> SmallVec<[i32; 64]> {
+pub fn parse_indicies(b: &mut MyBitreader) -> Option<SmallVec<[i32; 64]>> {
     /*
     Gets wanted prop indicies. The index maps to a Prop struct.
     For example Player serverclass (id=40) with index 20 gives m_angEyeAngles[0]
     */
     let mut val = -1;
-    let before = b.reader.bits_remaining().unwrap();
+    let before = b.reader.bits_remaining()?;
     b.reader.refill_lookahead();
     let p = b.reader.peek(54);
-    let new_way = b.read_boolie().unwrap();
+    let new_way = b.read_boolie()?;
     let mut indicies: SmallVec<[_; 64]> = SmallVec::<[i32; 64]>::new();
 
     loop {
-        val = b.read_inx(val, new_way).unwrap();
+        val = b.read_inx(val, new_way)?;
         if val == -1 {
             break;
         }
         indicies.push(val);
     }
-    /*
-    println!(
-        "{} {} {:?}",
-        before - b.reader.bits_remaining().unwrap(),
-        p,
-        indicies
-    );
-    */
-    indicies
+    Some(indicies)
 }
 #[inline(always)]
 pub fn parse_ent_props(
@@ -167,42 +174,57 @@ pub fn parse_ent_props(
     b: &mut MyBitreader,
     sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
     tick: i32,
-) -> Vec<SingleEntOutput> {
+) -> Option<Vec<SingleEntOutput>> {
     let cls_id = get_cls_id(entity_id);
     let svc_map = sv_cls_map;
-    let sv_cls = svc_map.get(&cls_id).unwrap();
-    let indicies = parse_indicies(b);
+
+    let sv_cls = match svc_map.get(&cls_id) {
+        Some(svc) => svc,
+        None => {
+            return None;
+        }
+    };
+    let indicies = match parse_indicies(b) {
+        Some(idc) => idc,
+        None => return None,
+    };
 
     let mut props: Vec<SingleEntOutput> = vec![];
 
     for idx in indicies {
-        let prop = &sv_cls.props[idx as usize];
-        let pdata = b.decode(prop).unwrap();
-        match pdata {
-            PropData::VecXY(v) => {
-                // Extract vec into their own props
-                props.push(SingleEntOutput {
-                    ent_id: entity_id,
-                    prop_inx: 10000,
-                    data: PropData::F32(v[0]),
-                });
-                props.push(SingleEntOutput {
-                    ent_id: entity_id,
-                    prop_inx: 10001,
-                    data: PropData::F32(v[1]),
-                });
-            }
-            _ => {
-                let data = SingleEntOutput {
-                    ent_id: entity_id,
-                    prop_inx: idx,
-                    data: pdata,
-                };
-                props.push(data);
+        match sv_cls.props.get(idx as usize) {
+            None => return None,
+
+            Some(x) => {
+                let pdata = b.decode(x);
+                match pdata {
+                    Some(PropData::VecXY(v)) => {
+                        // Extract vec into their own props
+                        props.push(SingleEntOutput {
+                            ent_id: entity_id,
+                            prop_inx: 10000,
+                            data: PropData::F32(v[0]),
+                        });
+                        props.push(SingleEntOutput {
+                            ent_id: entity_id,
+                            prop_inx: 10001,
+                            data: PropData::F32(v[1]),
+                        });
+                    }
+                    None => return None,
+                    _ => {
+                        let data = SingleEntOutput {
+                            ent_id: entity_id,
+                            prop_inx: idx,
+                            data: pdata.unwrap(),
+                        };
+                        props.push(data);
+                    }
+                }
             }
         }
     }
-    props
+    Some(props)
 }
 
 pub fn parse_baselines(

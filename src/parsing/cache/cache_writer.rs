@@ -2,12 +2,6 @@ use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::JobResult;
 use ahash::HashMap;
 use itertools::Itertools;
-use rayon::prelude::IntoParallelIterator;
-use rayon::prelude::*;
-use serde::Deserialize;
-use serde::Serialize;
-use serde_cbor;
-use std::error::Error;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::fs::{create_dir, metadata};
@@ -25,6 +19,14 @@ pub struct WriteCache {
     pub ge_start: u64,
     pub zip: ZipWriter<File>,
 }
+
+struct CacheEntry {
+    byte: u64,
+    tick: i32,
+    pidx: i32,
+    entid: u32,
+}
+
 use crate::parsing::cache::cache_reader::ReadCache;
 use crate::parsing::players::Players;
 
@@ -98,38 +100,19 @@ impl WriteCache {
         "rules@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
     }
 
-    fn write_bytes_to_zip(&mut self, data: &Vec<&&(u64, i32, i32, i32)>, name: &String) {
+    fn write_bytes_to_zip(&mut self, data: &Vec<&CacheEntry>, name: &String) {
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
         self.zip.start_file(name, options).unwrap();
         let mut byt = vec![];
         byt.extend(data.len().to_le_bytes());
         for t in data {
-            byt.extend(t.0.to_le_bytes());
+            byt.extend(t.byte.to_le_bytes());
         }
         for t in data {
-            byt.extend(t.3.to_le_bytes());
+            byt.extend(t.tick.to_le_bytes());
         }
         for t in data {
-            byt.extend(t.2.to_le_bytes());
-        }
-        self.zip.write_all(&byt).unwrap();
-    }
-    fn write_player_bytes_to_zip(&mut self, data: &Vec<&(u64, i32, i32, i32)>, name: &String) {
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
-        self.zip.start_file(name, options).unwrap();
-        let mut byt = vec![];
-        byt.extend(data.len().to_le_bytes());
-
-        for (idx, t) in data.iter().enumerate() {
-            byt.extend(t.0.to_le_bytes());
-        }
-
-        for t in data {
-            byt.extend(t.3.to_le_bytes());
-        }
-
-        for (idx, t) in data.iter().enumerate() {
-            byt.extend(t.2.to_le_bytes());
+            byt.extend(t.entid.to_le_bytes());
         }
         self.zip.write_all(&byt).unwrap();
     }
@@ -145,54 +128,50 @@ impl WriteCache {
                 if this_ents_indicies.entid < 64 && this_ents_indicies.entid > 0 {
                     for index in &this_ents_indicies.prop_indicies {
                         if !forbidden.contains(&index) {
-                            player_props.push((
-                                this_ents_indicies.byte,
-                                *index,
-                                this_ents_indicies.entid,
-                                this_ents_indicies.tick,
-                            ))
-                        } else {
-                            other_props.push((
-                                this_ents_indicies.byte,
-                                *index,
-                                this_ents_indicies.entid,
-                                this_ents_indicies.tick,
-                            ))
+                            player_props.push(CacheEntry {
+                                byte: this_ents_indicies.byte,
+                                pidx: *index,
+                                entid: this_ents_indicies.entid as u32,
+                                tick: this_ents_indicies.tick,
+                            })
                         }
+                    }
+                } else {
+                    for index in &this_ents_indicies.prop_indicies {
+                        other_props.push(CacheEntry {
+                            byte: this_ents_indicies.byte,
+                            pidx: *index,
+                            entid: this_ents_indicies.entid as u32,
+                            tick: this_ents_indicies.tick,
+                        })
                     }
                 }
             }
         }
-        println!("PL {}", player_props.len());
-        println!("PL {}", other_props.len());
 
-        let m = player_props.iter().into_group_map_by(|x| x.1);
+        let group_by_pidx = player_props.iter().into_group_map_by(|x| x.pidx);
 
         /*
         Write data per prop. Also use SoA form for ~3x size reduction.
         */
 
-        for idx in 0..11000 {
-            match m.get(&idx) {
-                Some(data) => {
-                    let prop_str_name = if idx == 10000 {
-                        "player@m_vecOrigin_X".to_string()
-                    } else if idx == 10001 {
-                        "player@m_vecOrigin_Y".to_string()
-                    } else {
-                        self.to_str_name_player_prop(sv_cls_map, idx)
-                    };
-                    self.write_player_bytes_to_zip(data, &prop_str_name);
-                }
-                None => {}
-            }
+        for (pidx, data) in &group_by_pidx {
+            let prop_str_name = if *pidx == 10000 {
+                "player@m_vecOrigin_X".to_string()
+            } else if *pidx == 10001 {
+                "player@m_vecOrigin_Y".to_string()
+            } else {
+                self.to_str_name_player_prop(sv_cls_map, *pidx)
+            };
+            self.write_bytes_to_zip(data, &prop_str_name);
         }
+
         let mut teams = vec![];
         let mut manager = vec![];
         let mut rules = vec![];
 
-        for field in &other_props {
-            match field.2 {
+        for field in other_props {
+            match field.entid {
                 // TEAM
                 65 => teams.push(field),
                 66 => teams.push(field),
@@ -209,30 +188,14 @@ impl WriteCache {
         self.write_others(teams, sv_cls_map, "teams");
         self.write_others(manager, sv_cls_map, "manager");
         self.write_others(rules, sv_cls_map, "rules");
-
-        /*
-        self.zip.start_file("other_props", options).unwrap();
-
-        let mut byt = vec![];
-        for field in &other_props {
-            byt.extend(field.0.to_le_bytes());
-        }
-        for field in &other_props {
-            byt.extend(field.3.to_le_bytes());
-        }
-        for field in &other_props {
-            byt.extend(field.2.to_le_bytes());
-        }
-        self.zip.write_all(&byt).unwrap();
-        */
     }
     fn write_others(
         &mut self,
-        data: Vec<&(u64, i32, i32, i32)>,
+        data: Vec<CacheEntry>,
         sv_cls_map: &HashMap<u16, ServerClass>,
         write_type: &str,
     ) {
-        let grouped_by_pidx = data.iter().into_group_map_by(|x| x.1);
+        let grouped_by_pidx = data.iter().into_group_map_by(|x| x.pidx);
         for (pidx, data) in grouped_by_pidx {
             let str_name = match write_type {
                 "teams" => self.to_str_name_team_prop(sv_cls_map, pidx),

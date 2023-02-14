@@ -1,8 +1,8 @@
 use crate::parsing::cache::cache_reader::ReadCache;
-use crate::parsing::create_output::ExtraEventRequest;
+use crate::parsing::create_output::create_output::ExtraEventRequest;
 use crate::parsing::demo_parsing::*;
 use crate::parsing::players::Players;
-use ahash::HashMap;
+use ahash::{HashMap, HashSet};
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use itertools::Itertools;
 
@@ -50,7 +50,7 @@ impl ReadCache {
         svc_map: &HashMap<u16, ServerClass>,
         players: &Players,
     ) -> Vec<u64> {
-        let mut wanted_bytes = vec![];
+        let mut wanted_bytes = HashSet::default();
         for prop in props {
             let prefix: Vec<&str> = prop.split("@").collect();
 
@@ -58,12 +58,10 @@ impl ReadCache {
                 "player" => {
                     self.read_deltas_by_name(prop, &svc_map);
                     for uid in uids {
-                        wanted_bytes.extend(self.find_delta_ticks(
-                            *uid,
-                            prop.to_owned(),
-                            &ticks,
-                            &players,
-                        ));
+                        let bytes = self.find_delta_ticks(*uid, prop.to_owned(), &ticks, &players);
+                        for byte in bytes {
+                            wanted_bytes.insert(byte);
+                        }
                     }
                 }
                 "rules" => self.read_other_deltas_by_name(prop, &svc_map, 39),
@@ -73,7 +71,7 @@ impl ReadCache {
             }
         }
         // Unique bytes
-        wanted_bytes.iter().map(|x| x.clone()).unique().collect()
+        wanted_bytes.iter().map(|x| x.clone()).collect()
     }
 
     pub fn find_delta_ticks_others(
@@ -83,7 +81,6 @@ impl ReadCache {
         wanted_ticks: &Vec<i32>,
         players: &Players,
     ) -> Vec<u64> {
-        // println!("Looking for: {:?}", prop_name);
         let x = match self.deltas.get(&prop_name) {
             Some(x) => {
                 let mut last_idx = 0;
@@ -157,32 +154,21 @@ impl ReadCache {
         if temp_ticks.len() == 0 {
             return vec![];
         }
+        //println!("Looking for: {:?}", wanted_ticks);
 
-        let mut wanted_bytes = Vec::with_capacity(wanted_ticks.len());
         let mut sorted_ticks = temp_ticks.clone();
         sorted_ticks.sort_by_key(|x| x.1);
-        let mut last_idx = 0;
 
-        for wanted_tick in wanted_ticks {
-            for j in sorted_ticks[last_idx..].windows(2) {
-                last_idx += 1;
-                if j[0].1 <= *wanted_tick && j[1].1 > *wanted_tick {
-                    wanted_bytes.push(j[0].0);
-                    break;
-                }
-            }
-        }
-
-        let mut bin = vec![];
+        let mut wanted_bytes = Vec::with_capacity(wanted_ticks.len());
         for wanted_tick in wanted_ticks {
             let idx = sorted_ticks.partition_point(|x| x.1 < *wanted_tick);
             if idx > 0 {
-                bin.push(sorted_ticks[idx - 1].0);
+                wanted_bytes.push(sorted_ticks[idx - 1].0);
             } else {
-                bin.push(sorted_ticks[0].0);
+                wanted_bytes.push(sorted_ticks[0].0);
             }
         }
-        bin
+        wanted_bytes
     }
 
     pub fn get_stringtables(&self) -> Vec<u64> {

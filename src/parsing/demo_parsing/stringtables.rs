@@ -114,7 +114,7 @@ impl Parser {
                 data: vec![],
             };
 
-            for _ in 1..50000 {
+            for _ in 1..2 {
                 st.data.push(StField {
                     entry: "".to_string(),
                 })

@@ -38,7 +38,6 @@ impl ByteReader {
         }
     }
 
-    #[inline]
     pub fn read_varint(&mut self) -> u32 {
         let mut result: u32 = 0;
         let mut count: u8 = 0;
@@ -58,7 +57,7 @@ impl ByteReader {
         }
         result as u32
     }
-    #[inline]
+
     pub fn read_short(&mut self) -> u16 {
         let s = u16::from_le_bytes(
             self.bytes[self.byte_idx..self.byte_idx + 2]
@@ -68,7 +67,7 @@ impl ByteReader {
         self.byte_idx += 2;
         s
     }
-    #[inline]
+
     pub fn read_string(&mut self) -> String {
         let mut v = vec![];
         loop {
@@ -82,7 +81,7 @@ impl ByteReader {
         let s = String::from_utf8_lossy(&v);
         s.to_string()
     }
-    #[inline]
+
     pub fn read_i32(&mut self) -> i32 {
         let i = i32::from_le_bytes(
             self.bytes[self.byte_idx..self.byte_idx + 4]
@@ -92,23 +91,23 @@ impl ByteReader {
         self.byte_idx += 4;
         i
     }
-    #[inline]
+
     pub fn read_byte(&mut self) -> u8 {
         let b = self.bytes[self.byte_idx];
         self.byte_idx += 1;
         b
     }
-    #[inline]
+
     pub fn skip_n_bytes(&mut self, n: u32) {
         self.byte_idx += n as usize;
     }
-    #[inline]
+
     pub fn read_n_bytes(&mut self, n: u32) -> &[u8] {
         let s = &self.bytes[self.byte_idx..self.byte_idx + n as usize];
         self.byte_idx += n as usize;
         s
     }
-    #[inline(always)]
+
     pub fn read_frame(&mut self) -> (u8, i32) {
         let cmd = self.read_byte();
         let tick = self.read_i32();
@@ -116,7 +115,6 @@ impl ByteReader {
         (cmd, tick)
     }
 
-    #[inline(always)]
     pub fn read_two_varints(&mut self) -> (u32, u32) {
         unsafe {
             {

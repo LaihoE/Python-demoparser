@@ -142,22 +142,22 @@ impl Parser {
             Ok(ge) => ge,
             Err(_) => return JobResult::None,
         };
-        let mut game_events: Vec<GameEvent> = Vec::new();
         let event_desc = &game_events_map[&msg.eventid()];
+
+        if event_desc.name() != wanted_event {
+            return JobResult::None;
+        }
 
         let name_data_pairs =
             gen_name_val_pairs(&msg, event_desc, &blueprint.byte, &blueprint.tick);
 
-        game_events.push({
-            GameEvent {
-                name: event_desc.name().to_owned(),
-                fields: name_data_pairs,
-                tick: blueprint.tick,
-                byte: blueprint.byte,
-                id: msg.eventid(),
-            }
+        return JobResult::GameEvents(GameEvent {
+            name: event_desc.name().to_owned(),
+            fields: name_data_pairs,
+            tick: blueprint.tick,
+            byte: blueprint.byte,
+            id: msg.eventid(),
         });
-        return JobResult::GameEvents(game_events);
     }
 
     pub fn parse_game_event_map(&mut self, blueprint: &MsgBluePrint) {

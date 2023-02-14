@@ -19,17 +19,14 @@ impl<'a> MyBitreader<'a> {
         };
         b
     }
-    #[inline(always)]
     pub fn read_nbits(&mut self, n: u32) -> Option<u32> {
         let bits = self.reader.read_bits(n)?;
         Some(bits as u32 & MASKS[n as usize])
     }
-    #[inline(always)]
     pub fn read_boolie(&mut self) -> Option<bool> {
         self.reader.read_bit()
     }
 
-    #[inline(always)]
     pub fn read_u_bit_var(&mut self) -> Option<u32> {
         let mut ret = self.read_nbits(6)?;
         if ret & 48 == 16 {
@@ -42,7 +39,6 @@ impl<'a> MyBitreader<'a> {
         Some(ret)
     }
 
-    #[inline(always)]
     pub fn read_inx(&mut self, last: i32, new_way: bool) -> Option<i32> {
         if new_way && self.read_boolie()? {
             return Some(last + 1);
@@ -65,7 +61,7 @@ impl<'a> MyBitreader<'a> {
             Some(last + 1 + index as i32)
         }
     }
-    #[inline(always)]
+
     pub fn read_varint(&mut self) -> Option<u32> {
         let mut result: u32 = 0;
         let mut count: i32 = 0;
@@ -85,7 +81,6 @@ impl<'a> MyBitreader<'a> {
         Some(result)
     }
 
-    #[inline(always)]
     pub fn decode_string(&mut self) -> Option<String> {
         let mut length = self.read_nbits(9)?;
         if length == 0 {
@@ -96,7 +91,7 @@ impl<'a> MyBitreader<'a> {
         }
         Some(self.read_string(length as i32)?)
     }
-    #[inline(always)]
+
     pub fn decode(&mut self, prop: &Prop) -> Option<PropData> {
         match prop.p_type {
             0 => Some(PropData::I32(self.decode_int(prop)? as i32)),
@@ -135,7 +130,7 @@ impl<'a> MyBitreader<'a> {
         }
         Some(vec![0, 0, 0])
     }
-    #[inline(always)]
+
     pub fn read_string(&mut self, length: i32) -> Option<String> {
         let mut s: Vec<u8> = Vec::new();
         for _ in 0..length {
@@ -150,7 +145,6 @@ impl<'a> MyBitreader<'a> {
         let out = String::from_utf8_lossy(&s);
         Some(out.to_string())
     }
-    #[inline(always)]
     pub fn read_string_lossy(&mut self, length: i32) -> Option<String> {
         let mut s: Vec<u8> = Vec::new();
         let mut inx = 1;
@@ -168,7 +162,7 @@ impl<'a> MyBitreader<'a> {
         let out = String::from_utf8_lossy(&s);
         Some(out.to_string())
     }
-    #[inline(always)]
+
     pub fn decode_vec(&mut self, prop: &Prop) -> Option<[f32; 3]> {
         let x = self.decode_float(prop)?;
         let y = self.decode_float(prop)?;
@@ -188,7 +182,7 @@ impl<'a> MyBitreader<'a> {
             Some([x, y, z])
         }
     }
-    #[inline(always)]
+
     pub fn read_bits_st(&mut self, n: u32) -> Option<Vec<u8>> {
         let eight = 8.try_into().unwrap();
         let mut bytarr: Vec<u8> = vec![];
@@ -198,18 +192,17 @@ impl<'a> MyBitreader<'a> {
         Some(bytarr)
     }
 
-    #[inline(always)]
     pub fn decode_vec_xy(&mut self, prop: &Prop) -> Option<[f32; 2]> {
         let x = self.decode_float(prop)?;
         let y = self.decode_float(prop)?;
         let v = [x, y];
         Some(v)
     }
-    #[inline(always)]
+
     pub fn read_sint_bits(&mut self, n: i32) -> Option<u32> {
         Some(self.read_nbits(n.try_into().unwrap())? << (32 - n) >> (32 - n))
     }
-    #[inline(always)]
+
     pub fn read_bit_cell_coord(&mut self, n: usize, coord_type: u32) -> Option<u32> {
         // SKIP FOR NOW, WATCH OUT
         match coord_type {
@@ -224,7 +217,7 @@ impl<'a> MyBitreader<'a> {
             }
         }
     }
-    #[inline(always)]
+
     pub fn read_bit_normal(&mut self) -> Option<f64> {
         let sign = self.read_boolie()?;
         let frac = self.read_nbits(11)?;
@@ -235,7 +228,7 @@ impl<'a> MyBitreader<'a> {
             Some(result)
         }
     }
-    #[inline(always)]
+
     pub fn read_bit_coord(&mut self) -> Option<i32> {
         let mut int_val = 0;
         let mut frac_val = 0;
@@ -262,7 +255,6 @@ impl<'a> MyBitreader<'a> {
         }
     }
 
-    #[inline(always)]
     pub fn decode_special_float(&mut self, prop: &Prop) -> Option<f32> {
         let mut val = 0.0;
         let flags = prop.flags;
@@ -281,7 +273,7 @@ impl<'a> MyBitreader<'a> {
         }
         Some(val)
     }
-    #[inline(always)]
+
     pub fn decode_float(&mut self, prop: &Prop) -> Option<f32> {
         let val = self.decode_special_float(prop)?;
 
@@ -297,7 +289,7 @@ impl<'a> MyBitreader<'a> {
             Some(val)
         }
     }
-    #[inline(always)]
+
     pub fn decode_int(&mut self, prop: &Prop) -> Option<u32> {
         let flags = prop.flags;
         if flags & (1 << 19) != 0 {
@@ -324,7 +316,7 @@ impl<'a> MyBitreader<'a> {
             }
         }
     }
-    #[inline(always)]
+
     pub fn read_sbit_long(&mut self, numbits: u32) -> Option<i32> {
         let nret = self.read_nbits(numbits)? as i32;
         Some((nret << (32 - numbits)) >> (32 - numbits))

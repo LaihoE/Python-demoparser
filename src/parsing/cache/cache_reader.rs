@@ -96,14 +96,12 @@ impl ReadCache {
     }
 
     pub fn get_player_messages(&mut self) -> Vec<u64> {
-        self.read_stringtables();
-        // self.read_game_events();
-
-        let (ge_start, dt_start) = self.read_maps();
         let mut wanted_bytes = vec![];
+
+        self.read_stringtables();
+        let (ge_start, dt_start) = self.read_maps();
         wanted_bytes.push(ge_start as u64);
         wanted_bytes.push(dt_start as u64);
-
         wanted_bytes.extend(self.get_stringtables());
         wanted_bytes
     }
@@ -133,7 +131,6 @@ impl ReadCache {
                 zip.read_to_end(&mut data).unwrap();
             }
             Err(e) => {
-                println!("not found {}", wanted_name);
                 return;
             }
         }
@@ -185,7 +182,7 @@ impl ReadCache {
         }
         self.deltas.insert("m_vecOrigin_X".to_owned(), vec![]);
         self.deltas.insert("m_vecOrigin_Y".to_owned(), vec![]);
-        println!("WANTED {}", wanted_name);
+
         let v = match self.deltas.get_mut(wanted_name) {
             Some(dv) => dv,
             None => return,
@@ -228,7 +225,6 @@ impl ReadCache {
                 zip.read_to_end(&mut data).unwrap();
             }
             Err(e) => {
-                println!("no found file {}", wanted_name);
                 return;
             }
         }

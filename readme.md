@@ -1,10 +1,21 @@
 # CSGO demo parser for Python
 
-Demo parser for Counter-Strike: Global Offensive. Parser is used to collect data from replay files (".dem" files).  
-The goal of the parser fast and simple. Performance is solved by having Rust do the heavy lifting and to keep it simple we completely avoid "hooks" and rather just let users "query" the demo.
+Demo parser for Counter-Strike: Global Offensive. Parser is used to collect data from replay files (".dem" files).
+The parser lets users query the files, similarly to how one would interact with a database. The benefit of this desing is that the useage is very simple: Ask for fields --> get DataFrame back.
+
+
+For example:
+```python
+from demoparser import DemoParser
+
+wanted_fields = ["X", "Y"]
+parser = DemoParser("path_to_demo.dem")
+df = parser.parse_ticks(wanted_fields)
+```
+returns all X and Y coordinates of players during the demo.
 
 ## Installing
-Python >= 3.7 (but not 3.11 it came out like a few days ago, will add when available)
+Python >= 3.7
 ```bash
 pip install demoparser
 ```

@@ -50,6 +50,7 @@ pub struct ParserSettings {
     pub wanted_players: Vec<u64>,
     pub playback_frames: usize,
     pub og_names: Vec<String>,
+    pub is_cache_run: bool,
 }
 
 impl Parser {
@@ -110,6 +111,7 @@ impl Parser {
                     wanted_players: wanted_players,
                     playback_frames: 0,
                     og_names: og_names,
+                    is_cache_run: false,
                 };
                 let state = ParserState {
                     fp: 0,

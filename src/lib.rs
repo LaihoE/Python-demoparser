@@ -11,6 +11,7 @@ use parsing::utils::Header;
 use parsing::variants::PropData;
 use phf::phf_map;
 use polars::prelude::ArrowField;
+use polars::prelude::NamedFrom;
 use polars::series::Series;
 use polars_arrow::export::arrow;
 use polars_arrow::prelude::ArrayRef;
@@ -24,6 +25,7 @@ use pyo3::{PyAny, PyObject, PyResult};
 use pyo3::{PyErr, Python};
 
 use parsing::utils::TYPEHM;
+use pyo3::types::IntoPyDict;
 use std::io::prelude::*;
 use std::path::Path;
 use std::vec;
@@ -192,7 +194,6 @@ impl DemoParser {
                     let py_series = rust_series_to_py_series(&s).unwrap();
                     ss.push(py_series);
                 }
-                use pyo3::types::IntoPyDict;
 
                 if rows == 0 {
                     let pandas = py.import("pandas")?;
@@ -286,71 +287,87 @@ impl DemoParser {
         }
     }
 
-    /*
-    pub fn parse_players(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+    #[args(py_kwargs = "**")]
+    pub fn parse_players(&self, py: Python) -> PyResult<PyObject> {
+        // Need to clean up this function.
+        let wanted_props = vec!["player@DT_BaseEntity.m_iTeamNum".to_string()];
         let parser = Parser::new(
             self.path.clone(),
             true,
+            false,
+            (0..1 as i32).collect(),
             vec![],
-            vec![],
-            vec!["m_iTeamNum".to_string()],
+            wanted_props.clone(),
             "".to_string(),
-            true,
+            false,
             false,
             true,
             9999999,
-            vec![],
+            wanted_props.clone(),
         );
+
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err(format!(
                 "Couldnt read demo file. Error: {}",
                 e
             ))),
             Ok(mut parser) => {
-                let _: Header = parser.parse_demo_header();
-                let _ = parser.start_parsing(&vec![]);
-                let players = parser.maps.players;
-                let mut py_players = vec![];
-                let ent_manager = &parser.state.entities[70 as usize].1;
-                for (_, player) in players {
-                    let team = get_player_team(&parser.state.entities[player.entity_id as usize].1);
-                    let mut hm = player.to_hashmap(py);
-                    let team = match team {
-                        2 => "T",
-                        3 => "CT",
-                        _ => "Missing",
-                    };
+                let h: Header = parser.parse_demo_header();
 
-                    let rank_id =
-                        get_manager_i32_prop(ent_manager, &player, "m_iCompetitiveRanking");
-                    let rank_name = rank_id_to_name(rank_id);
+                parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
+                let mut ss = vec![];
+                let output = parser.start_parsing();
 
-                    let crosshair_code =
-                        get_manager_str_prop(ent_manager, &player, "m_szCrosshairCodes");
+                let mut df = output.df;
+                let mut filtered_series = vec![];
 
-                    let comp_wins =
-                        get_manager_i32_prop(ent_manager, &player, "m_iCompetitiveWins");
-
-                    hm.insert("starting_side".to_string(), team.to_string().to_object(py));
-                    hm.insert(
-                        "crosshair_code".to_string(),
-                        crosshair_code.to_string().to_object(py),
-                    );
-                    hm.insert("rank_name".to_string(), rank_name.to_string().to_object(py));
-                    hm.insert("rank_id".to_string(), rank_id.to_object(py));
-                    hm.insert("comp_wins".to_string(), comp_wins.to_object(py));
-
-                    let dict = pyo3::Python::with_gil(|py| hm.to_object(py));
-                    if player.xuid > 76500000000000000 && player.xuid < 76600000000000000 {
-                        py_players.push(dict);
+                let mut teamnums_vec = vec![];
+                for s in &mut df {
+                    if s.name() == "player@DT_BaseEntity.m_iTeamNum" {
+                        s.rename("starting_team");
+                        let teamnums = s.f32().unwrap();
+                        for x in teamnums {
+                            teamnums_vec.push(x.unwrap() as i32);
+                        }
+                    } else if s.name() != "tick" {
+                        filtered_series.push(s);
                     }
                 }
-                let dict = pyo3::Python::with_gil(|py| py_players.to_object(py));
-                Ok(dict)
+
+                let mut mapping = HashMap::default();
+                mapping.insert(1, "spectator");
+                mapping.insert(2, "CT");
+                mapping.insert(3, "T");
+
+                let mut team_names = vec![];
+                for ti in teamnums_vec {
+                    team_names.push(mapping[&ti]);
+                }
+
+                let mut column_names: Vec<String> = filtered_series
+                    .iter()
+                    .map(|x| x.name().to_string())
+                    .collect();
+                column_names.push("starting_team".to_string());
+
+                for s in &filtered_series {
+                    let py_series = rust_series_to_py_series(&s).unwrap();
+                    ss.push(py_series);
+                }
+                let starting_team_name =
+                    rust_series_to_py_series(&Series::new("starting_team", team_names)).unwrap();
+                ss.push(starting_team_name);
+
+                let polars = py.import("polars").unwrap();
+                // let all_series_py = ss.to_object(py);
+                let df = polars.call_method1("DataFrame", (ss,)).unwrap();
+                df.setattr("columns", column_names.to_object(py)).unwrap();
+                let pandas_df = df.call_method0("to_pandas").unwrap();
+                Ok(pandas_df.to_object(py))
             }
         }
     }
-    */
+
     pub fn parse_header(&self) -> PyResult<Py<PyAny>> {
         let parser = Parser::new(
             self.path.clone(),

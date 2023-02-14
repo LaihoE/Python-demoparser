@@ -1,21 +1,20 @@
-use super::stringtables::UserInfo;
 use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::JobResult;
 use crate::parsing::parser::MsgBluePrint;
 use crate::parsing::parser::Parser;
-use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
 use ahash::RandomState;
-use bitter::BitReader;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use memmap2::Mmap;
 use protobuf::Message;
-use serde::Deserialize;
 use smallvec::SmallVec;
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::convert::TryInto;
+
+/*
+Stripped down version of entities.rs where this one gets prop indicies
+as fast as possible. These are what are written into the cache.
+*/
 
 #[derive(Debug, Clone)]
 pub struct Prop {
@@ -148,7 +147,7 @@ fn get_cls_id(ent_id: i32) -> u16 {
         _ => 40,
     }
 }
-#[inline(always)]
+
 fn parse_indicies(b: &mut MyBitreader) -> Option<SmallVec<[i32; 32]>> {
     /*
     Gets wanted prop indicies. The index maps to a Prop struct.
@@ -166,7 +165,7 @@ fn parse_indicies(b: &mut MyBitreader) -> Option<SmallVec<[i32; 32]>> {
     }
     Some(indicies)
 }
-#[inline(always)]
+
 fn parse_ent_props_indicies(
     entity_id: i32,
     b: &mut MyBitreader,

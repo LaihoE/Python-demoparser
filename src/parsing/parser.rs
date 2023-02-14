@@ -32,7 +32,7 @@ pub struct MsgBluePrint {
 pub enum JobResult {
     PacketEntities(PacketEntsOutput),
     PacketEntitiesIndicies(Vec<EntityIndicies>),
-    GameEvents(Vec<GameEvent>),
+    GameEvents(GameEvent),
     StringTables(Vec<UserInfo>),
     None,
 }
@@ -55,11 +55,11 @@ impl Parser {
             Some(mut cache) => {
                 let wanted_bytes = cache.get_player_messages();
                 self.parse_bytes(wanted_bytes);
-                let jobresults = self.compute_jobs_with_cache(&mut cache);
-                jobresults
+                self.compute_jobs_with_cache(&mut cache)
             }
             // NO CACHE FOUND
             None => {
+                self.settings.is_cache_run = true;
                 self.parse_bytes(vec![]);
                 let jobresults = self.compute_jobs_no_cache();
 
@@ -79,23 +79,23 @@ impl Parser {
                     Some(mut cache) => {
                         let wanted_bytes = cache.get_player_messages();
                         self.parse_bytes(wanted_bytes);
-                        let jobresults = self.compute_jobs_with_cache(&mut cache);
-                        jobresults
+                        self.compute_jobs_with_cache(&mut cache)
                     }
                     None => panic!("FAILED TO READ WRITTEN CACHE"),
                 }
             }
         }
     }
-    #[inline(always)]
+
     pub fn msg_handler(
         blueprint: &MsgBluePrint,
         bytes: &Mmap,
         serverclass_map: &HashMap<u16, ServerClass, RandomState>,
         game_events_map: &HashMap<i32, Descriptor_t, RandomState>,
         only_cache: bool,
+        wanted_event: &str,
     ) -> JobResult {
-        let wanted_event = "player_death";
+        // println!("{} {} {}", blueprint.byte, blueprint.tick, blueprint.msg);
         match blueprint.msg {
             12 => Parser::create_string_table(blueprint, bytes),
             13 => Parser::update_string_table_msg(blueprint, bytes),
@@ -104,20 +104,22 @@ impl Parser {
             _ => JobResult::None,
         }
     }
-    #[inline(always)]
+
     pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>) {
-        /*
-        if wanted_bytes.len() == 0 {
-            return;
-        }
-        */
-        let uniq_bytes: Vec<&u64> = wanted_bytes.iter().dedup().collect();
+        // Collects NETMESSAGES
+        println!("{}", wanted_bytes.len());
+        let mut uniq_bytes: Vec<&u64> = wanted_bytes.iter().dedup().collect();
+        uniq_bytes.sort();
+
         let byte_readers = ByteReader::get_byte_readers(&self.bytes, uniq_bytes);
 
         for mut byte_reader in byte_readers {
             let mut frames_parsed = 0;
             while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
                 if byte_reader.single && frames_parsed > 0 {
+                    break;
+                }
+                if byte_reader.byte_idx >= self.bytes.len() - 200 {
                     break;
                 }
                 let (cmd, tick) = byte_reader.read_frame();
@@ -127,7 +129,7 @@ impl Parser {
             }
         }
     }
-    #[inline(always)]
+
     pub fn parse_cmd(&mut self, cmd: u8, byte_reader: &mut ByteReader) {
         match cmd {
             1 => self.messages_from_packet(byte_reader),
@@ -136,13 +138,16 @@ impl Parser {
             _ => {}
         }
     }
-    #[inline(always)]
+
     pub fn messages_from_packet(&mut self, byte_reader: &mut ByteReader) {
         let packet_started_at = byte_reader.byte_idx - 6;
         byte_reader.skip_n_bytes(160);
         let packet_len = byte_reader.read_i32();
         let goal_inx = byte_reader.byte_idx + packet_len as usize;
         while byte_reader.byte_idx < goal_inx {
+            if byte_reader.byte_idx >= self.bytes.len() - 200 {
+                break;
+            }
             let msg = byte_reader.read_varint();
             let size = byte_reader.read_varint();
             // Get byte boundaries for this msg
@@ -162,7 +167,7 @@ impl Parser {
             }
         }
     }
-    #[inline(always)]
+
     pub fn parse_blueprints(&mut self, only_cache: bool) -> Vec<JobResult> {
         let mut opt = None;
 
@@ -176,6 +181,9 @@ impl Parser {
             self.parse_game_event_map(&opt.unwrap());
         }
 
+        use rayon::iter::IntoParallelRefIterator;
+        use rayon::iter::ParallelIterator;
+
         self.tasks
             .iter()
             .map(|t| {
@@ -185,6 +193,7 @@ impl Parser {
                     &self.maps.serverclass_map,
                     &self.maps.event_map.as_ref().unwrap(),
                     only_cache,
+                    &self.settings.event_name,
                 )
             })
             .collect()

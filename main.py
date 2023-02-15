@@ -4,10 +4,12 @@ import numpy as np
 
 import pandas as pd
   
-# Creating the Series
-sr = pd.Series([11, 21, 8, 18, 65, 18, 32, 10, 5, 32, None])
-sr = np.log2(sr)
-print(sr)
+a = np.array([0, 1, 1, 0]) == 1
+b = np.array([44, 99, 55, 77])
+c = np.where(a, b, 0)
+print(c)
+#>>> [99]
+
 
 
 

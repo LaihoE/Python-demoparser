@@ -16,9 +16,9 @@ def coordinates(file):
 
 if __name__ == "__main__":
     # files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5:6]
-    files = glob.glob("/home/laiho/Documents/demos/mygames/*")#[9:10]
+    files = glob.glob("/home/laiho/Documents/demos/mygames/*")[9:10]
     # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[240:]
-    files = glob.glob("/home/laiho/Documents/demos/bench_pro_demos/*")
+    #files = glob.glob("/home/laiho/Documents/demos/bench_pro_demos/*")
     before = time.time()
     with mp.Pool(processes=12) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(

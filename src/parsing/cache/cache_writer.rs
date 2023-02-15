@@ -1,20 +1,12 @@
 use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::JobResult;
 use ahash::HashMap;
-use ahash::HashSet;
 use itertools::Itertools;
-use rayon::prelude::IntoParallelRefIterator;
-use rayon::prelude::IntoParallelRefMutIterator;
+use std::fs;
 use std::fs::File;
-use std::fs::OpenOptions;
-use std::fs::{create_dir, metadata};
-use std::io::IoSlice;
-use std::io::Read;
 use std::io::Write;
-use std::{fs, time::Instant};
 use zip::write::FileOptions;
-use zip::{ZipArchive, ZipWriter};
-#[feature(write_all_vectored)]
+use zip::ZipWriter;
 
 pub struct WriteCache {
     pub game_events: Vec<GameEvent>,
@@ -23,24 +15,28 @@ pub struct WriteCache {
     pub dt_start: u64,
     pub ge_start: u64,
     pub zip: ZipWriter<File>,
+    pub zip_options: FileOptions,
 }
 #[derive(Debug)]
 struct CacheEntry {
     byte: u64,
-    tick: i32,
     pidx: i32,
     entid: u32,
 }
 
-use crate::parsing::cache::cache_reader::ReadCache;
-use crate::parsing::players::Players;
+const TEAM_CLSID: u16 = 43;
+const MANAGER_CLSID: u16 = 41;
+const RULES_CLSID: u16 = 39;
+const PLAYER_CLSID: u16 = 40;
+const PLAYER_MAX_ENTID: i32 = 64;
 
 impl WriteCache {
     pub fn new(path: &String, jobresults: Vec<JobResult>, dt_start: u64, ge_start: u64) -> Self {
         let (game_events, string_tables, packet_ents) = WriteCache::filter_per_result(jobresults);
 
-        let mut file = fs::File::create(path.to_owned()).unwrap();
-        let mut zip = zip::ZipWriter::new(file);
+        let file = fs::File::create(path.to_owned()).unwrap();
+        let zip = zip::ZipWriter::new(file);
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
 
         WriteCache {
             game_events: game_events,
@@ -49,76 +45,41 @@ impl WriteCache {
             dt_start: dt_start,
             ge_start: ge_start,
             zip: zip,
+            zip_options: options,
         }
     }
     pub fn write_all_caches(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
+        self.write_packet_ents(sv_cls_map);
         self.write_game_events();
         self.write_string_tables();
         self.write_maps();
-        self.write_packet_ents(sv_cls_map);
+    }
+    pub fn write_packet_ents(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
+        let (player_props, other_props, hm, inverse_hm) = self.split_props_gen_idx_map();
+        self.write_tick_map(&inverse_hm);
+        self.write_player_props(player_props, &hm, sv_cls_map);
+        self.write_other_props(other_props, &hm, sv_cls_map);
     }
 
-    pub fn write_maps(&mut self) {
-        // Writes positions where Game event map and dt map start.
-        // These are needed for parsing the rest of the demo so
-        // these have to be parsed always.
-
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-        self.zip.start_file("maps", options).unwrap();
-
-        let mut byt = vec![];
-        byt.extend(self.ge_start.to_le_bytes());
-        byt.extend(self.dt_start.to_le_bytes());
-
-        self.zip.write_all(&byt).unwrap();
-    }
-    pub fn to_str_name_player_prop(
+    pub fn idx_to_str_name(
         &mut self,
         sv_cls_map: &HashMap<u16, ServerClass>,
         idx: i32,
+        write_type: &str,
+        cls_id: u16,
     ) -> String {
-        let player_props = &sv_cls_map.get(&40).unwrap().props;
+        let player_props = &sv_cls_map.get(&cls_id).unwrap().props;
         let prop = player_props.get(idx as usize).unwrap();
-        "player@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
-    }
-    pub fn to_str_name_team_prop(
-        &mut self,
-        sv_cls_map: &HashMap<u16, ServerClass>,
-        idx: i32,
-    ) -> String {
-        let player_props = &sv_cls_map.get(&43).unwrap().props;
-        let prop = player_props.get(idx as usize).unwrap();
-        "team@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
-    }
-    pub fn to_str_name_manager_prop(
-        &mut self,
-        sv_cls_map: &HashMap<u16, ServerClass>,
-        idx: i32,
-    ) -> String {
-        let player_props = &sv_cls_map.get(&41).unwrap().props;
-        let prop = player_props.get(idx as usize).unwrap();
-        "manager@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
-    }
-    pub fn to_str_name_rules_prop(
-        &mut self,
-        sv_cls_map: &HashMap<u16, ServerClass>,
-        idx: i32,
-    ) -> String {
-        let player_props = &sv_cls_map.get(&39).unwrap().props;
-        let prop = player_props.get(idx as usize).unwrap();
-        "rules@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
+        write_type.to_string() + "@" + &prop.table + "." + &prop.name
     }
 
     fn write_bytes_to_zip(
         &mut self,
         data: &mut Vec<&CacheEntry>,
         name: &String,
-        pidx: i32,
         hm: &HashMap<u32, i32>,
-        inverse_hm: &HashMap<i32, (u64, i32)>,
     ) {
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
-        //.compression_level(Some(3));
         self.zip.start_file(name, options).unwrap();
 
         let per_prop = data.iter().group_by(|x| x.byte);
@@ -143,81 +104,75 @@ impl WriteCache {
         self.zip.write_all(&bytes).unwrap();
     }
 
-    pub fn write_packet_ents(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
-        let forbidden = vec![0, 1, 2, 37, 103, 93, 59, 58, 1343, 1297, 40, 41, 26, 27];
+    fn push_cache_entry(
+        forbidden: &Vec<i32>,
+        entindc: &EntityIndicies,
+        out_vec: &mut Vec<CacheEntry>,
+    ) {
+        for idx in &entindc.prop_indicies {
+            if !forbidden.contains(&idx) || entindc.entid > PLAYER_MAX_ENTID {
+                out_vec.push(CacheEntry {
+                    byte: entindc.byte,
+                    pidx: *idx,
+                    entid: entindc.entid as u32,
+                })
+            }
+        }
+    }
+    fn insert_tick_maps(
+        hm: &mut HashMap<u32, i32>,
+        inverse_hm: &mut HashMap<i32, (u64, i32)>,
+        entindc: &EntityIndicies,
+        tick_map_idx: &mut i32,
+    ) {
+        if !hm.contains_key(&(entindc.byte as u32)) {
+            hm.insert(entindc.byte as u32, *tick_map_idx as i32);
+            inverse_hm.insert(*tick_map_idx as i32, (entindc.byte, entindc.tick));
+            *tick_map_idx += 1;
+        }
+    }
+    fn split_props_gen_idx_map(
+        &mut self,
+    ) -> (
+        Vec<CacheEntry>,
+        Vec<CacheEntry>,
+        HashMap<u32, i32>,
+        HashMap<i32, (u64, i32)>,
+    ) {
+        // TODO, they seem constant across demos... only for player props
+        let forbidden = vec![0, 1, 2, 37, 103, 93, 59, 58, 40, 41, 26, 27];
 
         let mut player_props = vec![];
         let mut other_props = vec![];
-
         let mut hm: HashMap<u32, i32> = HashMap::default();
         let mut inverse_hm = HashMap::default();
-
-        let mut idx = 0;
+        let mut tick_map_idx = 0;
 
         for indicies in &self.packet_ents {
             for this_ents_indicies in indicies {
-                if this_ents_indicies.entid < 64 && this_ents_indicies.entid > 0 {
-                    for index in &this_ents_indicies.prop_indicies {
-                        if !forbidden.contains(&index) {
-                            if !hm.contains_key(&(this_ents_indicies.byte as u32)) {
-                                hm.insert(this_ents_indicies.byte as u32, idx as i32);
-                                inverse_hm.insert(
-                                    idx as i32,
-                                    (this_ents_indicies.byte, this_ents_indicies.tick),
-                                );
-                                idx += 1;
-                            }
-
-                            player_props.push(CacheEntry {
-                                byte: this_ents_indicies.byte,
-                                pidx: *index,
-                                entid: this_ents_indicies.entid as u32,
-                                tick: this_ents_indicies.tick,
-                            })
-                        }
-                    }
-                } else {
-                    for index in &this_ents_indicies.prop_indicies {
-                        if !hm.contains_key(&(this_ents_indicies.byte as u32)) {
-                            hm.insert(this_ents_indicies.byte as u32, idx as i32);
-                            inverse_hm.insert(
-                                idx as i32,
-                                (this_ents_indicies.byte, this_ents_indicies.tick),
-                            );
-                            idx += 1;
-                        }
-                        other_props.push(CacheEntry {
-                            byte: this_ents_indicies.byte,
-                            pidx: *index,
-                            entid: this_ents_indicies.entid as u32,
-                            tick: this_ents_indicies.tick,
-                        })
-                    }
-                }
+                // PLAYERS HAVE ENTID < 64
+                let out_vec = match this_ents_indicies.entid < PLAYER_MAX_ENTID {
+                    true => &mut player_props,
+                    false => &mut other_props,
+                };
+                WriteCache::push_cache_entry(&forbidden, this_ents_indicies, out_vec);
+                WriteCache::insert_tick_maps(
+                    &mut hm,
+                    &mut inverse_hm,
+                    this_ents_indicies,
+                    &mut tick_map_idx,
+                );
             }
         }
-
+        (player_props, other_props, hm, inverse_hm)
+    }
+    fn write_player_props(
+        &mut self,
+        player_props: Vec<CacheEntry>,
+        hm: &HashMap<u32, i32>,
+        sv_cls_map: &HashMap<u16, ServerClass>,
+    ) {
         let mut group_by_pidx = player_props.iter().into_group_map_by(|x| x.pidx);
-
-        /*
-        Write data per prop. Also use SoA form for ~3x size reduction.
-        */
-
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
-        self.zip.start_file("tick_mapping", options).unwrap();
-        let mut bytes = vec![];
-        bytes.extend(inverse_hm.len().to_le_bytes());
-        for (k, v) in &inverse_hm {
-            //println!("{} {} {}", k, v.0, v.1);
-            bytes.extend(k.to_le_bytes());
-        }
-        for (k, v) in &inverse_hm {
-            bytes.extend(v.0.to_le_bytes());
-        }
-        for (k, v) in &inverse_hm {
-            bytes.extend(v.1.to_le_bytes());
-        }
-        self.zip.write_all(&bytes).unwrap();
 
         for (pidx, data) in &mut group_by_pidx {
             let prop_str_name = if *pidx == 10000 {
@@ -225,11 +180,29 @@ impl WriteCache {
             } else if *pidx == 10001 {
                 "player@m_vecOrigin_Y".to_string()
             } else {
-                self.to_str_name_player_prop(sv_cls_map, *pidx)
+                self.idx_to_str_name(sv_cls_map, *pidx, "player", PLAYER_CLSID)
             };
-            self.write_bytes_to_zip(data, &prop_str_name, *pidx, &hm, &inverse_hm);
+            self.write_bytes_to_zip(data, &prop_str_name, &hm);
         }
+    }
+    pub fn write_maps(&mut self) {
+        // Writes positions where Game event map and dt map start.
+        // These are needed for parsing the rest of the demo so
+        // these have to be parsed always.
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        self.zip.start_file("maps", options).unwrap();
 
+        let mut bytes = vec![];
+        bytes.extend(self.ge_start.to_le_bytes());
+        bytes.extend(self.dt_start.to_le_bytes());
+        self.zip.write_all(&bytes).unwrap();
+    }
+    fn write_other_props(
+        &mut self,
+        other_props: Vec<CacheEntry>,
+        hm: &HashMap<u32, i32>,
+        sv_cls_map: &HashMap<u16, ServerClass>,
+    ) {
         let mut teams = vec![];
         let mut manager = vec![];
         let mut rules = vec![];
@@ -249,41 +222,61 @@ impl WriteCache {
                 _ => {}
             }
         }
-        self.write_others(teams, sv_cls_map, "teams", &hm, &inverse_hm);
-        self.write_others(manager, sv_cls_map, "manager", &hm, &inverse_hm);
-        self.write_others(rules, sv_cls_map, "rules", &hm, &inverse_hm);
+        self.write_others(teams, sv_cls_map, "teams", &hm);
+        self.write_others(manager, sv_cls_map, "manager", &hm);
+        self.write_others(rules, sv_cls_map, "rules", &hm);
     }
+
     fn write_others(
         &mut self,
         data: Vec<CacheEntry>,
         sv_cls_map: &HashMap<u16, ServerClass>,
         write_type: &str,
         hm: &HashMap<u32, i32>,
-        inverse_hm: &HashMap<i32, (u64, i32)>,
     ) {
-        /*
-        let mut hm: HashMap<u32, i32> = HashMap::default();
-        let mut inverse_hm = HashMap::default();
-
-        let mut idx = 0;
-        for x in &data {
-            if !hm.contains_key(&(x.byte as u32)) {
-                hm.insert(x.byte as u32, idx as i32);
-                inverse_hm.insert(idx as i32, (x.byte, x.tick));
-                idx += 1;
-            }
-        }
-        */
         let mut grouped_by_pidx = data.iter().into_group_map_by(|x| x.pidx);
         for (pidx, data) in &mut grouped_by_pidx {
             let str_name = match write_type {
-                "teams" => self.to_str_name_team_prop(sv_cls_map, *pidx),
-                "manager" => self.to_str_name_manager_prop(sv_cls_map, *pidx),
-                "rules" => self.to_str_name_rules_prop(sv_cls_map, *pidx),
+                "teams" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, TEAM_CLSID),
+                "manager" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, MANAGER_CLSID),
+                "rules" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, RULES_CLSID),
                 _ => panic!("unkown write type"),
             };
-            self.write_bytes_to_zip(data, &str_name, *pidx, &hm, &inverse_hm);
+            self.write_bytes_to_zip(data, &str_name, &hm);
         }
+    }
+
+    pub fn filter_per_result(
+        jobresults: Vec<JobResult>,
+    ) -> (Vec<GameEvent>, Vec<UserInfo>, Vec<Vec<EntityIndicies>>) {
+        let mut game_events = vec![];
+        let mut string_tables = vec![];
+        let mut packet_ents = vec![];
+
+        for jobresult in jobresults {
+            match jobresult {
+                JobResult::GameEvents(ge) => game_events.push(ge),
+                JobResult::PacketEntitiesIndicies(pe) => packet_ents.push(pe),
+                JobResult::StringTables(st) => string_tables.extend(st),
+                _ => {}
+            }
+        }
+        (game_events, string_tables, packet_ents)
+    }
+    fn write_tick_map(&mut self, inverse_hm: &HashMap<i32, (u64, i32)>) {
+        // Writes hm that maps idx --> (tick, byte) pairs.
+        // This is done to compress better ie. small integer vs (integer + u64)
+
+        self.zip
+            .start_file("tick_mapping", self.zip_options)
+            .unwrap();
+        let mut bytes = vec![];
+        bytes.extend(inverse_hm.len().to_le_bytes());
+        bytes.extend(inverse_hm.keys().flat_map(|x| x.to_le_bytes()));
+        bytes.extend(inverse_hm.iter().flat_map(|(_, v)| v.0.to_le_bytes()));
+        bytes.extend(inverse_hm.iter().flat_map(|(_, v)| v.1.to_le_bytes()));
+
+        self.zip.write_all(&bytes).unwrap();
     }
     pub fn write_string_tables(&mut self) {
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
@@ -312,23 +305,5 @@ impl WriteCache {
             byt.extend(ge.id.to_le_bytes());
         }
         self.zip.write_all(&byt).unwrap();
-    }
-
-    pub fn filter_per_result(
-        jobresults: Vec<JobResult>,
-    ) -> (Vec<GameEvent>, Vec<UserInfo>, Vec<Vec<EntityIndicies>>) {
-        let mut game_events = vec![];
-        let mut string_tables = vec![];
-        let mut packet_ents = vec![];
-
-        for jobresult in jobresults {
-            match jobresult {
-                JobResult::GameEvents(ge) => game_events.push(ge),
-                JobResult::PacketEntitiesIndicies(pe) => packet_ents.push(pe),
-                JobResult::StringTables(st) => string_tables.extend(st),
-                _ => {}
-            }
-        }
-        (game_events, string_tables, packet_ents)
     }
 }

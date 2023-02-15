@@ -134,37 +134,41 @@ impl ReadCache {
                 return;
             }
         }
-
+        let (idx_byte_map, idx_tick_map) = self.read_byte_tick_map().unwrap();
+        //println!("{:?}", a);
         // First 8 bytes = number of "rows"
         let number_structs = usize::from_le_bytes(data[..8].try_into().unwrap());
-
-        let mut starting_bytes = Vec::with_capacity(number_structs);
+        let mut idx = Vec::with_capacity(number_structs);
         let mut entids = Vec::with_capacity(number_structs);
-        let mut ticks = Vec::with_capacity(number_structs);
-        // Stored as u64
-        let BYTES_SIZE = 8;
-        // Stored as u32
-        let PIDX_SIZE = 4;
+        // Stored as i32
+        let BYTES_SIZE = 4;
+        // Stored as i32
+        let PIDX_SIZE = 2;
 
         let bytes_starts_at = 8;
         let bytes_end_at = number_structs * BYTES_SIZE + 8;
         let entids_start_at = bytes_end_at;
-        let entids_end_at = bytes_end_at + PIDX_SIZE * number_structs;
-        let ticks_start_at = entids_end_at;
 
         for bytes in data[bytes_starts_at..bytes_end_at].chunks(BYTES_SIZE) {
-            starting_bytes.push(usize::from_le_bytes(bytes.try_into().unwrap()));
+            idx.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
-        for bytes in data[ticks_start_at..].chunks(PIDX_SIZE) {
-            ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
-        }
-        for bytes in data[entids_start_at..entids_end_at].chunks(PIDX_SIZE) {
-            entids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        for bytes in data[entids_start_at..].chunks(PIDX_SIZE) {
+            entids.push(i16::from_le_bytes(bytes.try_into().unwrap()));
         }
 
-        assert_eq!(number_structs, starting_bytes.len());
         assert_eq!(number_structs, entids.len());
-        assert_eq!(number_structs, ticks.len());
+        assert_eq!(number_structs, idx.len());
+        assert_eq!(entids.len(), idx.len());
+
+        let mut starting_bytes = vec![];
+        let mut ticks = vec![];
+        let mut entids_out = vec![];
+
+        for (idx, entid) in idx.iter().zip(entids) {
+            starting_bytes.push(idx_byte_map[idx]);
+            ticks.push(idx_tick_map[idx]);
+            entids_out.push(entid);
+        }
 
         let p: Vec<&str> = wanted_name.split("@").collect();
         let dot: Vec<&str> = wanted_name.split(".").collect();
@@ -180,16 +184,16 @@ impl ReadCache {
                 self.deltas.insert(key, vec![]);
             }
         }
-        self.deltas.insert("m_vecOrigin_X".to_owned(), vec![]);
-        self.deltas.insert("m_vecOrigin_Y".to_owned(), vec![]);
 
-        let v = match self.deltas.get_mut(wanted_name) {
-            Some(dv) => dv,
-            None => return,
-        };
+        self.deltas.insert(
+            "player@DT_CSNonLocalPlayerExclusive.m_vecOrigin".to_owned(),
+            vec![],
+        );
+
+        let v = self.deltas.get_mut(wanted_name).unwrap();
         v.reserve(number_structs);
 
-        for (byte, entid, tick) in izip!(&starting_bytes, &ticks, &entids) {
+        for (byte, entid, tick) in izip!(&starting_bytes, &entids_out, &ticks) {
             // println!("{} {} {}", byte, entid, tick);
             v.push(Delta {
                 byte: *byte as u64,
@@ -197,6 +201,51 @@ impl ReadCache {
                 tick: *tick,
             });
         }
+    }
+    pub fn read_byte_tick_map(&mut self) -> Option<(HashMap<i32, u64>, HashMap<i32, i32>)> {
+        let mut data = vec![];
+        match self.zip.by_name("tick_mapping") {
+            Ok(mut zip) => {
+                zip.read_to_end(&mut data).unwrap();
+            }
+            Err(e) => {
+                return None;
+            }
+        }
+        let number_structs = usize::from_le_bytes(data[..8].try_into().unwrap());
+        let mut idx = Vec::with_capacity(number_structs);
+        let mut start_bytes = Vec::with_capacity(number_structs);
+        let mut ticks = Vec::with_capacity(number_structs);
+        // Stored as u64
+        let IDX_SIZE = 4;
+        let BYTE_SIZE = 8;
+        let TICK_SIZE = 4;
+
+        let idx_start_at = 8;
+        let idx_end_at = number_structs * IDX_SIZE + 8;
+        let bytes_start_at = idx_end_at;
+        let bytes_end_at = idx_end_at + number_structs * BYTE_SIZE;
+        let ticks_start_at = bytes_end_at;
+
+        for bytes in data[idx_start_at..idx_end_at].chunks(IDX_SIZE) {
+            idx.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        }
+        for bytes in data[bytes_start_at..bytes_end_at].chunks(BYTE_SIZE) {
+            start_bytes.push(u64::from_le_bytes(bytes.try_into().unwrap()));
+        }
+        for bytes in data[ticks_start_at..].chunks(TICK_SIZE) {
+            ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        }
+
+        let mut idx_byte_map: HashMap<i32, u64> = HashMap::default();
+        let mut idx_tick_map: HashMap<i32, i32> = HashMap::default();
+
+        for (i, byte, tick) in izip!(&idx, &start_bytes, &ticks) {
+            idx_byte_map.insert(*i, *byte);
+            idx_tick_map.insert(*i, *tick);
+        }
+
+        Some((idx_byte_map, idx_tick_map))
     }
 
     pub fn read_deltas_by_name(
@@ -228,37 +277,44 @@ impl ReadCache {
                 return;
             }
         }
-
+        let (idx_byte_map, idx_tick_map) = self.read_byte_tick_map().unwrap();
+        //println!("{:?}", a);
         // First 8 bytes = number of "rows"
         let number_structs = usize::from_le_bytes(data[..8].try_into().unwrap());
-
-        let mut starting_bytes = Vec::with_capacity(number_structs);
+        let mut idx = Vec::with_capacity(number_structs);
         let mut entids = Vec::with_capacity(number_structs);
-        let mut ticks = Vec::with_capacity(number_structs);
-        // Stored as u64
-        let BYTES_SIZE = 8;
-        // Stored as u32
-        let PIDX_SIZE = 4;
+        // Stored as i32
+        let BYTES_SIZE = 4;
+        // Stored as i32
+        let PIDX_SIZE = 2;
 
         let bytes_starts_at = 8;
         let bytes_end_at = number_structs * BYTES_SIZE + 8;
         let entids_start_at = bytes_end_at;
-        let entids_end_at = bytes_end_at + PIDX_SIZE * number_structs;
-        let ticks_start_at = entids_end_at;
 
         for bytes in data[bytes_starts_at..bytes_end_at].chunks(BYTES_SIZE) {
-            starting_bytes.push(usize::from_le_bytes(bytes.try_into().unwrap()));
+            idx.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
-        for bytes in data[ticks_start_at..].chunks(PIDX_SIZE) {
-            ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
-        }
-        for bytes in data[entids_start_at..entids_end_at].chunks(PIDX_SIZE) {
-            entids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        for bytes in data[entids_start_at..].chunks(PIDX_SIZE) {
+            entids.push(i16::from_le_bytes(bytes.try_into().unwrap()));
         }
 
-        assert_eq!(number_structs, starting_bytes.len());
         assert_eq!(number_structs, entids.len());
-        assert_eq!(number_structs, ticks.len());
+        assert_eq!(number_structs, idx.len());
+
+        let mut starting_bytes = vec![];
+        let mut ticks = vec![];
+        let mut entids_out = vec![];
+
+        for (idx, entid) in idx.iter().zip(entids) {
+            for j in 0..16 {
+                if entid & 1 << j != 0 {
+                    starting_bytes.push(idx_byte_map[idx]);
+                    ticks.push(idx_tick_map[idx]);
+                    entids_out.push(j);
+                }
+            }
+        }
 
         let p: Vec<&str> = wanted_name.split("@").collect();
         let dot: Vec<&str> = wanted_name.split(".").collect();
@@ -283,8 +339,8 @@ impl ReadCache {
         let v = self.deltas.get_mut(wanted_name).unwrap();
         v.reserve(number_structs);
 
-        for (byte, entid, tick) in izip!(&starting_bytes, &ticks, &entids) {
-            // println!("{} {} {}", byte, entid, tick);
+        for (byte, entid, tick) in izip!(&starting_bytes, &entids_out, &ticks) {
+            //println!("{} {} {}", byte, entid, tick);
             v.push(Delta {
                 byte: *byte as u64,
                 entid: *entid as u32,

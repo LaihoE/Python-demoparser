@@ -26,7 +26,7 @@ fn parse_demo(demo_path: String) -> i32 {
         vec![],
         //(10000..10002).collect(),
         vec![],
-        vec![],
+        vec!["player@m_vecOrigin_X".to_string()],
         "player_death".to_string(),
         false,
         false,

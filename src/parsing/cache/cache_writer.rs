@@ -8,11 +8,13 @@ use rayon::prelude::IntoParallelRefMutIterator;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::fs::{create_dir, metadata};
+use std::io::IoSlice;
 use std::io::Read;
 use std::io::Write;
 use std::{fs, time::Instant};
 use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
+#[feature(write_all_vectored)]
 
 pub struct WriteCache {
     pub game_events: Vec<GameEvent>,
@@ -57,6 +59,10 @@ impl WriteCache {
     }
 
     pub fn write_maps(&mut self) {
+        // Writes positions where Game event map and dt map start.
+        // These are needed for parsing the rest of the demo so
+        // these have to be parsed always.
+
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         self.zip.start_file("maps", options).unwrap();
 
@@ -111,69 +117,30 @@ impl WriteCache {
         hm: &HashMap<u32, i32>,
         inverse_hm: &HashMap<i32, (u64, i32)>,
     ) {
-        let options = FileOptions::default()
-            .compression_method(zip::CompressionMethod::Zstd)
-            .compression_level(Some(3));
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
+        //.compression_level(Some(3));
         self.zip.start_file(name, options).unwrap();
 
-        let mut bytes = vec![];
-        bytes.extend(data.len().to_le_bytes());
-        //self.zip.write_all(&bytes).unwrap();
+        let per_prop = data.iter().group_by(|x| x.byte);
 
-        data.sort_by_key(|x| x.tick);
-
-        let per_prop = data.iter().into_group_map_by(|x| x.byte);
-
-        let mut vals: Vec<(&u64, i16)> = vec![];
+        let mut vals: Vec<(u64, i16)> = vec![];
         for (k, v) in &per_prop {
             let mut mask: i16 = 0;
+
             for e in v {
-                mask |= (1 << e.entid);
-                //println!("{}", e.entid);
+                mask |= 1 << e.entid;
             }
             vals.push((k, mask));
-            // println!("{:032b}", mask);
-            // println!("{} {:?}", k, v);
         }
 
-        let mut inxes = vec![];
-        for x in &*data {
-            //println!("{:?} {}", x.tick, x.entid);
-            //println!("{:?}", x.byte);
-            inxes.extend(hm[&(x.byte as u32)].to_le_bytes());
+        vals.sort_unstable_by_key(|x| x.1);
+        let mut bytes: Vec<u8> = vec![];
 
-            /*
-            println!(
-                "{} {} {} {} MAP: {}",
-                x.byte, x.tick, x.entid, pidx, hm[&x.byte]
-            );
-            */
-        }
-        vals.sort_by_key(|x| x.1);
-        //let mut pairs = vec![];
-        //println!("{} {}", vals.len(), inxes.len());
+        bytes.extend(vals.len().to_le_bytes());
+        bytes.extend(vals.iter().flat_map(|e| hm[&(e.0 as u32)].to_le_bytes()));
+        bytes.extend(vals.iter().flat_map(|e| e.1.to_le_bytes()));
 
-        //let b: Vec<u8> = vals.iter().flat_map(|x| x.to_le_bytes()).collect();
-        let bytes1: Vec<u8> = per_prop
-            .iter()
-            .flat_map(|e| hm[&(*e.0 as u32)].to_le_bytes())
-            .collect();
-
-        let bytes1: Vec<u8> = vals
-            .iter()
-            .flat_map(|e| hm[&(*e.0 as u32)].to_le_bytes())
-            .collect();
-
-        let bytes2: Vec<u8> = vals.iter().flat_map(|e| e.1.to_le_bytes()).collect();
-        //let bytes2: Vec<u8> = data.iter().flat_map(|e| e.entid.to_le_bytes()).collect();
-
-        let mut b = vec![];
-        b.extend(bytes1);
-        b.extend(bytes2);
-
-        self.zip.write_all(&b).unwrap();
-        //self.zip.write_all(&bytes2).unwrap();
-        //self.zip.write_all(&bytes3).unwrap();
+        self.zip.write_all(&bytes).unwrap();
     }
 
     pub fn write_packet_ents(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
@@ -182,11 +149,25 @@ impl WriteCache {
         let mut player_props = vec![];
         let mut other_props = vec![];
 
+        let mut hm: HashMap<u32, i32> = HashMap::default();
+        let mut inverse_hm = HashMap::default();
+
+        let mut idx = 0;
+
         for indicies in &self.packet_ents {
             for this_ents_indicies in indicies {
                 if this_ents_indicies.entid < 64 && this_ents_indicies.entid > 0 {
                     for index in &this_ents_indicies.prop_indicies {
                         if !forbidden.contains(&index) {
+                            if !hm.contains_key(&(this_ents_indicies.byte as u32)) {
+                                hm.insert(this_ents_indicies.byte as u32, idx as i32);
+                                inverse_hm.insert(
+                                    idx as i32,
+                                    (this_ents_indicies.byte, this_ents_indicies.tick),
+                                );
+                                idx += 1;
+                            }
+
                             player_props.push(CacheEntry {
                                 byte: this_ents_indicies.byte,
                                 pidx: *index,
@@ -197,6 +178,14 @@ impl WriteCache {
                     }
                 } else {
                     for index in &this_ents_indicies.prop_indicies {
+                        if !hm.contains_key(&(this_ents_indicies.byte as u32)) {
+                            hm.insert(this_ents_indicies.byte as u32, idx as i32);
+                            inverse_hm.insert(
+                                idx as i32,
+                                (this_ents_indicies.byte, this_ents_indicies.tick),
+                            );
+                            idx += 1;
+                        }
                         other_props.push(CacheEntry {
                             byte: this_ents_indicies.byte,
                             pidx: *index,
@@ -213,21 +202,23 @@ impl WriteCache {
         /*
         Write data per prop. Also use SoA form for ~3x size reduction.
         */
-        let mut hm: HashMap<u32, i32> = HashMap::default();
-        let mut inverse_hm = HashMap::default();
 
-        let mut idx = 0;
-        for x in &player_props {
-            if !hm.contains_key(&(x.byte as u32)) {
-                hm.insert(x.byte as u32, idx as i32);
-                inverse_hm.insert(idx as i32, (x.byte, x.tick));
-                //println!("{}", idx);
-                idx += 1;
-            }
-        }
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
+        self.zip.start_file("tick_mapping", options).unwrap();
+        let mut bytes = vec![];
+        bytes.extend(inverse_hm.len().to_le_bytes());
         for (k, v) in &inverse_hm {
             //println!("{} {} {}", k, v.0, v.1);
+            bytes.extend(k.to_le_bytes());
         }
+        for (k, v) in &inverse_hm {
+            bytes.extend(v.0.to_le_bytes());
+        }
+        for (k, v) in &inverse_hm {
+            bytes.extend(v.1.to_le_bytes());
+        }
+        self.zip.write_all(&bytes).unwrap();
+
         for (pidx, data) in &mut group_by_pidx {
             let prop_str_name = if *pidx == 10000 {
                 "player@m_vecOrigin_X".to_string()
@@ -258,16 +249,19 @@ impl WriteCache {
                 _ => {}
             }
         }
-        self.write_others(teams, sv_cls_map, "teams");
-        self.write_others(manager, sv_cls_map, "manager");
-        self.write_others(rules, sv_cls_map, "rules");
+        self.write_others(teams, sv_cls_map, "teams", &hm, &inverse_hm);
+        self.write_others(manager, sv_cls_map, "manager", &hm, &inverse_hm);
+        self.write_others(rules, sv_cls_map, "rules", &hm, &inverse_hm);
     }
     fn write_others(
         &mut self,
         data: Vec<CacheEntry>,
         sv_cls_map: &HashMap<u16, ServerClass>,
         write_type: &str,
+        hm: &HashMap<u32, i32>,
+        inverse_hm: &HashMap<i32, (u64, i32)>,
     ) {
+        /*
         let mut hm: HashMap<u32, i32> = HashMap::default();
         let mut inverse_hm = HashMap::default();
 
@@ -279,7 +273,7 @@ impl WriteCache {
                 idx += 1;
             }
         }
-
+        */
         let mut grouped_by_pidx = data.iter().into_group_map_by(|x| x.pidx);
         for (pidx, data) in &mut grouped_by_pidx {
             let str_name = match write_type {

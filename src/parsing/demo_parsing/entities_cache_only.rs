@@ -78,6 +78,7 @@ impl Parser {
         let mut b = MyBitreader::new(pack_ents.entity_data());
         let mut outputs = Vec::with_capacity(12);
         let mut entity_id: i32 = -1;
+
         for _ in 0..n_upd_ents {
             entity_id += match b.read_u_bit_var() {
                 Some(eid_plus) => eid_plus as i32 + 1,

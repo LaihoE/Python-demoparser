@@ -107,7 +107,7 @@ impl Parser {
 
     pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>) {
         // Collects NETMESSAGES
-        println!("{}", wanted_bytes.len());
+        //println!("{}", wanted_bytes.len());
         let mut uniq_bytes: Vec<&u64> = wanted_bytes.iter().dedup().collect();
         uniq_bytes.sort();
 

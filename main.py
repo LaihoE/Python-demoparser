@@ -2,13 +2,12 @@ import pandas as pd
 from collections import Counter
 import numpy as np
 
-df = pd.read_csv("coma.txt", sep=" ", names=["byte", "tick", "entid", "pidx"])
-print(df)
-
-
-print(len(set(df1["byte"]).union(df2["byte"])))
-
-
+import pandas as pd
+  
+# Creating the Series
+sr = pd.Series([11, 21, 8, 18, 65, 18, 32, 10, 5, 32, None])
+sr = np.log2(sr)
+print(sr)
 
 
 

@@ -113,6 +113,7 @@ impl Parser {
                     }
                 }
                 3 => {
+                    // println!("3{}", x.ent_id);
                     if x.prop_inx == wanted_pidx && x.ent_id == 71 {
                         if let PropData::I32(f) = x.data {
                             v.push((f as f32, x.prop_inx, pe.tick, x.ent_id));
@@ -351,7 +352,6 @@ impl Parser {
     ) -> (Vec<f32>, Vec<u64>, Vec<String>, Vec<i32>) {
         let mut v = vec![];
         let mut steamids = players.get_steamids();
-
         for sid in steamids {
             let lower_boundary = 0;
             let high_boundary = 64;

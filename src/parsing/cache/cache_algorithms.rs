@@ -86,6 +86,7 @@ impl ReadCache {
                 let mut last_idx = 0;
                 let mut out_bytes = vec![];
 
+                // retur n vec![];
                 if x.len() == 0 {
                     return vec![];
                 }
@@ -100,6 +101,7 @@ impl ReadCache {
                     }
                     out_bytes.push(x[x.len() - 1].byte)
                 }
+
                 return out_bytes;
             }
             None => return vec![],
@@ -154,7 +156,6 @@ impl ReadCache {
         if temp_ticks.len() == 0 {
             return vec![];
         }
-        //println!("Looking for: {:?}", wanted_ticks);
 
         let mut sorted_ticks = temp_ticks.clone();
         sorted_ticks.sort_by_key(|x| x.1);

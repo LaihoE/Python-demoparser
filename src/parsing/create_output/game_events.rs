@@ -175,7 +175,6 @@ impl Parser {
         series.extend(s);
         // Sort game events so that columns are always in the same order
         series.sort_by_key(|s| s.name().to_string());
-        println!("{:2?}", before.elapsed());
         series
     }
 

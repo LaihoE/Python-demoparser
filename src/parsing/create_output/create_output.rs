@@ -1,20 +1,9 @@
 use crate::parsing::cache::cache_reader::ReadCache;
-use crate::parsing::demo_parsing::entities::PacketEntsOutput;
-use crate::parsing::demo_parsing::KeyData;
-use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::*;
 use crate::parsing::players::Players;
-use crate::parsing::utils::TYPEHM;
 pub use crate::parsing::variants::*;
-use derive_more::TryInto;
-use game_events;
-use itertools::Itertools;
-use polars::df;
-use polars::export::regex::internal::Inst;
-use polars::prelude::{DataFrame, Int64Type, NamedFrom, NamedFromOwned};
+use polars::prelude::{NamedFrom, NamedFromOwned};
 use polars::series::Series;
-use rayon::vec;
-use std::time::Instant;
 
 // Its not worth to filter if we want too many ticks of data
 // --> Just parse everything
@@ -62,12 +51,12 @@ impl Parser {
             let ticks = self.get_wanted_ticks();
             return self.create_series_others(&results, &other_props, &ticks, players);
         }
+        //self.parse_bytes(vec![]);
         vec![]
     }
 
     pub fn compute_jobs_with_cache(&mut self, cache: &mut ReadCache) -> ParsingOutPut {
         // Need to parse players to understand cache. This is fast
-        println!("HERE");
         let player_results: Vec<JobResult> = self.parse_blueprints(false);
         let players = Players::new(&player_results);
         let ticks = self.get_wanted_ticks();
@@ -83,7 +72,6 @@ impl Parser {
                 other_props.push(prop.clone());
             }
         }
-        println!("HERE2");
 
         if !self.settings.only_events {
             if ticks.len() < TICKS_FILTER_LIMIT {
@@ -110,13 +98,9 @@ impl Parser {
             cache.read_game_events();
             let event_ticks = cache
                 .find_game_event_ticks(self.settings.event_name.to_string(), &self.maps.event_map);
-            println!("evt {}", event_ticks.len());
             self.parse_bytes(event_ticks);
 
-            println!("HERE3");
-            println!("{:?}", self.tasks.len());
             let results: Vec<JobResult> = self.parse_blueprints(false);
-            println!("HERE4");
 
             self.get_game_events(&results, &players, cache)
         } else {

@@ -76,7 +76,7 @@ impl Parser {
         */
         let n_upd_ents = pack_ents.updated_entries();
         let mut b = MyBitreader::new(pack_ents.entity_data());
-        let mut outputs = Vec::with_capacity(12);
+        let mut outputs = Vec::with_capacity(32);
         let mut entity_id: i32 = -1;
 
         for _ in 0..n_upd_ents {
@@ -94,7 +94,10 @@ impl Parser {
             } else if b.read_boolie().unwrap() {
                 // IF ENTITY DOES NOT EXIST
                 // These bits are for creating the ent but we use hack for it so not needed
-                let _ = b.read_nbits(19).unwrap();
+                let cls_id = b.read_nbits(9).unwrap();
+                let _ = b.read_nbits(10);
+                println!("{} {}", cls_id, entity_id);
+
                 let indicies = parse_ent_props_indicies(entity_id, &mut b, sv_cls_map, tick);
                 match indicies {
                     Some(idc) => {
@@ -123,7 +126,7 @@ impl Parser {
                 }
             }
         }
-
+        //println!("OUTPUT LEN {}", outputs.len());
         return outputs;
     }
 }

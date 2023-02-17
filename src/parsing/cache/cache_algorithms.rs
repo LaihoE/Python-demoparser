@@ -137,16 +137,22 @@ impl ReadCache {
             let eid = players.uid_to_entid_tick(userid, 55555).unwrap();
             let all_deltas: Vec<(u64, i32, u32)> = delta_vec
                 .iter()
-                .filter(|x| x.entid == eid)
-                .map(|x| (x.byte, x.tick, x.entid))
+                .filter(|x| x.entid & (1 << eid) != 0)
+                .map(|x| (x.byte, x.tick, eid))
                 .collect();
             self.filter_delta_ticks_wanted(&all_deltas, wanted_ticks)
         } else {
-            let all_deltas: Vec<(u64, i32, u32)> = delta_vec
-                .iter()
-                .filter(|x| players.eid_to_sid(x.entid, x.tick) == Some(sid))
-                .map(|x| (x.byte, x.tick, x.entid))
-                .collect();
+            let mut all_deltas = vec![];
+            for i in 0..16 {
+                let temp_deltas: Vec<(u64, i32, u32)> = delta_vec
+                    .iter()
+                    .filter(|x| {
+                        (x.entid & (1 << i) != 0) && players.eid_to_sid(i, x.tick) == Some(sid)
+                    })
+                    .map(|x| (x.byte, x.tick, i))
+                    .collect();
+                all_deltas.extend(temp_deltas)
+            }
             self.filter_delta_ticks_wanted(&all_deltas, wanted_ticks)
         }
     }

@@ -15,7 +15,7 @@ def coordinates(file):
 
     ticks = [10000]
 
-    df = pd.DataFrame(parser.parse_ticks(["player@m_vecOrigin_X"], ticks=ticks))
+    df = pd.DataFrame(parser.parse_ticks(["player@DT_BaseCombatCharacter.m_hActiveWeapon"], ticks=ticks))
     print(df.columns)
     print(df)
 
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     files = glob.glob("/home/laiho/Documents/demos/bench_pro_demos/*")
 
     before = time.time()
-    with mp.Pool(processes=12) as pool:
+    with mp.Pool(processes=1) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(
             coordinates, files), total=len(files), desc="Parsing demos"))
     print(time.time() - before)

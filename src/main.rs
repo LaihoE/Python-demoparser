@@ -62,7 +62,7 @@ fn main() {
     }
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(4)
+        .num_threads(1)
         .build_global()
         .unwrap();
 
@@ -76,7 +76,7 @@ fn main() {
     use rayon::iter::ParallelIterator;
 
     let x: Vec<i32> = paths_v[..1]
-        .into_iter()
+        .into_par_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();
 

@@ -335,12 +335,14 @@ impl DemoParser {
                 }
 
                 let mut mapping = HashMap::default();
+                mapping.insert(0, "?");
                 mapping.insert(1, "spectator");
                 mapping.insert(2, "CT");
                 mapping.insert(3, "T");
 
                 let mut team_names = vec![];
                 for ti in teamnums_vec {
+                    println!("{}", ti);
                     team_names.push(mapping[&ti]);
                 }
 

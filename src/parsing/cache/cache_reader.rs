@@ -15,7 +15,7 @@ use zip::{ZipArchive, ZipWriter};
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Delta {
     pub byte: u64,
-    pub entid: u32,
+    pub entid: i16,
     pub tick: i32,
 }
 #[derive(Debug, Deserialize, Serialize)]
@@ -27,10 +27,6 @@ pub struct GameEventIdx {
 pub struct Stringtables {
     pub byte: u64,
 }
-pub struct GameEventBluePrint {
-    pub byte: u64,
-    pub entid: u32,
-}
 
 pub struct ReadCache {
     pub deltas: HashMap<String, Vec<Delta>>,
@@ -38,8 +34,8 @@ pub struct ReadCache {
     pub stringtables: Vec<Stringtables>,
     pub cache_path: String,
     pub zip: ZipArchive<File>,
-    pub idx_byte_map: HashMap<i32, u64>,
-    pub idx_tick_map: HashMap<i32, i32>,
+    pub idx_byte_map: Vec<u64>,
+    pub idx_tick_map: Vec<i32>,
 }
 const HASH_BYTE_LENGTH: usize = 10000;
 
@@ -176,8 +172,8 @@ impl ReadCache {
         let mut entids_out = vec![];
 
         for (idx, entid) in idx.iter().zip(entids) {
-            starting_bytes.push(self.idx_byte_map[idx]);
-            ticks.push(self.idx_tick_map[idx]);
+            starting_bytes.push(self.idx_byte_map[*idx as usize]);
+            ticks.push(self.idx_tick_map[*idx as usize]);
             entids_out.push(entid);
         }
 
@@ -207,7 +203,7 @@ impl ReadCache {
         for (byte, entid, tick) in izip!(&starting_bytes, &entids_out, &ticks) {
             v.push(Delta {
                 byte: *byte as u64,
-                entid: *entid as u32,
+                entid: *entid,
                 tick: *tick,
             });
         }
@@ -219,9 +215,7 @@ impl ReadCache {
         Ok(bytes)
     }
 
-    pub fn read_byte_tick_map(
-        zip: &mut ZipArchive<File>,
-    ) -> (HashMap<i32, u64>, HashMap<i32, i32>) {
+    pub fn read_byte_tick_map(zip: &mut ZipArchive<File>) -> (Vec<u64>, Vec<i32>) {
         let mut data = vec![];
         let mut zf = zip.by_name("tick_mapping").unwrap();
         zf.read_to_end(&mut data).unwrap();
@@ -250,15 +244,15 @@ impl ReadCache {
         for bytes in data[ticks_start_at..].chunks(TICK_SIZE) {
             ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
-
-        let mut idx_byte_map: HashMap<i32, u64> = HashMap::default();
-        let mut idx_tick_map: HashMap<i32, i32> = HashMap::default();
+        // Missing "value". Cant really use same missing value due to ranges :(
+        let mut idx_byte_map = vec![9999999999; idx.len()];
+        let mut idx_tick_map = vec![-9999999; idx.len()];
 
         let before = Instant::now();
 
         for (i, byte, tick) in izip!(&idx, &start_bytes, &ticks) {
-            idx_byte_map.insert(*i, *byte);
-            idx_tick_map.insert(*i, *tick);
+            idx_byte_map[*i as usize] = *byte;
+            idx_tick_map[*i as usize] = *tick;
         }
         println!("HM TOOK: {:2?}", before.elapsed());
 
@@ -268,20 +262,18 @@ impl ReadCache {
         &mut self,
         indicies: Vec<i32>,
         entids: Vec<i16>,
-    ) -> (Vec<u64>, Vec<i32>, Vec<i32>) {
+    ) -> (Vec<u64>, Vec<i32>, Vec<i16>) {
         let mut starting_bytes = vec![];
         let mut ticks = vec![];
         let mut entids_out = vec![];
         println!("{}", entids.len());
+
         for (idx, entid) in indicies.iter().zip(entids) {
-            for j in 0..16 {
-                if entid & 1 << j != 0 {
-                    starting_bytes.push(self.idx_byte_map[idx]);
-                    ticks.push(self.idx_tick_map[idx]);
-                    entids_out.push(j);
-                }
-            }
+            starting_bytes.push(self.idx_byte_map[*idx as usize]);
+            ticks.push(self.idx_tick_map[*idx as usize]);
+            entids_out.push(entid);
         }
+
         (starting_bytes, ticks, entids_out)
     }
 
@@ -334,7 +326,7 @@ impl ReadCache {
             //println!("{} {} {}", byte, entid, tick);
             v.push(Delta {
                 byte: *byte as u64,
-                entid: *entid as u32,
+                entid: *entid,
                 tick: *tick,
             });
         }

@@ -63,6 +63,11 @@ impl Parser {
                 self.parse_bytes(vec![]);
                 let jobresults = self.compute_jobs_no_cache();
 
+                return ParsingOutPut {
+                    df: vec![],
+                    events: vec![],
+                };
+
                 let cache_path = ReadCache::get_cache_path(&self.bytes);
 
                 let mut wc = WriteCache::new(
@@ -107,7 +112,6 @@ impl Parser {
 
     pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>) {
         // Collects NETMESSAGES
-        //println!("{}", wanted_bytes.len());
         let mut uniq_bytes: Vec<&u64> = wanted_bytes.iter().dedup().collect();
         uniq_bytes.sort();
 
@@ -180,9 +184,6 @@ impl Parser {
         if opt.is_some() {
             self.parse_game_event_map(&opt.unwrap());
         }
-
-        use rayon::iter::IntoParallelRefIterator;
-        use rayon::iter::ParallelIterator;
 
         self.tasks
             .iter()

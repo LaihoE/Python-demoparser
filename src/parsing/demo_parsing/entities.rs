@@ -9,6 +9,7 @@ use ahash::RandomState;
 use bitter::BitReader;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
+use dashmap::DashMap;
 use memmap2::Mmap;
 use protobuf::Message;
 use serde::Deserialize;
@@ -16,7 +17,7 @@ use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
-
+use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct Entity {
     pub class_id: u32,
@@ -55,16 +56,16 @@ impl Parser {
     pub fn parse_packet_entities(
         blueprint: &MsgBluePrint,
         mmap: &Mmap,
-        sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+        serverclass_map: Arc<ClsEidMapper>,
         only_cache: bool,
     ) -> JobResult {
         // This will only return indicies no prop data
         if only_cache {
-            return Parser::parse_packet_entities_indicies(blueprint, mmap, sv_cls_map);
+            return Parser::parse_packet_entities_indicies(blueprint, mmap, serverclass_map);
         }
         let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
         let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
-        let result = Parser::_parse_packet_entities(msg, sv_cls_map, blueprint.tick);
+        let result = Parser::_parse_packet_entities(msg, serverclass_map, blueprint.tick);
         match result {
             None => JobResult::None,
             Some(p) => JobResult::PacketEntities(PacketEntsOutput {
@@ -77,7 +78,7 @@ impl Parser {
 
     pub fn _parse_packet_entities(
         pack_ents: CSVCMsg_PacketEntities,
-        sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+        serverclass_map: Arc<ClsEidMapper>,
         tick: i32,
     ) -> Option<Vec<SingleEntOutput>> {
         /*
@@ -105,10 +106,10 @@ impl Parser {
                 // IF ENTITY DOES NOT EXIST
                 // These bits are for creating the ent but we use hack for it so not needed
                 let _ = b.read_nbits(19)?;
-                parse_ent_props(entity_id, &mut b, sv_cls_map, &mut all_props)
+                parse_ent_props(entity_id, &mut b, serverclass_map.clone(), &mut all_props)
             } else {
                 // IF ENTITY DOES EXIST
-                parse_ent_props(entity_id, &mut b, sv_cls_map, &mut all_props)
+                parse_ent_props(entity_id, &mut b, serverclass_map.clone(), &mut all_props)
             }
         }
         return Some(all_props);
@@ -159,18 +160,12 @@ pub fn parse_indicies(b: &mut MyBitreader) -> Option<SmallVec<[i32; 64]>> {
 pub fn parse_ent_props(
     entity_id: i32,
     b: &mut MyBitreader,
-    sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+    serverclass_map: Arc<ClsEidMapper>,
     out_vec: &mut Vec<SingleEntOutput>,
 ) {
-    let cls_id = get_cls_id(entity_id);
-    let svc_map = sv_cls_map;
+    let cls_id = serverclass_map.eid_clsid.get(&entity_id).unwrap();
+    let sv_cls = serverclass_map.cls_map.get(&cls_id).unwrap();
 
-    let sv_cls = match svc_map.get(&cls_id) {
-        Some(svc) => svc,
-        None => {
-            return;
-        }
-    };
     let indicies = match parse_indicies(b) {
         Some(idc) => idc,
         None => return,

@@ -6,11 +6,12 @@ use crate::parsing::variants::PropData;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
+use dashmap::DashMap;
 use memmap2::Mmap;
 use protobuf::Message;
 use smallvec::SmallVec;
 use std::collections::HashMap;
-
+use std::sync::Arc;
 /*
 Stripped down version of entities.rs where this one gets prop indicies
 as fast as possible. These are what are written into the cache.
@@ -39,12 +40,17 @@ pub struct EntityIndicies {
     pub tick: i32,
     pub prop_indicies: SmallVec<[i32; 32]>,
 }
+#[derive(Debug, Clone)]
+pub struct ClsEidMapper {
+    pub eid_clsid: DashMap<i32, u16, RandomState>,
+    pub cls_map: DashMap<u16, ServerClass, RandomState>,
+}
 
 impl Parser {
     pub fn parse_packet_entities_indicies(
         blueprint: &MsgBluePrint,
         mmap: &Mmap,
-        sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+        serverclass_map: Arc<ClsEidMapper>,
     ) -> JobResult {
         // Demo is corrupt
         if blueprint.end_idx > mmap.len() {
@@ -54,7 +60,7 @@ impl Parser {
         let msg = Message::parse_from_bytes(wanted_bytes).unwrap();
         let result = Parser::_parse_packet_entities_indicies(
             msg,
-            sv_cls_map,
+            serverclass_map,
             blueprint.tick,
             blueprint.byte as u64,
         );
@@ -63,7 +69,7 @@ impl Parser {
 
     fn _parse_packet_entities_indicies(
         pack_ents: CSVCMsg_PacketEntities,
-        sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+        serverclass_map: Arc<ClsEidMapper>,
         tick: i32,
         byte: u64,
     ) -> Vec<EntityIndicies> {
@@ -84,10 +90,11 @@ impl Parser {
                 Some(eid_plus) => eid_plus as i32 + 1,
                 None => break,
             };
-
+            //println!("{}", entity_id);
             if entity_id > 71 {
-                break;
+                //break;
             }
+
             if b.read_boolie().unwrap() {
                 // Checks if entity should be destroyed, don't see this being useful for parser
                 b.read_boolie();
@@ -96,9 +103,11 @@ impl Parser {
                 // These bits are for creating the ent but we use hack for it so not needed
                 let cls_id = b.read_nbits(9).unwrap();
                 let _ = b.read_nbits(10);
-                println!("{} {}", cls_id, entity_id);
+                // println!("{} {}", cls_id, entity_id);
+                serverclass_map.eid_clsid.insert(entity_id, cls_id as u16);
 
-                let indicies = parse_ent_props_indicies(entity_id, &mut b, sv_cls_map, tick);
+                let indicies =
+                    parse_ent_props_indicies(entity_id, &mut b, serverclass_map.clone(), tick);
                 match indicies {
                     Some(idc) => {
                         outputs.push(EntityIndicies {
@@ -112,7 +121,8 @@ impl Parser {
                 }
             } else {
                 // IF ENTITY DOES EXIST
-                let indicies = parse_ent_props_indicies(entity_id, &mut b, sv_cls_map, tick);
+                let indicies =
+                    parse_ent_props_indicies(entity_id, &mut b, serverclass_map.clone(), tick);
                 match indicies {
                     Some(idc) => {
                         outputs.push(EntityIndicies {
@@ -173,13 +183,11 @@ fn parse_indicies(b: &mut MyBitreader) -> Option<SmallVec<[i32; 32]>> {
 fn parse_ent_props_indicies(
     entity_id: i32,
     b: &mut MyBitreader,
-    sv_cls_map: &HashMap<u16, ServerClass, RandomState>,
+    serverclass_map: Arc<ClsEidMapper>,
     tick: i32,
 ) -> Option<SmallVec<[i32; 32]>> {
-    let cls_id = get_cls_id(entity_id);
-    let m = sv_cls_map;
-
-    let sv_cls = match m.get(&cls_id) {
+    let cls_id = serverclass_map.eid_clsid.get(&entity_id).unwrap();
+    let sv_cls = match serverclass_map.cls_map.get(&cls_id) {
         Some(svc) => svc,
         None => {
             return None;
@@ -189,6 +197,7 @@ fn parse_ent_props_indicies(
         Some(idc) => idc,
         None => return None,
     };
+    // println!("{} {:?}", entity_id, indicies);
 
     for idx in &indicies {
         match sv_cls.props.get(*idx as usize) {

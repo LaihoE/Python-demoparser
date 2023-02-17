@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::vec;
 
 use super::read_bytes::ByteReader;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ServerClass {
     pub id: u16,
     pub dt: String,
@@ -55,22 +55,22 @@ impl Parser {
             let _ = byte_reader.read_string();
             let dt = byte_reader.read_string();
             // Ids for classes we use
-            if id == 275 || id == 43 || id == 41 || id == 39 || id == 40 {
-                let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
-                let server_class = ServerClass { id, dt, props };
-                // Set baselines parsed earlier in stringtables.
-                // Happens when stringtable, with instancebaseline, comes
-                // before this event. Seems oddly complicated
-                match self.maps.baseline_no_cls.get(&(id as u32)) {
-                    Some(user_data) => {
-                        parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
-                        // Remove after being parsed
-                        self.maps.baseline_no_cls.remove(&(id as u32));
-                    }
-                    None => {}
+            //if id == 275 || id == 43 || id == 41 || id == 39 || id == 40 {
+            let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
+            let server_class = ServerClass { id, dt, props };
+            // Set baselines parsed earlier in stringtables.
+            // Happens when stringtable, with instancebaseline, comes
+            // before this event. Seems oddly complicated
+            match self.maps.baseline_no_cls.get(&(id as u32)) {
+                Some(user_data) => {
+                    parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
+                    // Remove after being parsed
+                    self.maps.baseline_no_cls.remove(&(id as u32));
                 }
-                self.maps.serverclass_map.insert(id, server_class);
+                None => {}
             }
+            self.maps.serverclass_map.insert(id, server_class);
+            //}
         }
     }
     pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 32]> {

@@ -5,6 +5,7 @@ use crate::parsing::parser_settings::*;
 pub use crate::parsing::variants::*;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
+use dashmap::DashMap;
 use itertools::Itertools;
 use memmap2::Mmap;
 use polars::series::Series;
@@ -95,7 +96,7 @@ impl Parser {
     pub fn msg_handler(
         blueprint: &MsgBluePrint,
         bytes: &Mmap,
-        serverclass_map: &HashMap<u16, ServerClass, RandomState>,
+        serverclass_map: Arc<ClsEidMapper>,
         game_events_map: &HashMap<i32, Descriptor_t, RandomState>,
         only_cache: bool,
         wanted_event: &str,
@@ -185,13 +186,23 @@ impl Parser {
             self.parse_game_event_map(&opt.unwrap());
         }
 
+        let mut conc_map: DashMap<u16, ServerClass, RandomState> = DashMap::default();
+        for (k, v) in &self.maps.serverclass_map {
+            conc_map.insert(*k, v.clone());
+        }
+
+        let cls_eid_mapper = Arc::new(ClsEidMapper {
+            cls_map: conc_map,
+            eid_clsid: DashMap::default(),
+        });
+
         self.tasks
             .iter()
             .map(|t| {
                 Parser::msg_handler(
                     &t,
                     &self.bytes,
-                    &self.maps.serverclass_map,
+                    cls_eid_mapper.clone(),
                     &self.maps.event_map.as_ref().unwrap(),
                     only_cache,
                     &self.settings.event_name,

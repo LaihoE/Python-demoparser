@@ -24,11 +24,11 @@ struct CacheEntry {
     entid: u32,
 }
 
-const TEAM_CLSID: u16 = 43;
-const MANAGER_CLSID: u16 = 41;
-const RULES_CLSID: u16 = 39;
-const PLAYER_CLSID: u16 = 40;
-const PLAYER_MAX_ENTID: i32 = 64;
+pub const TEAM_CLSID: u16 = 43;
+pub const MANAGER_CLSID: u16 = 41;
+pub const RULES_CLSID: u16 = 39;
+pub const PLAYER_CLSID: u16 = 40;
+pub const PLAYER_MAX_ENTID: i32 = 64;
 
 impl WriteCache {
     pub fn new(path: &String, jobresults: Vec<JobResult>, dt_start: u64, ge_start: u64) -> Self {
@@ -89,12 +89,14 @@ impl WriteCache {
             let mut mask: i16 = 0;
 
             for e in v {
-                mask |= 1 << e.entid;
+                if e.entid < 16 {
+                    mask |= 1 << e.entid;
+                }
             }
             vals.push((k, mask));
         }
 
-        vals.sort_unstable_by_key(|x| x.1);
+        vals.sort_unstable_by_key(|x| x.0);
         let mut bytes: Vec<u8> = vec![];
 
         bytes.extend(vals.len().to_le_bytes());

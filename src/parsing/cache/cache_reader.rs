@@ -1,3 +1,4 @@
+use crate::parsing::cache::PLAYER_CLSID;
 use crate::parsing::demo_parsing::ServerClass;
 use ahash::HashMap;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
@@ -8,6 +9,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::{fs, time::Instant};
+use zip::result::ZipError;
 use zip::{ZipArchive, ZipWriter};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -36,20 +38,31 @@ pub struct ReadCache {
     pub stringtables: Vec<Stringtables>,
     pub cache_path: String,
     pub zip: ZipArchive<File>,
+    pub idx_byte_map: HashMap<i32, u64>,
+    pub idx_tick_map: HashMap<i32, i32>,
 }
 const HASH_BYTE_LENGTH: usize = 10000;
 
 impl ReadCache {
     pub fn new(cache_path: &String) -> Self {
         let file = fs::File::open(cache_path.to_owned()).unwrap();
+        let before = Instant::now();
 
-        ReadCache {
-            zip: ZipArchive::new(file).unwrap(),
+        let mut ziparc = ZipArchive::new(file).unwrap();
+        let (idx_byte_map, idx_tick_map) = ReadCache::read_byte_tick_map(&mut ziparc);
+
+        let rc = ReadCache {
+            zip: ziparc,
             deltas: HashMap::default(),
             game_events: vec![],
             stringtables: vec![],
             cache_path: cache_path.clone(),
-        }
+            idx_byte_map: idx_byte_map,
+            idx_tick_map: idx_tick_map,
+        };
+
+        println!("{:2?}", before.elapsed());
+        rc
     }
 
     pub fn get_cache_path(bytes: &[u8]) -> String {
@@ -134,8 +147,6 @@ impl ReadCache {
                 return;
             }
         }
-        let (idx_byte_map, idx_tick_map) = self.read_byte_tick_map().unwrap();
-        //println!("{:?}", a);
         // First 8 bytes = number of "rows"
         let number_structs = usize::from_le_bytes(data[..8].try_into().unwrap());
         let mut idx = Vec::with_capacity(number_structs);
@@ -165,8 +176,8 @@ impl ReadCache {
         let mut entids_out = vec![];
 
         for (idx, entid) in idx.iter().zip(entids) {
-            starting_bytes.push(idx_byte_map[idx]);
-            ticks.push(idx_tick_map[idx]);
+            starting_bytes.push(self.idx_byte_map[idx]);
+            ticks.push(self.idx_tick_map[idx]);
             entids_out.push(entid);
         }
 
@@ -194,7 +205,6 @@ impl ReadCache {
         v.reserve(number_structs);
 
         for (byte, entid, tick) in izip!(&starting_bytes, &entids_out, &ticks) {
-            // println!("{} {} {}", byte, entid, tick);
             v.push(Delta {
                 byte: *byte as u64,
                 entid: *entid as u32,
@@ -202,16 +212,20 @@ impl ReadCache {
             });
         }
     }
-    pub fn read_byte_tick_map(&mut self) -> Option<(HashMap<i32, u64>, HashMap<i32, i32>)> {
+    fn read_zip_to_buffer(&mut self, name: &str) -> Result<Vec<u8>, ZipError> {
+        let mut bytes = vec![];
+        let mut zf = self.zip.by_name(name)?;
+        zf.read_to_end(&mut bytes)?;
+        Ok(bytes)
+    }
+
+    pub fn read_byte_tick_map(
+        zip: &mut ZipArchive<File>,
+    ) -> (HashMap<i32, u64>, HashMap<i32, i32>) {
         let mut data = vec![];
-        match self.zip.by_name("tick_mapping") {
-            Ok(mut zip) => {
-                zip.read_to_end(&mut data).unwrap();
-            }
-            Err(e) => {
-                return None;
-            }
-        }
+        let mut zf = zip.by_name("tick_mapping").unwrap();
+        zf.read_to_end(&mut data).unwrap();
+
         let number_structs = usize::from_le_bytes(data[..8].try_into().unwrap());
         let mut idx = Vec::with_capacity(number_structs);
         let mut start_bytes = Vec::with_capacity(number_structs);
@@ -240,12 +254,35 @@ impl ReadCache {
         let mut idx_byte_map: HashMap<i32, u64> = HashMap::default();
         let mut idx_tick_map: HashMap<i32, i32> = HashMap::default();
 
+        let before = Instant::now();
+
         for (i, byte, tick) in izip!(&idx, &start_bytes, &ticks) {
             idx_byte_map.insert(*i, *byte);
             idx_tick_map.insert(*i, *tick);
         }
+        println!("HM TOOK: {:2?}", before.elapsed());
 
-        Some((idx_byte_map, idx_tick_map))
+        (idx_byte_map, idx_tick_map)
+    }
+    fn extract_entid_mask(
+        &mut self,
+        indicies: Vec<i32>,
+        entids: Vec<i16>,
+    ) -> (Vec<u64>, Vec<i32>, Vec<i32>) {
+        let mut starting_bytes = vec![];
+        let mut ticks = vec![];
+        let mut entids_out = vec![];
+        println!("{}", entids.len());
+        for (idx, entid) in indicies.iter().zip(entids) {
+            for j in 0..16 {
+                if entid & 1 << j != 0 {
+                    starting_bytes.push(self.idx_byte_map[idx]);
+                    ticks.push(self.idx_tick_map[idx]);
+                    entids_out.push(j);
+                }
+            }
+        }
+        (starting_bytes, ticks, entids_out)
     }
 
     pub fn read_deltas_by_name(
@@ -253,39 +290,23 @@ impl ReadCache {
         wanted_name_temp: &str,
         sv_cls_map: &HashMap<u16, ServerClass>,
     ) {
-        /*
-        File format:
-        first 8 bytes -> number of structs (u64)
-        byte * number of structs (u64)
-        pidx * number of structs (u16)
-
-        We are storing the structs in SOA form.
-        */
-
         let wanted_name = if wanted_name_temp.contains("m_vecOrigin") {
             "player@DT_CSNonLocalPlayerExclusive.m_vecOrigin"
         } else {
             wanted_name_temp
         };
-
-        let mut data = vec![];
-        match self.zip.by_name(&wanted_name) {
-            Ok(mut zip) => {
-                zip.read_to_end(&mut data).unwrap();
-            }
-            Err(e) => {
-                return;
-            }
-        }
-        let (idx_byte_map, idx_tick_map) = self.read_byte_tick_map().unwrap();
-        //println!("{:?}", a);
+        let data = match self.read_zip_to_buffer(wanted_name) {
+            Ok(data) => data,
+            Err(e) => panic!("no tick map found! {}", e),
+        };
+        // IF this fails then GG
         // First 8 bytes = number of "rows"
         let number_structs = usize::from_le_bytes(data[..8].try_into().unwrap());
-        let mut idx = Vec::with_capacity(number_structs);
+
+        let mut indicies = Vec::with_capacity(number_structs);
         let mut entids = Vec::with_capacity(number_structs);
         // Stored as i32
         let BYTES_SIZE = 4;
-        // Stored as i32
         let PIDX_SIZE = 2;
 
         let bytes_starts_at = 8;
@@ -293,48 +314,18 @@ impl ReadCache {
         let entids_start_at = bytes_end_at;
 
         for bytes in data[bytes_starts_at..bytes_end_at].chunks(BYTES_SIZE) {
-            idx.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+            indicies.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
         for bytes in data[entids_start_at..].chunks(PIDX_SIZE) {
             entids.push(i16::from_le_bytes(bytes.try_into().unwrap()));
         }
-
         assert_eq!(number_structs, entids.len());
-        assert_eq!(number_structs, idx.len());
+        assert_eq!(number_structs, indicies.len());
+        //assert_eq!(entids.len(), indicies.len());
 
-        let mut starting_bytes = vec![];
-        let mut ticks = vec![];
-        let mut entids_out = vec![];
+        let (starting_bytes, ticks, entids_out) = self.extract_entid_mask(indicies, entids);
 
-        for (idx, entid) in idx.iter().zip(entids) {
-            for j in 0..16 {
-                if entid & 1 << j != 0 {
-                    starting_bytes.push(idx_byte_map[idx]);
-                    ticks.push(idx_tick_map[idx]);
-                    entids_out.push(j);
-                }
-            }
-        }
-
-        let p: Vec<&str> = wanted_name.split("@").collect();
-        let dot: Vec<&str> = wanted_name.split(".").collect();
-        let table_name_temp: Vec<&str> = p[1].split(".").collect();
-        let table_name = table_name_temp[0];
-        let prop_n = dot[dot.len() - 1];
-        let prefix = p[0];
-
-        let p = &sv_cls_map[&40];
-        for prop in &p.props {
-            if &prop.table == table_name && &prop.name == prop_n {
-                let key = prefix.to_owned() + "@" + &prop.table + "." + &prop.name;
-                self.deltas.insert(key, vec![]);
-            }
-        }
-
-        self.deltas.insert(
-            "player@DT_CSNonLocalPlayerExclusive.m_vecOrigin".to_owned(),
-            vec![],
-        );
+        self.init_delta_hm(wanted_name, sv_cls_map);
 
         let v = self.deltas.get_mut(wanted_name).unwrap();
         v.reserve(number_structs);
@@ -347,6 +338,27 @@ impl ReadCache {
                 tick: *tick,
             });
         }
+    }
+    fn init_delta_hm(&mut self, wanted_name: &str, sv_cls_map: &HashMap<u16, ServerClass>) {
+        let p: Vec<&str> = wanted_name.split("@").collect();
+        let dot: Vec<&str> = wanted_name.split(".").collect();
+        let table_name_temp: Vec<&str> = p[1].split(".").collect();
+        let table_name = table_name_temp[0];
+        let prop_n = dot[dot.len() - 1];
+        let prefix = p[0];
+
+        let p = &sv_cls_map[&PLAYER_CLSID];
+        for prop in &p.props {
+            if &prop.table == table_name && &prop.name == prop_n {
+                let key = prefix.to_owned() + "@" + &prop.table + "." + &prop.name;
+                self.deltas.insert(key, vec![]);
+            }
+        }
+
+        self.deltas.insert(
+            "player@DT_CSNonLocalPlayerExclusive.m_vecOrigin".to_owned(),
+            vec![],
+        );
     }
     pub fn read_game_events(&mut self) {
         let mut data = vec![];
@@ -389,7 +401,6 @@ impl ReadCache {
         let number_rows = usize::from_le_bytes(data[..8].try_into().unwrap());
 
         let mut starting_bytes = Vec::with_capacity(number_rows);
-        // Stored as u64
         const BYTES_SIZE: usize = 8;
 
         for bytes in data[..number_rows * BYTES_SIZE + 8].chunks(BYTES_SIZE) {

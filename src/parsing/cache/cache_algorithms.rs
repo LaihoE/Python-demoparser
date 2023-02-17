@@ -70,8 +70,9 @@ impl ReadCache {
                 _ => panic!("unknown prop prefix {:?}", prefix[0]),
             }
         }
+        println!("{:?}", wanted_bytes.len());
         // Unique bytes
-        wanted_bytes.iter().map(|x| x.clone()).collect()
+        wanted_bytes.iter().map(|x| *x).collect()
     }
 
     pub fn find_delta_ticks_others(
@@ -121,7 +122,7 @@ impl ReadCache {
             &prop_name_temp
         };
 
-        let delta_vec = match self.deltas.get(prop_name) {
+        let delta_vec = match self.deltas.get_mut(prop_name) {
             Some(delta_v) => delta_v,
             None => return vec![],
         };
@@ -129,6 +130,8 @@ impl ReadCache {
             Some(sid) => sid,
             None => return vec![],
         };
+        println!("{}", delta_vec.len());
+        delta_vec.sort_by_key(|x| x.tick);
 
         if players.is_easy_uid[userid as usize] {
             let eid = players.uid_to_entid_tick(userid, 55555).unwrap();
@@ -150,15 +153,12 @@ impl ReadCache {
 
     pub fn filter_delta_ticks_wanted(
         &self,
-        temp_ticks: &Vec<(u64, i32, u32)>,
+        sorted_ticks: &Vec<(u64, i32, u32)>,
         wanted_ticks: &Vec<i32>,
     ) -> Vec<u64> {
-        if temp_ticks.len() == 0 {
+        if sorted_ticks.len() == 0 {
             return vec![];
         }
-
-        let mut sorted_ticks = temp_ticks.clone();
-        sorted_ticks.sort_by_key(|x| x.1);
 
         let mut wanted_bytes = Vec::with_capacity(wanted_ticks.len());
         for wanted_tick in wanted_ticks {

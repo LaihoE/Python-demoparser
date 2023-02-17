@@ -1,19 +1,15 @@
-use crate::parsing::cache::cache_reader::ReadCache;
+use crate::parsing::cache::MANAGER_CLSID;
+use crate::parsing::cache::PLAYER_CLSID;
+use crate::parsing::cache::RULES_CLSID;
+use crate::parsing::cache::TEAM_CLSID;
 use crate::parsing::demo_parsing::entities::PacketEntsOutput;
-use crate::parsing::demo_parsing::KeyData;
-use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::*;
 use crate::parsing::players::Players;
 use crate::parsing::utils::TYPEHM;
 pub use crate::parsing::variants::*;
-use derive_more::TryInto;
-use game_events;
 use itertools::Itertools;
-use polars::df;
-use polars::export::regex::internal::Inst;
 use polars::prelude::{DataFrame, Int64Type, NamedFrom, NamedFromOwned};
-use polars::series::Series;
-use rayon::vec;
+
 use std::time::Instant;
 
 impl Parser {
@@ -21,7 +17,6 @@ impl Parser {
         &self,
         results: &Vec<JobResult>,
         lower_boundary: i32,
-        high_boundary: i32,
         prop_name: &String,
         players: &Players,
         wanted_sid: u64,
@@ -113,7 +108,6 @@ impl Parser {
                     }
                 }
                 3 => {
-                    // println!("3{}", x.ent_id);
                     if x.prop_inx == wanted_pidx && x.ent_id == 71 {
                         if let PropData::I32(f) = x.data {
                             v.push((f as f32, x.prop_inx, pe.tick, x.ent_id));
@@ -218,109 +212,47 @@ impl Parser {
     }
 
     pub fn str_name_to_first_idx(&self, str_name: String) -> Option<i32> {
-        let prefix: Vec<&str> = str_name.split("@").collect();
-        match prefix[0] {
-            "player" => {
-                panic!("PLAYER IN ARRAY IDX FUNC");
+        // Finds pidx that maps to array prop with ending .000
+        // The array ending means which entid is in question.
+        // The pidxs for same array prop are contiguous ie.
+        // If manager@m_iKills.000 has pidx of 50 then
+        // manager@m_iKills.001 has pidx 51 and so on
+        let splitted: Vec<&str> = str_name.split("@").collect();
+        let prefix = splitted[0];
+
+        let sv_map = match prefix {
+            "player" => self.maps.serverclass_map.get(&PLAYER_CLSID).unwrap(),
+            "manager" => self.maps.serverclass_map.get(&MANAGER_CLSID).unwrap(),
+            "rules" => self.maps.serverclass_map.get(&RULES_CLSID).unwrap(),
+            "team" => self.maps.serverclass_map.get(&TEAM_CLSID).unwrap(),
+            _ => panic!("unkown prefix: {}", prefix),
+        };
+        let wanted_name = str_name.to_owned() + &".000";
+        for (idx, prop) in sv_map.props.iter().enumerate() {
+            if "manager@".to_string() + &prop.table + "." + &prop.name == wanted_name {
+                return Some(idx as i32);
             }
-            "manager" => {
-                let sv_map = self.maps.serverclass_map.get(&41).unwrap();
-                for (idx, prop) in sv_map.props.iter().enumerate() {
-                    if "manager@".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
-                        == str_name.to_owned() + &".000"
-                    {
-                        return Some(idx as i32);
-                    }
-                }
-                return None;
-            }
-            "rules" => {
-                let sv_map = self.maps.serverclass_map.get(&39).unwrap();
-                for (idx, prop) in sv_map.props.iter().enumerate() {
-                    if "rules@".to_string()
-                        + &prop.table.to_owned()
-                        + "."
-                        + &prop.name.to_owned()
-                        + ".000"
-                        == str_name
-                    {
-                        return Some(idx as i32);
-                    }
-                }
-                return None;
-            }
-            "team" => {
-                let sv_map = self.maps.serverclass_map.get(&43).unwrap();
-                for (idx, prop) in sv_map.props.iter().enumerate() {
-                    if "team@".to_string()
-                        + &prop.table.to_owned()
-                        + "."
-                        + &prop.name.to_owned()
-                        + ".000"
-                        == str_name
-                    {
-                        return Some(idx as i32);
-                    }
-                }
-                return None;
-            }
-            _ => panic!("UNKOWN PREFIX: {}", prefix[0]),
         }
+        return None;
     }
 
     pub fn str_name_to_idx(&self, str_name: String) -> Option<i32> {
         let prefix: Vec<&str> = str_name.split("@").collect();
-
         match prefix[0] {
-            "player" => {
-                if str_name == "player@m_vecOrigin_X" {
-                    return Some(10000);
-                }
-                if str_name == "player@m_vecOrigin_Y" {
-                    return Some(10001);
-                }
-                let sv_map = self.maps.serverclass_map.get(&40).unwrap();
-                for (idx, prop) in sv_map.props.iter().enumerate() {
-                    if prop.table.to_owned() + "." + &prop.name.to_owned() == prefix[1] {
-                        return Some(idx as i32);
+            "player" => match str_name.as_str() {
+                "player@m_vecOrigin_X" => return Some(10000),
+                "player@m_vecOrigin_Y" => return Some(10001),
+                _ => {
+                    let sv_map = self.maps.serverclass_map.get(&40).unwrap();
+                    for (idx, prop) in sv_map.props.iter().enumerate() {
+                        if prop.table.to_owned() + "." + &prop.name.to_owned() == prefix[1] {
+                            return Some(idx as i32);
+                        }
                     }
+                    return None;
                 }
-                return None;
-            }
-            "manager" => {
-                let sv_map = self.maps.serverclass_map.get(&41).unwrap();
-                for (idx, prop) in sv_map.props.iter().enumerate() {
-                    if "manager_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
-                        == str_name
-                    {
-                        return Some(idx as i32);
-                    }
-                }
-                return None;
-            }
-            "rules" => {
-                let sv_map = self.maps.serverclass_map.get(&39).unwrap();
-                for (idx, prop) in sv_map.props.iter().enumerate() {
-                    if "rules_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
-                        == str_name
-                    {
-                        return Some(idx as i32);
-                    }
-                }
-                return None;
-            }
-            "team" => {
-                let sv_map = self.maps.serverclass_map.get(&43).unwrap();
-                for (idx, prop) in sv_map.props.iter().enumerate() {
-                    if "team_".to_string() + &prop.table.to_owned() + "." + &prop.name.to_owned()
-                        == str_name
-                    {
-                        return Some(idx as i32);
-                    }
-                }
-                return None;
-            }
-            _ => panic!("UNKOWN PREFIX: {}", prefix[0]),
+            },
+            _ => panic!("NON PLAYER PREFIX IN PLAYER FUNC: {}", prefix[0]),
         }
     }
     pub fn find_one_value(
@@ -353,20 +285,9 @@ impl Parser {
         let mut v = vec![];
         let mut steamids = players.get_steamids();
         for sid in steamids {
-            let lower_boundary = 0;
-            let high_boundary = 64;
-
             let lower_b = self.str_name_to_first_idx(prop_name.clone());
-
-            let mut filtered = self.filter_jobs_by_pidx_other(
-                results,
-                lower_b.unwrap(),
-                high_boundary,
-                &prop_name,
-                players,
-                sid,
-            );
-
+            let mut filtered =
+                self.filter_jobs_by_pidx_other(results, lower_b.unwrap(), &prop_name, players, sid);
             filtered.sort_by_key(|x| x.2);
 
             let out = self.find_wanted_values2(&mut filtered, &ticks);
@@ -398,28 +319,28 @@ impl Parser {
         ticks: &Vec<i32>,
         players: &Players,
     ) -> (Vec<f32>, Vec<u64>, Vec<String>, Vec<i32>) {
+        // Takes Vec<JobResult> and creates our vectors that
+        // then get converted to Series.
         let idx = match self.str_name_to_idx(prop_name.clone()) {
             Some(i) => i,
             None => return (vec![], vec![], vec![], vec![]),
         };
-        let mut filtered = self.filter_jobs_by_pidx(results, idx, &prop_name);
-        filtered.sort_by_key(|x| x.1);
-
-        let grouped_by_sid = filtered
-            .iter()
-            .into_group_map_by(|x| players.eid_to_sid(x.2 as u32, x.1));
-
         let mut tasks: Vec<(u64, Vec<&(f32, i32, i32)>)> = vec![];
         let mut ids = Vec::with_capacity(ticks.len() * 10);
         let mut out_ticks = Vec::with_capacity(ticks.len() * 10);
         let mut names = Vec::with_capacity(ticks.len() * 10);
         let mut out_data: Vec<f32> = Vec::with_capacity(ticks.len() * 10);
 
+        let mut filtered = self.filter_jobs_by_pidx(results, idx, &prop_name);
+        let grouped_by_sid = filtered
+            .iter()
+            .into_group_map_by(|x| players.eid_to_sid(x.2 as u32, x.1));
         for (sid, data) in grouped_by_sid {
             if sid != None && sid != Some(0) {
                 tasks.push((sid.unwrap(), data));
             }
         }
+        // Check that we have data for every player
         let found_sids: Vec<u64> = tasks.iter().map(|x| x.0).collect();
         let all_sids = players.get_steamids();
         for sid in all_sids {
@@ -427,20 +348,17 @@ impl Parser {
                 tasks.push((sid, vec![&(0.0, 0, 0)]));
             }
         }
-
         tasks.sort_by_key(|x| x.0);
-
-        let before = Instant::now();
+        // Create metadata columns
         for i in &tasks {
             ids.extend(vec![i.0; ticks.len()]);
             out_ticks.extend(ticks.clone());
             names.extend(vec![players.steamid_to_name(i.0); ticks.len()]);
         }
-
+        // Pass mut ref to function for perf reasons
         for (_, data) in &mut tasks {
             self.find_wanted_values(data, ticks, &mut out_data);
         }
-
         (out_data, ids, names, out_ticks)
     }
 }

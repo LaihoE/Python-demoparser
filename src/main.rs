@@ -19,12 +19,14 @@ fn parse_demo(demo_path: String) -> i32 {
     let now = Instant::now();
     let props_names = vec![];
 
+    //let wanted_ticks = vec![10000]
+
     let mut parser = Parser::new(
         demo_path,
         true,
-        true,
-        vec![],
-        //(10000..10002).collect(),
+        false,
+        //vec![],
+        (10000..10002).collect(),
         vec![],
         vec!["player@m_vecOrigin_X".to_string()],
         "player_death".to_string(),
@@ -49,9 +51,9 @@ fn main() {
     let now = Instant::now();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/").unwrap();
     //let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
+    //let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems").unwrap();
-    //let paths = fs::read_dir("/home/laiho/Documents/demos/bench_pro_demos/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/bench_pro_demos/").unwrap();
 
     let mut paths_v = vec![];
     for path in paths {
@@ -60,7 +62,7 @@ fn main() {
     }
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(24)
+        .num_threads(4)
         .build_global()
         .unwrap();
 
@@ -73,8 +75,8 @@ fn main() {
     */
     use rayon::iter::ParallelIterator;
 
-    let x: Vec<i32> = single
-        .into_par_iter()
+    let x: Vec<i32> = paths_v[..1]
+        .into_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();
 

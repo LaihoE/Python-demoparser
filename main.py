@@ -4,13 +4,46 @@ import numpy as np
 
 import pandas as pd
   
-a = np.array([0, 1, 1, 0]) == 1
-b = np.array([44, 99, 55, 77])
-c = np.where(a, b, 0)
-print(c)
-#>>> [99]
+
+kordinat1 = np.array([1, 2, 3]).reshape(3, 1)
+kordinat2 = np.array([8, 44, 93]).reshape(3, 1)
+stora = np.random.randn(100, 100, 100).astype("int64")
+stora[1, 2 ,3] = 42.0
+stora[8, 44, 93] = 99.0
+
+"""lista = [np.array([kordinat1, kordinat2]), np.array([kordinat1, kordinat2])]
+
+for kordinater in lista:
+    for kordinat in kordinater:
+        print(stora[kordinat[0], kordinat[1], kordinat[2]])
+
+"""
+
+x = np.concatenate((kordinat1, kordinat2), axis=1)
+print(x.shape)
+
+z = stora[:, x[:, :, :]]
+print(z.shape)
+print(x.shape)
 
 
+
+#print(kordinater.shape)
+
+"""stora = np.random.randn(100, 100, 100)
+# Sätter in någå siffror
+stora[1, 2 ,3] = 42
+stora[8, 44, 93] = 99
+
+for kordinat in kordinater:
+    print(stora[kordinat[0], kordinat[1], kordinat[2]])
+
+>>> 42.0
+>>> 99.0
+"""
+
+#print(kordinater.shape)
+#print(stora.shape)
 
 
 """df.to_csv("comptest/commm3.txt", index=False)

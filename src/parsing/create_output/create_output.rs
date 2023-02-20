@@ -1,4 +1,8 @@
+use std::sync::Arc;
+
 use crate::parsing::cache::cache_reader::ReadCache;
+use crate::parsing::demo_parsing::entities_cache_only::ClsEidMapper;
+use crate::parsing::demo_parsing::EidClsHistoryEntry;
 use crate::parsing::parser::*;
 use crate::parsing::players::Players;
 pub use crate::parsing::variants::*;
@@ -7,7 +11,7 @@ use polars::series::Series;
 
 // Its not worth to filter if we want too many ticks of data
 // --> Just parse everything
-const TICKS_FILTER_LIMIT: usize = 30000;
+const TICKS_FILTER_LIMIT: usize = 100000000;
 
 #[derive(Debug, Clone)]
 pub struct ExtraEventRequest {
@@ -17,8 +21,8 @@ pub struct ExtraEventRequest {
 }
 
 impl Parser {
-    pub fn compute_jobs_no_cache(&mut self) -> Vec<JobResult> {
-        let results: Vec<JobResult> = self.parse_blueprints(true);
+    pub fn compute_jobs_no_cache(&mut self) -> (Vec<JobResult>, Arc<ClsEidMapper>) {
+        let results: (Vec<JobResult>, Arc<ClsEidMapper>) = self.parse_blueprints(true, None);
         results
     }
     pub fn other_outputs(
@@ -47,7 +51,7 @@ impl Parser {
         wanted_bytes.sort();
         if wanted_bytes.len() > 0 {
             self.parse_bytes(wanted_bytes);
-            let results: Vec<JobResult> = self.parse_blueprints(false);
+            let (results, _) = self.parse_blueprints(false, Some(cache.eid_cls_map.clone()));
             let ticks = self.get_wanted_ticks();
             return self.create_series_others(&results, &other_props, &ticks, players);
         }
@@ -57,7 +61,10 @@ impl Parser {
 
     pub fn compute_jobs_with_cache(&mut self, cache: &mut ReadCache) -> ParsingOutPut {
         // Need to parse players to understand cache. This is fast
-        let player_results: Vec<JobResult> = self.parse_blueprints(false);
+        let eid_cls_map = cache.eid_cls_map.clone();
+
+        let (player_results, _) = self.parse_blueprints(false, Some(cache.eid_cls_map.clone()));
+
         let players = Players::new(&player_results);
         let ticks = self.get_wanted_ticks();
 
@@ -87,12 +94,24 @@ impl Parser {
                 }
             }
         }
+        self.parse_bytes(vec![]);
+        let (results, _) = self.parse_blueprints(false, Some(cache.eid_cls_map.clone()));
 
-        let results: Vec<JobResult> = self.parse_blueprints(false);
+        //let weaps = self.find_weapon_values(&results, &ticks, &players, 497);
+        //let ammo = Series::from_vec("Ammo", weaps);
+
+        let defs = self.find_weapon_values(&results, &ticks, &players, 402);
+        let weapid = Series::from_vec("weapid", defs);
+        //panic!("done");
+
+        //println!("{:?}", results);
 
         let other_s = self.other_outputs(cache, &ticks, &players, &other_props);
         let mut df = self.create_series(&results, &player_props, &ticks, &players);
+        println!("{:?}", df);
         df.extend(other_s);
+        //df.push(ammo);
+        df.push(weapid);
 
         let events = if self.settings.only_events {
             cache.read_game_events();
@@ -100,7 +119,7 @@ impl Parser {
                 .find_game_event_ticks(self.settings.event_name.to_string(), &self.maps.event_map);
             self.parse_bytes(event_ticks);
 
-            let results: Vec<JobResult> = self.parse_blueprints(false);
+            let (results, _) = self.parse_blueprints(false, Some(cache.eid_cls_map.clone()));
 
             self.get_game_events(&results, &players, cache)
         } else {

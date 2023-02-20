@@ -11,6 +11,7 @@ use memmap2::Mmap;
 use polars::series::Series;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::u8;
 
 pub struct Parser {
@@ -54,6 +55,7 @@ impl Parser {
         match ReadCache::get_cache_if_exists(&self.bytes) {
             // CACHE FOUND
             Some(mut cache) => {
+                cache.read_eid_cls_map();
                 let wanted_bytes = cache.get_player_messages();
                 self.parse_bytes(wanted_bytes);
                 self.compute_jobs_with_cache(&mut cache)
@@ -62,20 +64,21 @@ impl Parser {
             None => {
                 self.settings.is_cache_run = true;
                 self.parse_bytes(vec![]);
-                let jobresults = self.compute_jobs_no_cache();
-
+                let (jobresults, cls_eid_mapper) = self.compute_jobs_no_cache();
+                /*
                 return ParsingOutPut {
                     df: vec![],
                     events: vec![],
                 };
+                */
 
                 let cache_path = ReadCache::get_cache_path(&self.bytes);
-
                 let mut wc = WriteCache::new(
                     &cache_path,
                     jobresults,
                     self.state.dt_started_at,
                     self.state.ge_map_started_at,
+                    cls_eid_mapper.eid_clsid_history.clone(),
                 );
                 wc.write_all_caches(&self.maps.serverclass_map);
                 drop(wc);
@@ -173,7 +176,11 @@ impl Parser {
         }
     }
 
-    pub fn parse_blueprints(&mut self, only_cache: bool) -> Vec<JobResult> {
+    pub fn parse_blueprints(
+        &mut self,
+        only_cache: bool,
+        cls_mapper: Option<Vec<EidClsHistoryEntry>>,
+    ) -> (Vec<JobResult>, Arc<ClsEidMapper>) {
         let mut opt = None;
 
         for t in &self.tasks {
@@ -186,17 +193,24 @@ impl Parser {
             self.parse_game_event_map(&opt.unwrap());
         }
 
-        let mut conc_map: DashMap<u16, ServerClass, RandomState> = DashMap::default();
+        let conc_map: DashMap<u16, ServerClass, RandomState> = DashMap::default();
         for (k, v) in &self.maps.serverclass_map {
             conc_map.insert(*k, v.clone());
         }
-
-        let cls_eid_mapper = Arc::new(ClsEidMapper {
-            cls_map: conc_map,
-            eid_clsid: DashMap::default(),
-        });
-
-        self.tasks
+        let cls_eid_mapper = match cls_mapper {
+            None => Arc::new(ClsEidMapper {
+                cls_map: conc_map,
+                eid_clsid: DashMap::default(),
+                eid_clsid_history: Arc::new(RwLock::new(vec![])),
+            }),
+            Some(eidmap) => Arc::new(ClsEidMapper {
+                cls_map: conc_map,
+                eid_clsid: DashMap::default(),
+                eid_clsid_history: Arc::new(RwLock::new(eidmap)),
+            }),
+        };
+        let v = self
+            .tasks
             .iter()
             .map(|t| {
                 Parser::msg_handler(
@@ -208,6 +222,7 @@ impl Parser {
                     &self.settings.event_name,
                 )
             })
-            .collect()
+            .collect();
+        (v, cls_eid_mapper)
     }
 }

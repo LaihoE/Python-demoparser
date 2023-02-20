@@ -161,7 +161,7 @@ impl Parser {
                 }
             }
         }
-
+        let eid_cls_map = cache.eid_cls_map.clone();
         let mut series = self.series_from_events(v, players);
         let requests = self.fill_wanted_extra_props(&series, &self.settings.wanted_props.clone());
         let extra_bytes = cache.find_request_bytes(&requests, &self.maps.serverclass_map, players);
@@ -169,7 +169,7 @@ impl Parser {
             self.parse_bytes(extra_bytes);
         }
 
-        let results = self.parse_blueprints(false);
+        let (results, _) = self.parse_blueprints(false, Some(eid_cls_map));
         let s = self.find_requested_vals(requests, &results, &players);
 
         series.extend(s);

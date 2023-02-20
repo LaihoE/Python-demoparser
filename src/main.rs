@@ -10,6 +10,7 @@ fn parse_demo(demo_path: String) -> i32 {
     // m_iHealth
     // m_angEyeAngles[1]
     println!("{}", demo_path);
+
     if demo_path
         == "/home/laiho/Documents/demos/faceits/cu/003309131115255562271_1824323488 (1).dem"
     {
@@ -26,7 +27,7 @@ fn parse_demo(demo_path: String) -> i32 {
         true,
         false,
         //vec![],
-        (10000..10002).collect(),
+        (0..10000).collect(),
         vec![],
         vec!["player@m_vecOrigin_X".to_string()],
         "player_death".to_string(),
@@ -75,7 +76,7 @@ fn main() {
     */
     use rayon::iter::ParallelIterator;
 
-    let x: Vec<i32> = paths_v[..1]
+    let x: Vec<i32> = paths_v[3..4]
         .into_par_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();

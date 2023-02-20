@@ -5,6 +5,9 @@ use itertools::Itertools;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
 use zip::write::FileOptions;
 use zip::ZipWriter;
 
@@ -16,12 +19,14 @@ pub struct WriteCache {
     pub ge_start: u64,
     pub zip: ZipWriter<File>,
     pub zip_options: FileOptions,
+    pub cls_eid_mapper: Arc<RwLock<Vec<EidClsHistoryEntry>>>,
 }
 #[derive(Debug)]
 struct CacheEntry {
     byte: u64,
     pidx: i32,
     entid: u32,
+    cls_id: u16,
 }
 
 pub const TEAM_CLSID: u16 = 43;
@@ -31,7 +36,13 @@ pub const PLAYER_CLSID: u16 = 40;
 pub const PLAYER_MAX_ENTID: i32 = 64;
 
 impl WriteCache {
-    pub fn new(path: &String, jobresults: Vec<JobResult>, dt_start: u64, ge_start: u64) -> Self {
+    pub fn new(
+        path: &String,
+        jobresults: Vec<JobResult>,
+        dt_start: u64,
+        ge_start: u64,
+        cls_eid_mapper: Arc<RwLock<Vec<EidClsHistoryEntry>>>,
+    ) -> Self {
         let (game_events, string_tables, packet_ents) = WriteCache::filter_per_result(jobresults);
 
         let file = fs::File::create(path.to_owned()).unwrap();
@@ -49,9 +60,11 @@ impl WriteCache {
             ge_start: ge_start,
             zip: zip,
             zip_options: options,
+            cls_eid_mapper: cls_eid_mapper,
         }
     }
     pub fn write_all_caches(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
+        self.write_eid_cls_map();
         self.write_packet_ents(sv_cls_map);
         self.write_game_events();
         self.write_string_tables();
@@ -71,8 +84,8 @@ impl WriteCache {
         write_type: &str,
         cls_id: u16,
     ) -> String {
-        let player_props = &sv_cls_map.get(&cls_id).unwrap().props;
-        let prop = player_props.get(idx as usize).unwrap();
+        let props = &sv_cls_map.get(&cls_id).unwrap().props;
+        let prop = props.get(idx as usize).unwrap();
         write_type.to_string() + "@" + &prop.table + "." + &prop.name
     }
 
@@ -121,6 +134,7 @@ impl WriteCache {
                     byte: entindc.byte,
                     pidx: *idx,
                     entid: entindc.entid as u32,
+                    cls_id: entindc.cls_id,
                 })
             }
         }
@@ -211,7 +225,7 @@ impl WriteCache {
         let mut teams = vec![];
         let mut manager = vec![];
         let mut rules = vec![];
-
+        let mut other = vec![];
         for field in other_props {
             match field.entid {
                 // TEAM
@@ -224,12 +238,16 @@ impl WriteCache {
                 70 => manager.push(field),
                 // RULES
                 71 => rules.push(field),
-                _ => {}
+                _ => {
+                    other.push(field)
+                    //println!("UNK ID: {}", field.entid);
+                }
             }
         }
         self.write_others(teams, sv_cls_map, "teams", &hm);
         self.write_others(manager, sv_cls_map, "manager", &hm);
         self.write_others(rules, sv_cls_map, "rules", &hm);
+        self.write_others(other, sv_cls_map, "other", &hm);
     }
 
     fn write_others(
@@ -245,7 +263,8 @@ impl WriteCache {
                 "teams" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, TEAM_CLSID),
                 "manager" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, MANAGER_CLSID),
                 "rules" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, RULES_CLSID),
-                _ => panic!("unkown write type"),
+                "other" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, data[0].cls_id),
+                _ => panic!("unkown write type {}", write_type),
             };
             self.write_bytes_to_zip(data, &str_name, &hm);
         }
@@ -281,6 +300,20 @@ impl WriteCache {
         bytes.extend(inverse_hm.iter().flat_map(|(_, v)| v.0.to_le_bytes()));
         bytes.extend(inverse_hm.iter().flat_map(|(_, v)| v.1.to_le_bytes()));
 
+        self.zip.write_all(&bytes).unwrap();
+    }
+    pub fn write_eid_cls_map(&mut self) {
+        let v = self.cls_eid_mapper.read().unwrap();
+
+        self.zip
+            .start_file("eid_cls_map", self.zip_options)
+            .unwrap();
+        let mut bytes: Vec<u8> = vec![];
+
+        bytes.extend(v.len().to_le_bytes());
+        bytes.extend(v.iter().flat_map(|x| x.eid.to_le_bytes()));
+        bytes.extend(v.iter().flat_map(|x| x.cls_id.to_le_bytes()));
+        bytes.extend(v.iter().flat_map(|x| x.tick.to_le_bytes()));
         self.zip.write_all(&bytes).unwrap();
     }
     pub fn write_string_tables(&mut self) {

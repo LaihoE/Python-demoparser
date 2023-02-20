@@ -1,4 +1,5 @@
 use crate::parsing::cache::PLAYER_CLSID;
+use crate::parsing::demo_parsing::entities_cache_only::EidClsHistoryEntry;
 use crate::parsing::demo_parsing::ServerClass;
 use ahash::HashMap;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
@@ -36,6 +37,7 @@ pub struct ReadCache {
     pub zip: ZipArchive<File>,
     pub idx_byte_map: Vec<u64>,
     pub idx_tick_map: Vec<i32>,
+    pub eid_cls_map: Vec<EidClsHistoryEntry>,
 }
 const HASH_BYTE_LENGTH: usize = 10000;
 
@@ -55,6 +57,7 @@ impl ReadCache {
             cache_path: cache_path.clone(),
             idx_byte_map: idx_byte_map,
             idx_tick_map: idx_tick_map,
+            eid_cls_map: vec![],
         };
 
         println!("{:2?}", before.elapsed());
@@ -401,6 +404,54 @@ impl ReadCache {
 
         for byte in starting_bytes {
             self.stringtables.push(Stringtables { byte: byte as u64 });
+        }
+    }
+
+    pub fn read_eid_cls_map(&mut self) {
+        let mut data = vec![];
+        self.zip
+            .by_name("eid_cls_map")
+            .unwrap()
+            .read_to_end(&mut data)
+            .unwrap();
+        // First 8 bytes = number of "rows"
+        let number_structs = usize::from_le_bytes(data[..8].try_into().unwrap());
+
+        let mut eids = Vec::with_capacity(number_structs);
+        let mut cls_ids = Vec::with_capacity(number_structs);
+        let mut ticks = Vec::with_capacity(number_structs);
+
+        const EIDS_SIZE: usize = 4;
+        const CLS_SIZE: usize = 2;
+        const TICKS_SIZE: usize = 4;
+
+        let eids_start_at = 8;
+        let eids_end_at = number_structs * EIDS_SIZE + 8;
+        let cls_start_at = eids_end_at;
+        let cls_end_at = cls_start_at + number_structs * CLS_SIZE;
+
+        let ticks_start_at = cls_end_at;
+
+        println!("NS {}", number_structs);
+
+        for bytes in data[eids_start_at..eids_end_at].chunks(EIDS_SIZE) {
+            eids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        }
+        for bytes in data[cls_start_at..cls_end_at].chunks(CLS_SIZE) {
+            cls_ids.push(u16::from_le_bytes(bytes.try_into().unwrap()));
+        }
+        for bytes in data[ticks_start_at..].chunks(TICKS_SIZE) {
+            ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        }
+        println!("{} {} {}", eids.len(), cls_ids.len(), ticks.len());
+
+        for (eid, cls_id, tick) in izip!(eids, cls_ids, ticks) {
+            self.eid_cls_map.push(EidClsHistoryEntry {
+                eid: eid,
+                cls_id: cls_id,
+                tick: tick,
+            });
+            //println!("{} {} {}", eid, cls_id, tick);
         }
     }
 }

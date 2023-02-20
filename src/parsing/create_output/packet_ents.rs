@@ -7,6 +7,9 @@ use crate::parsing::parser::*;
 use crate::parsing::players::Players;
 use crate::parsing::utils::TYPEHM;
 pub use crate::parsing::variants::*;
+use ahash::HashMap;
+use ahash::HashSet;
+use itertools::izip;
 use itertools::Itertools;
 use polars::prelude::{DataFrame, Int64Type, NamedFrom, NamedFromOwned};
 
@@ -176,6 +179,11 @@ impl Parser {
         ticks: &Vec<i32>,
         out_data: &mut Vec<f32>,
     ) {
+        for i in &*data {
+            if i.0 < 1000.0 {
+                println!("{:?}", i);
+            }
+        }
         // Fast due to mostly sorted already
         data.sort_by_key(|x| x.1);
 
@@ -360,5 +368,107 @@ impl Parser {
             self.find_wanted_values(data, ticks, &mut out_data);
         }
         (out_data, ids, names, out_ticks)
+    }
+
+    pub fn find_weapon_values(
+        &self,
+        results: &Vec<JobResult>,
+        og_ticks: &Vec<i32>,
+        players: &Players,
+        pidx: i32,
+    ) -> Vec<f32> {
+        let tickss: Vec<i32> = (0..700000).collect();
+        let (weapon_handles, xuids, name, ticks) = self.find_multiple_values(
+            results,
+            "player@DT_BaseCombatCharacter.m_hActiveWeapon".to_string(),
+            &tickss,
+            players,
+        );
+
+        let mut weap_map = HashMap::default();
+
+        for (weap, xuid, tick) in izip!(&weapon_handles, &xuids, &ticks) {
+            weap_map
+                .entry(tick)
+                .or_insert(vec![])
+                .push((xuid, *weap as i32 & 0x7FF));
+        }
+
+        let eids: Vec<i32> = weapon_handles.iter().map(|x| *x as i32 & 0x7FF).collect();
+        let uniq_eids: HashSet<i32> = HashSet::from_iter(eids.iter().map(|x| *x).dedup());
+
+        println!("UE {:?}", uniq_eids);
+
+        let mut v = vec![];
+        for x in results {
+            if let JobResult::PacketEntities(pe) = x {
+                v.push(pe);
+            }
+        }
+        let mut filtered = vec![];
+        for i in v {
+            for j in &i.data {
+                if uniq_eids.contains(&j.ent_id) && j.prop_inx == pidx {
+                    match j.data {
+                        PropData::I32(int) => {
+                            filtered.push((int as f32, i.tick, j.ent_id));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        let g = filtered
+            .iter()
+            .into_group_map_by(|x| Parser::weapid_to_person(&weap_map, x.1, x.2));
+
+        let mut tasks = vec![];
+        for (sid, data) in g {
+            if sid != None && sid != Some(0) {
+                tasks.push((sid.unwrap(), data));
+            }
+        }
+
+        let found_sids: Vec<u64> = tasks.iter().map(|x| x.0).collect();
+        let all_sids = players.get_steamids();
+
+        for sid in all_sids {
+            if !found_sids.contains(&sid) && sid != 0 {
+                tasks.push((sid, vec![&(0.0, 0, 0)]));
+            }
+        }
+        tasks.sort_by_key(|x| x.0);
+
+        for i in &filtered {
+            println!("***");
+            println!("{:?}", i);
+            Parser::weapid_to_person(&weap_map, i.1, i.2);
+            println!("{:?}", &weap_map[&i.1])
+        }
+        let mut out: Vec<f32> = vec![];
+
+        for (k, mut v) in tasks {
+            println!("{:?} {:?}", k, v.len());
+            self.find_wanted_values(&mut v, &og_ticks, &mut out);
+        }
+        return out;
+    }
+    fn weapid_to_person(
+        weap_map: &HashMap<&i32, Vec<(&u64, i32)>>,
+        tick: i32,
+        entid: i32,
+    ) -> Option<u64> {
+        match weap_map.get(&tick) {
+            Some(m) => {
+                for i in m {
+                    if i.1 == entid {
+                        return Some(*i.0);
+                    }
+                }
+            }
+            None => println!("no tick found"),
+        }
+        return None;
     }
 }

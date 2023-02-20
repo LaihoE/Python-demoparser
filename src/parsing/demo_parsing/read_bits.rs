@@ -8,6 +8,35 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::u32;
 
+const SPROP_UNSIGNED: i32 = 1 << 0;
+const SPROP_COORD: i32 = 1 << 1;
+const SPROP_NOSCALE: i32 = 1 << 2;
+const SPROP_ROUNDDOWN: i32 = 1 << 3;
+const SPROP_ROUNDUP: i32 = 1 << 4;
+const SPROP_NORMAL: i32 = 1 << 5;
+const SPROP_EXCLUDE: i32 = 1 << 6;
+const SPROP_XYZE: i32 = 1 << 7;
+const SPROP_INSIDEARRAY: i32 = 1 << 8;
+const SPROP_PROXY_ALWAYS_YES: i32 = 1 << 9;
+const SPROP_IS_A_VECTOR_ELEM: i32 = 1 << 10;
+const SPROP_COLLAPSIBLE: i32 = 1 << 11;
+const SPROP_COORD_MP: i32 = 1 << 12;
+const SPROP_COORD_MP_LOWPRECISION: i32 = 1 << 13;
+const SPROP_COORD_MP_INTEGRAL: i32 = 1 << 14;
+const SPROP_CELL_COORD: i32 = 1 << 15;
+const SPROP_CELL_COORD_LOWPRECISION: i32 = 1 << 16;
+const SPROP_CELL_COORD_INTEGRAL: i32 = 1 << 17;
+const SPROP_VARINT: i32 = 1 << 19;
+
+const coordFractionalBitsMp: u32 = 5;
+const coordFractionalBitsMpLowPrecision: i32 = 3;
+const coordDenominator: i32 = 1 << coordFractionalBitsMp;
+const coordResolution: f32 = 1.0 / coordDenominator as f32;
+const coordDenominatorLowPrecision: i32 = 1 << coordFractionalBitsMpLowPrecision;
+const coordResolutionLowPrecision: f32 = 1.0 / coordDenominatorLowPrecision as f32;
+const coordIntegerBitsMp: i32 = 11;
+const coordIntegerBits: i32 = 14;
+
 pub struct MyBitreader<'a> {
     pub reader: LittleEndianReader<'a>,
 }
@@ -166,6 +195,7 @@ impl<'a> MyBitreader<'a> {
     pub fn decode_vec(&mut self, prop: &Prop) -> Option<[f32; 3]> {
         let x = self.decode_float(prop)?;
         let y = self.decode_float(prop)?;
+
         if prop.flags & (1 << 5) == 0 {
             let z = self.decode_float(prop)?;
             Some([x, y, z])
@@ -203,17 +233,20 @@ impl<'a> MyBitreader<'a> {
         Some(self.read_nbits(n.try_into().unwrap())? << (32 - n) >> (32 - n))
     }
 
-    pub fn read_bit_cell_coord(&mut self, n: usize, coord_type: u32) -> Option<u32> {
-        // SKIP FOR NOW, WATCH OUT
-        match coord_type {
-            2 => {
-                self.read_nbits(n as u32)?;
-                Some(0)
-            }
-            _ => {
-                let frac_bits = if coord_type == 3 { 1 } else { 5 };
-                self.read_nbits(frac_bits);
-                Some(0)
+    pub fn read_bit_cell_coord(&mut self, n: usize, integral: bool, lowpres: bool) -> Option<f32> {
+        let num_bits = n as i32;
+        if integral {
+            return Some(self.read_sint_bits(num_bits).unwrap() as f32);
+        } else {
+            let i = self.read_sint_bits(num_bits).unwrap();
+            if lowpres {
+                let fract = self.read_sint_bits(3).unwrap();
+                return Some(i as f32 + fract as f32 * coordResolutionLowPrecision);
+            } else {
+                let fract = self
+                    .read_sint_bits(coordFractionalBitsMp.try_into().unwrap())
+                    .unwrap();
+                return Some(i as f32 + fract as f32 * coordResolutionLowPrecision);
             }
         }
     }
@@ -222,10 +255,58 @@ impl<'a> MyBitreader<'a> {
         let sign = self.read_boolie()?;
         let frac = self.read_nbits(11)?;
         let result = frac as f64 * (1.0 / ((1 << 11) - 1) as f64);
+        //println!("HERE2 {}", result as f32);
         if sign {
             Some(-result)
         } else {
             Some(result)
+        }
+    }
+
+    pub fn read_bit_coord_mp(&mut self, integral: bool, lowpres: bool) -> Option<f32> {
+        let in_bound = self.read_boolie().unwrap();
+        let result = 0;
+        if integral {
+            if self.read_boolie().unwrap() {
+                let is_negative = self.read_boolie().unwrap();
+                if in_bound {
+                    return Some((self.read_sint_bits(coordIntegerBitsMp).unwrap() + 1) as f32);
+                } else {
+                    return Some((self.read_sint_bits(coordIntegerBits).unwrap() + 1) as f32);
+                }
+            } else {
+                panic!("WTF");
+            }
+        } else {
+            let read_int_val = self.read_boolie().unwrap();
+            let neg = self.read_boolie().unwrap();
+
+            let mut intval = 0;
+
+            if read_int_val {
+                if in_bound {
+                    intval = self.read_sint_bits(coordIntegerBitsMp).unwrap() + 1;
+                } else {
+                    intval = self.read_sint_bits(coordIntegerBits).unwrap() + 1;
+                }
+            }
+            if lowpres {
+                return Some(
+                    intval as f32
+                        + self
+                            .read_sint_bits(coordFractionalBitsMpLowPrecision)
+                            .unwrap() as f32
+                            * coordResolutionLowPrecision,
+                );
+            } else {
+                return Some(
+                    intval as f32
+                        + self
+                            .read_sint_bits(coordFractionalBitsMp.try_into().unwrap())
+                            .unwrap() as f32
+                            * coordResolution,
+                );
+            }
         }
     }
 
@@ -248,6 +329,7 @@ impl<'a> MyBitreader<'a> {
         }
         let resol: f64 = 1.0 / (1 << 5) as f64;
         let result: i32 = (int_val as f64 + (frac_val as f64 * resol) as f64) as i32;
+        //println!("HERE {}", result as f32);
         if sign {
             Some(-result)
         } else {
@@ -255,38 +337,41 @@ impl<'a> MyBitreader<'a> {
         }
     }
 
+    #[inline(always)]
     pub fn decode_special_float(&mut self, prop: &Prop) -> Option<f32> {
-        let mut val = 0.0;
-        let flags = prop.flags;
-        if flags & (1 << 1) != 0 {
-            val = self.read_bit_coord()? as f32;
-        } else if flags & (1 << 2) != 0 {
-            val = self.reader.read_f32()?;
-        } else if flags & (1 << 5) != 0 {
-            val = self.read_bit_normal()? as f32;
-        } else if flags & (1 << 15) != 0 {
-            val = self.read_bit_cell_coord(prop.num_bits as usize, 0)? as f32;
-        } else if flags & (1 << 16) != 0 {
-            val = self.read_bit_cell_coord(prop.num_bits as usize, 1)? as f32;
-        } else if flags & (1 << 17) != 0 {
-            val = self.read_bit_cell_coord(prop.num_bits as usize, 2)? as f32;
+        if prop.flags & (1 << 1) != 0 {
+            return Some(self.read_bit_coord()? as f32);
+        } else if prop.flags & SPROP_COORD_MP != 0 {
+            return Some(self.read_bit_coord_mp(false, false).unwrap());
+        } else if prop.flags & SPROP_COORD_MP_LOWPRECISION != 0 {
+            return Some(self.read_bit_coord_mp(false, true).unwrap());
+        } else if prop.flags & SPROP_COORD_MP_INTEGRAL != 0 {
+            return Some(self.read_bit_coord_mp(true, false).unwrap());
+        } else if prop.flags & (1 << 2) != 0 {
+            return Some(self.reader.read_f32().unwrap());
+        } else if prop.flags & (1 << 5) != 0 {
+            return Some(self.read_bit_normal()? as f32);
+        } else if prop.flags & (1 << 15) != 0 {
+            return Some(self.read_bit_cell_coord(prop.num_bits as usize, false, false)? as f32);
+        } else if prop.flags & (1 << 16) != 0 {
+            return Some(self.read_bit_cell_coord(prop.num_bits as usize, true, false)? as f32);
+        } else if prop.flags & (1 << 17) != 0 {
+            return Some(self.read_bit_cell_coord(prop.num_bits as usize, false, true)? as f32);
         }
-        Some(val)
+        return None;
     }
 
+    #[inline(always)]
     pub fn decode_float(&mut self, prop: &Prop) -> Option<f32> {
-        let val = self.decode_special_float(prop)?;
-
-        if val != 0.0 {
-            Some(val as f32)
-        } else {
-            let mut interp = 1;
-            if prop.num_bits != -1 {
-                interp = self.read_nbits(prop.num_bits as u32)?;
+        let val = self.decode_special_float(prop);
+        match val {
+            Some(v) => return Some(v),
+            None => {
+                let max_value = 1 << prop.num_bits;
+                let interp = self.read_nbits(prop.num_bits as u32).unwrap();
+                let fval = (interp / max_value) as f32;
+                return Some(prop.low_value + (prop.high_value - prop.low_value) * fval);
             }
-            let mut val = (interp / (1 << (prop.num_bits - 1))) as f32;
-            val = prop.low_value + (prop.high_value - prop.low_value) * (val as f32);
-            Some(val)
         }
     }
 

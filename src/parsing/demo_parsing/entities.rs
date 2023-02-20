@@ -95,9 +95,8 @@ impl Parser {
         //println!("CAP {}", all_props.capacity());
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var()? as i32);
-
             if entity_id > 71 {
-                break;
+                //break;
             }
             if b.read_boolie()? {
                 // Checks if entity should be destroyed, don't see this being useful for parser
@@ -106,10 +105,22 @@ impl Parser {
                 // IF ENTITY DOES NOT EXIST
                 // These bits are for creating the ent but we use hack for it so not needed
                 let _ = b.read_nbits(19)?;
-                parse_ent_props(entity_id, &mut b, serverclass_map.clone(), &mut all_props)
+                parse_ent_props(
+                    entity_id,
+                    &mut b,
+                    serverclass_map.clone(),
+                    &mut all_props,
+                    tick,
+                )
             } else {
                 // IF ENTITY DOES EXIST
-                parse_ent_props(entity_id, &mut b, serverclass_map.clone(), &mut all_props)
+                parse_ent_props(
+                    entity_id,
+                    &mut b,
+                    serverclass_map.clone(),
+                    &mut all_props,
+                    tick,
+                )
             }
         }
         return Some(all_props);
@@ -157,13 +168,41 @@ pub fn parse_indicies(b: &mut MyBitreader) -> Option<SmallVec<[i32; 64]>> {
     Some(indicies)
 }
 
+fn find_cls_id(serverclass_map: Arc<ClsEidMapper>, entity_id: i32, tick: i32) -> u16 {
+    let x = serverclass_map.eid_clsid_history.read().unwrap();
+    let myid: Vec<&EidClsHistoryEntry> = x.iter().filter(|x| x.eid == entity_id).collect();
+
+    if myid.len() == 0 {
+        panic!("ENITD {} NO CLS", entity_id);
+    }
+
+    if myid.len() == 1 {
+        return myid[0].cls_id;
+    } else {
+        for e in myid.windows(2) {
+            if e[1].tick > tick && e[0].tick <= tick {
+                return e[0].cls_id;
+            }
+        }
+        return myid.last().unwrap().cls_id;
+    }
+}
+
 pub fn parse_ent_props(
     entity_id: i32,
     b: &mut MyBitreader,
     serverclass_map: Arc<ClsEidMapper>,
     out_vec: &mut Vec<SingleEntOutput>,
+    tick: i32,
 ) {
-    let cls_id = serverclass_map.eid_clsid.get(&entity_id).unwrap();
+    let cls_id = if entity_id > 71 {
+        find_cls_id(serverclass_map.clone(), entity_id, tick)
+    } else {
+        get_cls_id(entity_id)
+    };
+
+    //println!("{} {} ", entity_id, cls_id);
+    //let cls_id = serverclass_map.eid_clsid.get(&entity_id).unwrap();
     let sv_cls = serverclass_map.cls_map.get(&cls_id).unwrap();
 
     let indicies = match parse_indicies(b) {

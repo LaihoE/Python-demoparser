@@ -67,10 +67,11 @@ impl ReadCache {
                 "rules" => self.read_other_deltas_by_name(prop, &svc_map, 39),
                 "manager" => self.read_other_deltas_by_name(prop, &svc_map, 41),
                 "team" => self.read_other_deltas_by_name(prop, &svc_map, 43),
+                //"other" => self.find_weapon_deltas(prop_name, wanted_ticks, players),
                 _ => panic!("unknown prop prefix {:?}", prefix[0]),
             }
         }
-        println!("{:?}", wanted_bytes.len());
+        println!("Wanted bytes {:?}", wanted_bytes.len());
         // Unique bytes
         wanted_bytes.iter().map(|x| *x).collect()
     }

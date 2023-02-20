@@ -12,6 +12,7 @@ use protobuf::Message;
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::RwLock;
 /*
 Stripped down version of entities.rs where this one gets prop indicies
 as fast as possible. These are what are written into the cache.
@@ -39,11 +40,20 @@ pub struct EntityIndicies {
     pub entid: i32,
     pub tick: i32,
     pub prop_indicies: SmallVec<[i32; 32]>,
+    pub cls_id: u16,
 }
+#[derive(Debug, Clone)]
+pub struct EidClsHistoryEntry {
+    pub eid: i32,
+    pub cls_id: u16,
+    pub tick: i32,
+}
+
 #[derive(Debug, Clone)]
 pub struct ClsEidMapper {
     pub eid_clsid: DashMap<i32, u16, RandomState>,
     pub cls_map: DashMap<u16, ServerClass, RandomState>,
+    pub eid_clsid_history: Arc<RwLock<Vec<EidClsHistoryEntry>>>,
 }
 
 impl Parser {
@@ -90,7 +100,7 @@ impl Parser {
                 Some(eid_plus) => eid_plus as i32 + 1,
                 None => break,
             };
-            //println!("{}", entity_id);
+            // println!("{}", entity_id);
             if entity_id > 71 {
                 //break;
             }
@@ -102,8 +112,20 @@ impl Parser {
                 // IF ENTITY DOES NOT EXIST
                 // These bits are for creating the ent but we use hack for it so not needed
                 let cls_id = b.read_nbits(9).unwrap();
-                let _ = b.read_nbits(10);
+                let serial = b.read_nbits(10);
+                //println!("{:?}", serial);
+                //println!("{:032b}", serial.unwrap());
                 // println!("{} {}", cls_id, entity_id);
+                let mut history = serverclass_map.eid_clsid_history.write().unwrap();
+
+                history.push(EidClsHistoryEntry {
+                    eid: entity_id,
+                    cls_id: cls_id as u16,
+                    tick: tick,
+                });
+
+                drop(history);
+
                 serverclass_map.eid_clsid.insert(entity_id, cls_id as u16);
 
                 let indicies =
@@ -115,6 +137,7 @@ impl Parser {
                             tick: tick,
                             entid: entity_id,
                             prop_indicies: idc,
+                            cls_id: cls_id as u16,
                         });
                     }
                     None => break,
@@ -125,11 +148,14 @@ impl Parser {
                     parse_ent_props_indicies(entity_id, &mut b, serverclass_map.clone(), tick);
                 match indicies {
                     Some(idc) => {
+                        let cls_id = serverclass_map.eid_clsid.get(&entity_id).unwrap();
+
                         outputs.push(EntityIndicies {
                             byte: byte,
                             tick: tick,
                             entid: entity_id,
                             prop_indicies: idc,
+                            cls_id: *cls_id as u16,
                         });
                     }
                     None => break,
@@ -197,12 +223,30 @@ fn parse_ent_props_indicies(
         Some(idc) => idc,
         None => return None,
     };
-    // println!("{} {:?}", entity_id, indicies);
+    //println!("{} {:?}", entity_id, indicies);
 
     for idx in &indicies {
         match sv_cls.props.get(*idx as usize) {
             Some(x) => {
-                let _ = b.decode(x);
+                let p = b.decode(x).unwrap();
+                if entity_id > 0 && sv_cls.dt.contains("Weapon") {
+                    println!(
+                        "{} {} {} {} {} {:?} {}",
+                        tick,
+                        entity_id,
+                        tick,
+                        sv_cls.dt,
+                        sv_cls.props.get(*idx as usize).unwrap().name,
+                        p,
+                        idx
+                    );
+                    match p {
+                        PropData::I32(i) => {
+                            //println!("{:032b}", i);
+                        }
+                        _ => {}
+                    }
+                }
             }
             None => return None,
         }

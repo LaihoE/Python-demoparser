@@ -1,3 +1,4 @@
+/*
 mod parsing;
 
 use arrow::ffi;
@@ -616,3 +617,4 @@ fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<DemoParser>()?;
     Ok(())
 }
+*/

@@ -1,3 +1,4 @@
+/*
 use crate::parsing::cache::cache_reader::ReadCache;
 use crate::parsing::create_output::create_output::ExtraEventRequest;
 use crate::parsing::demo_parsing::*;
@@ -183,3 +184,4 @@ impl ReadCache {
         self.stringtables.iter().map(|s| s.byte).collect()
     }
 }
+ */

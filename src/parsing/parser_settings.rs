@@ -16,10 +16,13 @@ pub struct ParserState {
     pub tick: i32,
     pub round: i32,
     pub entities: Vec<(u32, Entity)>,
-    pub stringtables: Vec<StringTable>,
-    pub game_events: Vec<GameEvent>,
+    //pub stringtables: Vec<StringTable>,
+    //pub game_events: Vec<GameEvent>,
     pub ge_map_started_at: u64,
     pub dt_started_at: u64,
+    pub workhorse: Vec<i32>,
+    pub workhorse_idx: usize,
+    pub workhorse_tick_start: Vec<usize>,
 }
 
 pub struct Maps {
@@ -29,7 +32,7 @@ pub struct Maps {
     pub serverclass_map: HashMap<u16, ServerClass, RandomState>,
     pub event_map: Option<HashMap<i32, Descriptor_t, RandomState>>,
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable, RandomState>>,
-    pub players: HashMap<u64, UserInfo, RandomState>,
+    //pub players: HashMap<u64, UserInfo, RandomState>,
     pub userid_sid_map: HashMap<u32, Vec<(u64, i32)>, RandomState>,
     pub sid_entid_map: HashMap<u64, Vec<(u32, i32)>>,
     pub uid_eid_map: HashMap<u32, Vec<(u32, i32)>, RandomState>,
@@ -91,7 +94,7 @@ impl Parser {
                     serverclass_map: HashMap::default(),
                     event_map: Some(HashMap::default()),
                     dt_map: Some(HashMap::default()),
-                    players: HashMap::default(),
+                    //players: HashMap::default(),
                     userid_sid_map: HashMap::default(),
                     baselines: HashMap::default(),
                     baseline_no_cls: HashMap::default(),
@@ -118,10 +121,13 @@ impl Parser {
                     round: 0,
                     tick: 0,
                     entities: vec![],
-                    game_events: vec![],
-                    stringtables: vec![],
+                    //game_events: vec![],
+                    //stringtables: vec![],
                     dt_started_at: 0,
                     ge_map_started_at: 0,
+                    workhorse: vec![0; 30_000_000],
+                    workhorse_idx: 0,
+                    workhorse_tick_start: vec![],
                 };
                 match data {
                     Mmap3(m) => Ok(Self {
@@ -129,7 +135,6 @@ impl Parser {
                         settings: settings,
                         bytes: Arc::new(m),
                         state: state,
-                        tasks: vec![],
                     }),
                     BytesVariant::Vec(_) => panic!("vec"),
                 }

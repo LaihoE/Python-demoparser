@@ -1,3 +1,4 @@
+/*
 use std::time::Instant;
 
 use crate::parsing::cache::cache_reader::ReadCache;
@@ -203,3 +204,4 @@ impl Parser {
         series
     }
 }
+*/

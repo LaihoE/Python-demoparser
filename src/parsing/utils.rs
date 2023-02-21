@@ -100,19 +100,6 @@ impl Parser {
     }
 }
 
-pub fn check_round_change(entities: &[(u32, Entity)], round: &mut i32) {
-    match entities.get(70) {
-        Some(e) => match e.1.props.get("m_totalRoundsPlayed") {
-            Some(r) => {
-                if let PropData::I32(p) = r.data {
-                    *round = p;
-                }
-            }
-            None => {}
-        },
-        None => {}
-    }
-}
 pub fn decompress_gz(demo_path: String) -> Result<BytesVariant, std::io::Error> {
     match File::open(demo_path.clone()) {
         Err(e) => Err(e),

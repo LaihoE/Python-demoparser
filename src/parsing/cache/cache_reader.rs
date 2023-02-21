@@ -1,3 +1,4 @@
+/*
 use crate::parsing::cache::PLAYER_CLSID;
 use crate::parsing::demo_parsing::entities_cache_only::EidClsHistoryEntry;
 use crate::parsing::demo_parsing::ServerClass;
@@ -455,3 +456,4 @@ impl ReadCache {
         }
     }
 }
+*/

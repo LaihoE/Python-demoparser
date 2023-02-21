@@ -51,10 +51,10 @@ fn parse_demo(demo_path: String) -> i32 {
 fn main() {
     let now = Instant::now();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/").unwrap();
-    //let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
     //let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems").unwrap();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/bench_pro_demos/").unwrap();
+    //let paths = fs::read_dir("/home/laiho/Documents/demos/bench_pro_demos/").unwrap();
 
     let mut paths_v = vec![];
     for path in paths {
@@ -63,21 +63,17 @@ fn main() {
     }
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(1)
+        .num_threads(24)
         .build_global()
         .unwrap();
 
     let this_p = &paths_v[0];
     let single = vec![this_p];
-    /*
-    let x: Vec<i32> = tqdm!(paths_v.into_iter())
-        .map(|f| parse_demo(f.to_owned()))
-        .collect();
-    */
+
     use rayon::iter::ParallelIterator;
 
-    let x: Vec<i32> = paths_v[3..4]
-        .into_par_iter()
+    let x: Vec<i32> = single
+        .into_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();
 

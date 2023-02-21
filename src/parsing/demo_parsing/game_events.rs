@@ -1,4 +1,4 @@
-use crate::parsing::parser::MsgBluePrint;
+use crate::parsing::demo_parsing::ByteReader;
 use crate::parsing::parser::Parser;
 use crate::parsing::parser::*;
 use crate::parsing::variants::*;
@@ -12,6 +12,29 @@ use memmap2::Mmap;
 use protobuf::Message;
 use pyo3::prelude::*;
 use std::collections::HashMap;
+
+impl Parser {
+    pub fn parse_game_event(&mut self, byte_reader: &mut ByteReader, size: usize) {
+        let wanted_bytes = &self.bytes[byte_reader.byte_idx..byte_reader.byte_idx + size as usize];
+        byte_reader.skip_n_bytes(size.try_into().unwrap());
+        let game_event: CSVCMsg_GameEvent = Message::parse_from_bytes(wanted_bytes).unwrap();
+        let event_desc = &self.maps.event_map.as_ref().unwrap()[&game_event.eventid()];
+        let name_data_pairs = gen_name_val_pairs(&game_event, event_desc, &self.state.tick.clone());
+    }
+
+    pub fn parse_game_event_map(&mut self, byte_reader: &mut ByteReader, size: usize) {
+        let wanted_bytes = &self.bytes[byte_reader.byte_idx..byte_reader.byte_idx + size as usize];
+        byte_reader.skip_n_bytes(size.try_into().unwrap());
+        let game_event_list: CSVCMsg_GameEventList =
+            Message::parse_from_bytes(wanted_bytes).unwrap();
+
+        let mut hm: HashMap<i32, Descriptor_t, RandomState> = HashMap::default();
+        for event_desc in game_event_list.descriptors {
+            hm.insert(event_desc.eventid(), event_desc);
+        }
+        self.maps.event_map = Some(hm);
+    }
+}
 
 fn parse_key(key: &Key_t) -> KeyData {
     match key.type_() {
@@ -97,7 +120,6 @@ pub struct GameEvent {
 pub fn gen_name_val_pairs(
     game_event: &CSVCMsg_GameEvent,
     event: &Descriptor_t,
-    byte: &usize,
     tick: &i32,
 ) -> Vec<NameDataPair> {
     // Takes the msg and its descriptor and parses (name, val) pairs from it
@@ -114,61 +136,9 @@ pub fn gen_name_val_pairs(
         })
     }
     kv_pairs.push(NameDataPair {
-        name: "byte".to_owned(),
-        data: KeyData::Uint64(*byte as u64),
-        data_type: 7,
-    });
-    kv_pairs.push(NameDataPair {
         name: "tick".to_owned(),
         data: KeyData::Long(*tick),
         data_type: 3,
     });
     kv_pairs
-}
-
-impl Parser {
-    pub fn parse_game_events(
-        blueprint: &MsgBluePrint,
-        mmap: &Mmap,
-        game_events_map: &HashMap<i32, Descriptor_t, RandomState>,
-        wanted_event: &str,
-    ) -> JobResult {
-        if blueprint.end_idx > mmap.len() {
-            return JobResult::None;
-        }
-        let wanted_bytes = &mmap[blueprint.start_idx..blueprint.end_idx];
-
-        let msg: CSVCMsg_GameEvent = match Message::parse_from_bytes(wanted_bytes) {
-            Ok(ge) => ge,
-            Err(_) => return JobResult::None,
-        };
-        let event_desc = &game_events_map[&msg.eventid()];
-
-        if event_desc.name() != wanted_event {
-            return JobResult::None;
-        }
-
-        let name_data_pairs =
-            gen_name_val_pairs(&msg, event_desc, &blueprint.byte, &blueprint.tick);
-
-        return JobResult::GameEvents(GameEvent {
-            name: event_desc.name().to_owned(),
-            fields: name_data_pairs,
-            tick: blueprint.tick,
-            byte: blueprint.byte,
-            id: msg.eventid(),
-        });
-    }
-
-    pub fn parse_game_event_map(&mut self, blueprint: &MsgBluePrint) {
-        self.state.ge_map_started_at = (blueprint.byte) as u64;
-
-        let wanted_bytes = &self.bytes[blueprint.start_idx..blueprint.end_idx];
-        let msg: CSVCMsg_GameEventList = Message::parse_from_bytes(wanted_bytes).unwrap();
-        let mut hm: HashMap<i32, Descriptor_t, RandomState> = HashMap::default();
-        for event_desc in msg.descriptors {
-            hm.insert(event_desc.eventid(), event_desc);
-        }
-        self.maps.event_map = Some(hm);
-    }
 }

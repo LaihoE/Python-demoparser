@@ -4,15 +4,17 @@ use crate::parsing::demo_parsing::read_bits::MyBitreader;
 use crate::parsing::variants::PropAtom;
 use crate::parsing::variants::PropData;
 use crate::Parser;
+use ahash::HashMap;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use protobuf::Message;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
 
 //use super::stringtables::UserInfo;
+
+static forbidden: &'static [i32] = &[0, 1, 2, 37, 103, 93, 59, 58, 40, 41, 26, 27];
 
 #[derive(Debug)]
 pub struct Entity {
@@ -48,16 +50,9 @@ impl Parser {
         let mut entity_id: i32 = -1;
 
         //self.state.workhorse_idx += 1;
-        self.state.workhorse[self.state.workhorse_idx] = 999999999;
-        self.state.workhorse[self.state.workhorse_idx + 1] = self.state.tick;
-        self.state.workhorse_idx += 2;
 
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var().unwrap() as i32);
-
-            self.state.workhorse[self.state.workhorse_idx] = 111111111;
-            self.state.workhorse[self.state.workhorse_idx + 1] = entity_id;
-            self.state.workhorse_idx += 2;
 
             if b.read_boolie().unwrap() {
                 b.read_boolie();
@@ -87,18 +82,32 @@ impl Parser {
         let new_way = bitreader.read_boolie().unwrap();
         let cls_id = self.state.entities[entity_id as usize].1.class_id;
 
-        let workhorse_idx_start = self.state.workhorse_idx;
+        let mut idx = 0;
+
         loop {
             val = bitreader.read_inx(val, new_way).unwrap();
             if val == -1 {
                 break;
             }
-            self.state.workhorse[self.state.workhorse_idx] = val;
-            self.state.workhorse_idx += 1;
+            if !forbidden.contains(&val) && entity_id < 75 {
+                self.state
+                    .test
+                    .entry(cls_id)
+                    .or_insert(HashMap::default())
+                    .entry(val as u32)
+                    .or_insert(vec![])
+                    .push([
+                        self.state.tick,
+                        self.state.frame_started_at as i32,
+                        entity_id,
+                    ]);
+            }
+            self.state.workhorse[idx] = val;
+            idx += 1;
         }
         let sv_cls = self.maps.serverclass_map.get(&(cls_id as u16)).unwrap();
 
-        for i in workhorse_idx_start..self.state.workhorse_idx {
+        for i in 0..idx {
             let idx = self.state.workhorse[i];
             let prop = &sv_cls.props[idx as usize];
             let p = bitreader.decode(prop);

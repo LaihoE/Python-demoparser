@@ -1,348 +1,1312 @@
-use crate::parsing::demo_parsing::*;
-use crate::parsing::parser::JobResult;
+use crate::parsing::demo_parsing::ServerClass;
 use ahash::HashMap;
-use itertools::Itertools;
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
+use hdf5::{File, Group};
+use ndarray::arr1;
+use ndarray::Array1;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::to_string;
 use std::fs;
-use std::fs::File;
-use std::io::Write;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::RwLock;
-use zip::write::FileOptions;
-use zip::ZipWriter;
+use std::io::prelude::*;
 
-pub struct WriteCache {
-    pub game_events: Vec<GameEvent>,
-    pub string_tables: Vec<UserInfo>,
-    pub packet_ents: Vec<Vec<EntityIndicies>>,
-    pub dt_start: u64,
-    pub ge_start: u64,
-    pub zip: ZipWriter<File>,
-    pub zip_options: FileOptions,
-    pub cls_eid_mapper: Arc<RwLock<Vec<EidClsHistoryEntry>>>,
-}
+const HASH_BYTE_LENGTH: usize = 10000;
 #[derive(Debug)]
-struct CacheEntry {
-    byte: u64,
-    pidx: i32,
-    entid: u32,
-    cls_id: u16,
+pub struct WriteCache {
+    pub path: String,
+    pub index: Vec<IndexEntry>,
+    pub buffer: Vec<u8>,
 }
-
-pub const TEAM_CLSID: u16 = 43;
-pub const MANAGER_CLSID: u16 = 41;
-pub const RULES_CLSID: u16 = 39;
-pub const PLAYER_CLSID: u16 = 40;
-pub const PLAYER_MAX_ENTID: i32 = 64;
+#[derive(Debug, Deserialize, Serialize)]
+pub struct IndexEntry {
+    pub byte_start_at: i32,
+    pub byte_end_at: i32,
+    pub id: i32,
+}
 
 impl WriteCache {
-    pub fn new(
-        path: &String,
-        jobresults: Vec<JobResult>,
-        dt_start: u64,
-        ge_start: u64,
-        cls_eid_mapper: Arc<RwLock<Vec<EidClsHistoryEntry>>>,
-    ) -> Self {
-        let (game_events, string_tables, packet_ents) = WriteCache::filter_per_result(jobresults);
-
-        let file = fs::File::create(path.to_owned()).unwrap();
-        let zip = zip::ZipWriter::new(file);
-
-        let options = FileOptions::default()
-            .compression_method(zip::CompressionMethod::Zstd)
-            .compression_level(Some(10));
-
+    pub fn new(bytes: &[u8]) -> Self {
+        let cache_path = WriteCache::get_cache_path(bytes);
         WriteCache {
-            game_events: game_events,
-            string_tables: string_tables,
-            packet_ents: packet_ents,
-            dt_start: dt_start,
-            ge_start: ge_start,
-            zip: zip,
-            zip_options: options,
-            cls_eid_mapper: cls_eid_mapper,
+            path: cache_path,
+            index: vec![],
+            buffer: vec![],
         }
     }
-    pub fn write_all_caches(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
-        self.write_eid_cls_map();
-        self.write_packet_ents(sv_cls_map);
-        self.write_game_events();
-        self.write_string_tables();
-        self.write_maps();
+    pub fn flush(&mut self) {
+        let mut index_bytes = vec![];
+        let index_starts_at_byte = self.buffer.len();
+        for entry in &self.index {
+            index_bytes.extend(entry.byte_start_at.to_le_bytes());
+            index_bytes.extend(entry.byte_end_at.to_le_bytes());
+            index_bytes.extend(entry.id.to_le_bytes());
+        }
+        self.buffer.extend(index_bytes);
+        self.buffer.extend(index_starts_at_byte.to_le_bytes());
+        println!("wrote: {} bytes", self.buffer.len());
+        fs::write(&self.path, &self.buffer).unwrap();
     }
-    pub fn write_packet_ents(&mut self, sv_cls_map: &HashMap<u16, ServerClass>) {
-        let (player_props, other_props, hm, inverse_hm) = self.split_props_gen_idx_map();
-        self.write_tick_map(&inverse_hm);
-        self.write_player_props(player_props, &hm, sv_cls_map);
-        self.write_other_props(other_props, &hm, sv_cls_map);
+    pub fn compress_bytes(&mut self, bytes: &[u8]) -> Vec<u8> {
+        let mut e = ZlibEncoder::new(Vec::new(), Compression::fast());
+        e.write_all(bytes).unwrap();
+        e.finish().unwrap()
+    }
+    pub fn append_to_buffer(&mut self, bytes: &[u8], id: i32) {
+        let entry = IndexEntry {
+            byte_start_at: self.buffer.len() as i32,
+            byte_end_at: (self.buffer.len() + bytes.len()) as i32,
+            id: id,
+        };
+        self.index.push(entry);
+        let compressed = self.compress_bytes(bytes);
+        self.buffer.extend(compressed);
     }
 
-    pub fn idx_to_str_name(
+    pub fn write_maps(&mut self, dt_start_at: u64, ge_start_at: u64) {
+        /*
+        let arr = arr1(&vec![
+            dt_start_at.try_into().unwrap(),
+            ge_start_at.try_into().unwrap(),
+        ]);
+        */
+    }
+
+    pub fn write_packet_ents(
         &mut self,
-        sv_cls_map: &HashMap<u16, ServerClass>,
-        idx: i32,
-        write_type: &str,
-        cls_id: u16,
-    ) -> String {
-        let props = &sv_cls_map.get(&cls_id).unwrap().props;
-        let prop = props.get(idx as usize).unwrap();
-        write_type.to_string() + "@" + &prop.table + "." + &prop.name
-    }
-
-    fn write_bytes_to_zip(
-        &mut self,
-        data: &mut Vec<&CacheEntry>,
-        name: &String,
-        hm: &HashMap<u32, i32>,
+        packet_ents: &HashMap<u32, HashMap<u32, Vec<[i32; 3]>>>,
+        serverclass_map: &HashMap<u16, ServerClass>,
     ) {
-        self.zip.start_file(name, self.zip_options).unwrap();
-        let per_prop = data.iter().group_by(|x| x.byte);
+        for (cls_id, inner) in packet_ents {
+            if let Some(serverclass) = &serverclass_map.get(&(*cls_id as u16)) {
+                for (pidx, v) in inner {
+                    if let Some(prop) = serverclass.props.get(*pidx as usize) {
+                        let mut temp_arr: Vec<u8> = vec![];
+                        temp_arr.extend(v.iter().flat_map(|x| x[0].to_le_bytes()));
+                        temp_arr.extend(v.iter().flat_map(|x| x[1].to_le_bytes()));
+                        temp_arr.extend(v.iter().flat_map(|x| x[2].to_le_bytes()));
 
-        let mut vals: Vec<(u64, i16)> = vec![];
-        for (k, v) in &per_prop {
-            let mut mask: i16 = 0;
-
-            for e in v {
-                if e.entid < 16 {
-                    mask |= 1 << e.entid;
-                }
-            }
-            vals.push((k, mask));
-        }
-
-        vals.sort_unstable_by_key(|x| x.0);
-        for i in &vals {
-            //println!("{} {} {}", hm[&(i.0 as u32)], i.1, name);
-        }
-        let mut bytes: Vec<u8> = vec![];
-
-        bytes.extend(vals.len().to_le_bytes());
-        bytes.extend(vals.iter().flat_map(|e| hm[&(e.0 as u32)].to_le_bytes()));
-        bytes.extend(vals.iter().flat_map(|e| e.1.to_le_bytes()));
-
-        self.zip.write_all(&bytes).unwrap();
-    }
-
-    fn push_cache_entry(
-        forbidden: &Vec<i32>,
-        entindc: &EntityIndicies,
-        out_vec: &mut Vec<CacheEntry>,
-    ) {
-        for idx in &entindc.prop_indicies {
-            if !forbidden.contains(&idx) || entindc.entid > PLAYER_MAX_ENTID {
-                out_vec.push(CacheEntry {
-                    byte: entindc.byte,
-                    pidx: *idx,
-                    entid: entindc.entid as u32,
-                    cls_id: entindc.cls_id,
-                })
-            }
-        }
-    }
-    fn insert_tick_maps(
-        hm: &mut HashMap<u32, i32>,
-        inverse_hm: &mut HashMap<i32, (u64, i32)>,
-        entindc: &EntityIndicies,
-        tick_map_idx: &mut i32,
-    ) {
-        if !hm.contains_key(&(entindc.byte as u32)) {
-            hm.insert(entindc.byte as u32, *tick_map_idx as i32);
-            inverse_hm.insert(*tick_map_idx as i32, (entindc.byte, entindc.tick));
-            *tick_map_idx += 1;
-        }
-    }
-    fn split_props_gen_idx_map(
-        &mut self,
-    ) -> (
-        Vec<CacheEntry>,
-        Vec<CacheEntry>,
-        HashMap<u32, i32>,
-        HashMap<i32, (u64, i32)>,
-    ) {
-        // TODO, they seem constant across demos... only for player props
-        let forbidden = vec![0, 1, 2, 37, 103, 93, 59, 58, 40, 41, 26, 27];
-
-        let mut player_props = vec![];
-        let mut other_props = vec![];
-        let mut hm: HashMap<u32, i32> = HashMap::default();
-        let mut inverse_hm = HashMap::default();
-        let mut tick_map_idx = 0;
-
-        for indicies in &self.packet_ents {
-            for this_ents_indicies in indicies {
-                // PLAYERS HAVE ENTID < 64
-                let out_vec = match this_ents_indicies.entid < PLAYER_MAX_ENTID {
-                    true => &mut player_props,
-                    false => &mut other_props,
-                };
-                WriteCache::push_cache_entry(&forbidden, this_ents_indicies, out_vec);
-                WriteCache::insert_tick_maps(
-                    &mut hm,
-                    &mut inverse_hm,
-                    this_ents_indicies,
-                    &mut tick_map_idx,
-                );
-            }
-        }
-        (player_props, other_props, hm, inverse_hm)
-    }
-    fn write_player_props(
-        &mut self,
-        player_props: Vec<CacheEntry>,
-        hm: &HashMap<u32, i32>,
-        sv_cls_map: &HashMap<u16, ServerClass>,
-    ) {
-        let mut group_by_pidx = player_props.iter().into_group_map_by(|x| x.pidx);
-
-        for (pidx, data) in &mut group_by_pidx {
-            let prop_str_name = if *pidx == 10000 {
-                "player@m_vecOrigin_X".to_string()
-            } else if *pidx == 10001 {
-                "player@m_vecOrigin_Y".to_string()
-            } else {
-                self.idx_to_str_name(sv_cls_map, *pidx, "player", PLAYER_CLSID)
-            };
-            self.write_bytes_to_zip(data, &prop_str_name, &hm);
-        }
-    }
-    pub fn write_maps(&mut self) {
-        // Writes positions where Game event map and dt map start.
-        // These are needed for parsing the rest of the demo so
-        // these have to be parsed always.
-        self.zip.start_file("maps", self.zip_options).unwrap();
-
-        let mut bytes = vec![];
-        bytes.extend(self.ge_start.to_le_bytes());
-        bytes.extend(self.dt_start.to_le_bytes());
-        self.zip.write_all(&bytes).unwrap();
-    }
-    fn write_other_props(
-        &mut self,
-        other_props: Vec<CacheEntry>,
-        hm: &HashMap<u32, i32>,
-        sv_cls_map: &HashMap<u16, ServerClass>,
-    ) {
-        let mut teams = vec![];
-        let mut manager = vec![];
-        let mut rules = vec![];
-        let mut other = vec![];
-        for field in other_props {
-            match field.entid {
-                // TEAM
-                65 => teams.push(field),
-                66 => teams.push(field),
-                67 => teams.push(field),
-                68 => teams.push(field),
-                69 => teams.push(field),
-                // MANAGER
-                70 => manager.push(field),
-                // RULES
-                71 => rules.push(field),
-                _ => {
-                    other.push(field)
-                    //println!("UNK ID: {}", field.entid);
+                        let prop_name =
+                            serverclass.dt.to_string() + "-" + &prop.table + "-" + &prop.name;
+                        let prop_id = TYPEHM[&prop_name];
+                        self.append_to_buffer(&temp_arr, prop_id)
+                    }
                 }
             }
         }
-        self.write_others(teams, sv_cls_map, "teams", &hm);
-        self.write_others(manager, sv_cls_map, "manager", &hm);
-        self.write_others(rules, sv_cls_map, "rules", &hm);
-        self.write_others(other, sv_cls_map, "other", &hm);
     }
-
-    fn write_others(
-        &mut self,
-        data: Vec<CacheEntry>,
-        sv_cls_map: &HashMap<u16, ServerClass>,
-        write_type: &str,
-        hm: &HashMap<u32, i32>,
-    ) {
-        let mut grouped_by_pidx = data.iter().into_group_map_by(|x| x.pidx);
-        for (pidx, data) in &mut grouped_by_pidx {
-            let str_name = match write_type {
-                "teams" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, TEAM_CLSID),
-                "manager" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, MANAGER_CLSID),
-                "rules" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, RULES_CLSID),
-                "other" => self.idx_to_str_name(sv_cls_map, *pidx, write_type, data[0].cls_id),
-                _ => panic!("unkown write type {}", write_type),
-            };
-            self.write_bytes_to_zip(data, &str_name, &hm);
-        }
-    }
-
-    pub fn filter_per_result(
-        jobresults: Vec<JobResult>,
-    ) -> (Vec<GameEvent>, Vec<UserInfo>, Vec<Vec<EntityIndicies>>) {
-        let mut game_events = vec![];
-        let mut string_tables = vec![];
-        let mut packet_ents = vec![];
-
-        for jobresult in jobresults {
-            match jobresult {
-                JobResult::GameEvents(ge) => game_events.push(ge),
-                JobResult::PacketEntitiesIndicies(pe) => packet_ents.push(pe),
-                JobResult::StringTables(st) => string_tables.extend(st),
-                _ => {}
-            }
-        }
-        (game_events, string_tables, packet_ents)
-    }
-    fn write_tick_map(&mut self, inverse_hm: &HashMap<i32, (u64, i32)>) {
-        // Writes hm that maps idx --> (tick, byte) pairs.
-        // This is done to compress better ie. small integer vs (integer + u64)
-
-        self.zip
-            .start_file("tick_mapping", self.zip_options)
-            .unwrap();
-        let mut bytes = vec![];
-        bytes.extend(inverse_hm.len().to_le_bytes());
-        bytes.extend(inverse_hm.keys().flat_map(|x| x.to_le_bytes()));
-        bytes.extend(inverse_hm.iter().flat_map(|(_, v)| v.0.to_le_bytes()));
-        bytes.extend(inverse_hm.iter().flat_map(|(_, v)| v.1.to_le_bytes()));
-
-        self.zip.write_all(&bytes).unwrap();
-    }
-    pub fn write_eid_cls_map(&mut self) {
-        let v = self.cls_eid_mapper.read().unwrap();
-
-        self.zip
-            .start_file("eid_cls_map", self.zip_options)
-            .unwrap();
-        let mut bytes: Vec<u8> = vec![];
-
-        bytes.extend(v.len().to_le_bytes());
-        bytes.extend(v.iter().flat_map(|x| x.eid.to_le_bytes()));
-        bytes.extend(v.iter().flat_map(|x| x.cls_id.to_le_bytes()));
-        bytes.extend(v.iter().flat_map(|x| x.tick.to_le_bytes()));
-        self.zip.write_all(&bytes).unwrap();
-    }
-    pub fn write_string_tables(&mut self) {
-        self.zip
-            .start_file("string_tables", self.zip_options)
-            .unwrap();
-        let mut byt = vec![];
-        byt.extend(self.string_tables.len().to_le_bytes());
-
-        for st in &self.string_tables {
-            byt.extend(st.byte.to_le_bytes());
-        }
-        self.zip.write_all(&byt).unwrap();
-    }
-
-    pub fn write_game_events(&mut self) {
-        self.zip
-            .start_file("game_events", self.zip_options)
-            .unwrap();
-
-        let mut byt = vec![];
-        byt.extend(self.game_events.len().to_le_bytes());
-
-        for ge in &self.game_events {
-            byt.extend(ge.byte.to_le_bytes());
-        }
-        for ge in &self.game_events {
-            byt.extend(ge.id.to_le_bytes());
-        }
-        self.zip.write_all(&byt).unwrap();
+    pub fn get_cache_path(bytes: &[u8]) -> String {
+        let file_hash = sha256::digest(&bytes[..HASH_BYTE_LENGTH]);
+        let path = "/home/laiho/Documents/cache/".to_owned();
+        path + &file_hash + &".h5"
     }
 }
+use phf::phf_map;
+
+pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
+"DT_CSTeam-DT_Team-m_szTeamname" => 0,
+"DT_CSTeam-DT_Team-\"player_array\"" => 1,
+"DT_CSTeam-DT_Team-m_scoreFirstHalf" => 2,
+"DT_CSTeam-DT_Team-m_scoreSecondHalf" => 3,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_flCTTimeOutRemaining" => 4,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-011" => 5,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_bGameRestart" => 6,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-018" => 7,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_fRoundStartTime" => 8,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-024" => 9,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-024" => 10,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_flGameStartTime" => 11,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-000" => 12,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_bIsDroppingItems" => 13,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_bAnyHostageReached" => 14,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_flRestartRoundTime" => 15,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-021" => 16,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-003" => 17,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-023" => 18,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-011" => 19,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_fWarmupPeriodStart" => 20,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_bFreezePeriod" => 21,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-023" => 22,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-001" => 23,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-024" => 24,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_bWarmupPeriod" => 25,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_bTechnicalTimeOut" => 26,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-017" => 27,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-016" => 28,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-025" => 29,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_iNumConsecutiveCTLoses" => 30,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-020" => 31,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-022" => 32,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-022" => 33,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-004" => 34,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-009" => 35,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-009" => 36,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_flDMBonusTimeLength" => 37,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_fMatchStartTime" => 38,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-014" => 39,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-002" => 40,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-010" => 41,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_timeUntilNextPhaseStarts" => 42,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-006" => 43,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_flDMBonusStartTime" => 44,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-004" => 45,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-020" => 46,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-015" => 47,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-005" => 48,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-019" => 49,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-008" => 50,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-022" => 51,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-009" => 52,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_unDMBonusWeaponLoadoutSlot" => 53,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-012" => 54,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-023" => 55,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-021" => 56,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-005" => 57,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-014" => 58,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_bHasMatchStarted" => 59,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-005" => 60,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-001" => 61,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-018" => 62,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-000" => 63,
+"DT_CSGameRulesProxy-m_flNextRespawnWave-002" => 64,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-019" => 65,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-013" => 66,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-015" => 67,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_iSpectatorSlotCount" => 68,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-015" => 69,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_fWarmupPeriodEnd" => 70,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_iRoundWinStatus" => 71,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_eRoundWinReason" => 72,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_bTerroristTimeOutActive" => 73,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-017" => 74,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-013" => 75,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-008" => 76,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_iHostagesRemaining" => 77,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-002" => 78,
+"DT_CSGameRulesProxy-m_flNextRespawnWave-003" => 79,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-003" => 80,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-007" => 81,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_iNumConsecutiveTerroristLoses" => 82,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-008" => 83,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_flTerroristTimeOutRemaining" => 84,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_gamePhase" => 85,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-020" => 86,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-021" => 87,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-017" => 88,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-025" => 89,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-025" => 90,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-004" => 91,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-012" => 92,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_iRoundTime" => 93,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-003" => 94,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-006" => 95,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-014" => 96,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-018" => 97,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-019" => 98,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_totalRoundsPlayed" => 99,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-016" => 100,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_bMatchWaitingForResume" => 101,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-010" => 102,
+"DT_CSGameRulesProxy-DT_CSGameRules-m_nGuardianModeSpecialKillsRemaining" => 103,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-012" => 104,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-007" => 105,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_T-016" => 106,
+"DT_CSGameRulesProxy-m_iMatchStats_PlayersAlive_CT-013" => 107,
+"DT_CSGameRulesProxy-m_iMatchStats_RoundResults-006" => 108,
+"DT_CSPlayer-m_iMatchStats_Kills-022" => 109,
+"DT_CSPlayer-m_iMatchStats_Damage-008" => 110,
+"DT_CSPlayer-m_iMatchStats_CashEarned-002" => 111,
+"DT_CSPlayer-m_iMatchStats_KillReward-002" => 112,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-064" => 113,
+"DT_CSPlayer-m_iMatchStats_CashEarned-012" => 114,
+"DT_CSPlayer-m_iMatchStats_Assists-016" => 115,
+"DT_CSPlayer-m_iMatchStats_CashEarned-006" => 116,
+"DT_CSPlayer-DT_Animationlayer-m_flWeight" => 117,
+"DT_CSPlayer-m_iMatchStats_Assists-006" => 118,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-015" => 119,
+"DT_CSPlayer-DT_Local-m_iHideHUD" => 120,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-018" => 121,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-016" => 122,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-064" => 123,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-010" => 124,
+"DT_CSPlayer-DT_CSPlayer-m_iAddonBits" => 125,
+"DT_CSPlayer-m_iMatchStats_LiveTime-019" => 126,
+"DT_CSPlayer-m_iMatchStats_KillReward-011" => 127,
+"DT_CSPlayer-m_iMatchStats_LiveTime-005" => 128,
+"DT_CSPlayer-DT_Animationlayer-m_flPlaybackRate" => 129,
+"DT_CSPlayer-DT_CSPlayer-m_totalHitsOnServer" => 131,
+"DT_CSPlayer-DT_BasePlayer-m_afPhysicsFlags" => 132,
+"DT_CSPlayer-DT_Animationlayer-m_nOrder" => 133,
+"DT_CSPlayer-m_iMatchStats_KillReward-008" => 134,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-012" => 135,
+"DT_CSPlayer-m_iMatchStats_Kills-024" => 136,
+"DT_CSPlayer-DT_CSLocalPlayerExclusive-m_iShotsFired" => 137,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-004" => 138,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-017" => 139,
+"DT_CSPlayer-DT_Animationlayer-m_nSequence" => 140,
+"DT_CSPlayer-DT_CSPlayer-m_unTotalRoundDamageDealt" => 141,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-004" => 142,
+"DT_CSPlayer-m_hMyWeapons-006" => 143,
+"DT_CSPlayer-DT_BaseEntity-m_flLastMadeNoiseTime" => 144,
+"DT_CSPlayer-DT_Local-m_skybox3d.fog.dirPrimary" => 146,
+"DT_CSPlayer-m_iMatchStats_LiveTime-003" => 147,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-003" => 148,
+"DT_CSPlayer-m_iMatchStats_KillReward-003" => 149,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-010" => 150,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-014" => 151,
+"DT_CSPlayer-m_iMatchStats_Assists-001" => 152,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-038" => 153,
+"DT_CSPlayer-m_iMatchStats_Deaths-000" => 154,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-006" => 155,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-007" => 156,
+"DT_CSPlayer-m_iMatchStats_Kills-017" => 157,
+"DT_CSPlayer-m_iMatchStats_Kills-011" => 158,
+"DT_CSPlayer-m_iMatchStats_LiveTime-016" => 159,
+"DT_CSPlayer-m_iMatchStats_KillReward-018" => 160,
+"DT_CSPlayer-DT_BasePlayer-m_iObserverMode" => 161,
+"DT_CSPlayer-DT_Local-m_skybox3d.fog.maxdensity" => 163,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-017" => 164,
+"DT_CSPlayer-DT_CSPlayer-m_fMolotovUseTime" => 165,
+"DT_CSPlayer-m_iMatchStats_CashEarned-018" => 166,
+"DT_CSPlayer-m_iMatchStats_LiveTime-020" => 167,
+"DT_CSPlayer-DT_CSPlayer-m_flThirdpersonRecoil" => 169,
+"DT_CSPlayer-DT_Local-m_skybox3d.scale" => 170,
+"DT_CSPlayer-DT_BasePlayer-m_hObserverTarget" => 171,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-004" => 172,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-021" => 173,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-019" => 174,
+"DT_CSPlayer-m_iMatchStats_KillReward-019" => 176,
+"DT_CSPlayer-m_iMatchStats_KillReward-020" => 177,
+"DT_CSPlayer-DT_CSPlayer-m_iNumRoundKillsHeadshots" => 178,
+"DT_CSPlayer-m_iMatchStats_CashEarned-025" => 179,
+"DT_CSPlayer-m_iMatchStats_Deaths-019" => 180,
+"DT_CSPlayer-DT_CSPlayer-m_iStartAccount" => 181,
+"DT_CSPlayer-m_iMatchStats_Damage-013" => 182,
+"DT_CSPlayer-DT_LocalPlayerExclusive-m_nNextThinkTick" => 183,
+"DT_CSPlayer-m_iMatchStats_KillReward-022" => 184,
+"DT_CSPlayer-DT_Animationlaye-m_flCycle" => 186,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-006" => 187,
+"DT_CSPlayer-DT_BasePlayer-m_flFOVTime" => 189,
+"DT_CSPlayer-m_iMatchStats_Kills-002" => 190,
+"DT_CSPlayer-m_iMatchStats_CashEarned-021" => 191,
+"DT_CSPlayer-m_iMatchStats_Kills-013" => 192,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-025" => 193,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-002" => 194,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-000" => 195,
+"DT_CSPlayer-m_iMatchStats_Damage-002" => 196,
+"DT_CSPlayer-m_iMatchStats_Damage-012" => 197,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-025" => 198,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-021" => 199,
+"DT_CSPlayer-DT_LocalPlayerExclusive-m_hTonemapController" => 200,
+"DT_CSPlayer-DT_Local-m_bWearingSuit" => 201,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-060" => 202,
+"DT_CSPlayer-DT_CSPlayer-m_iPrimaryAddon" => 203,
+"DT_CSPlayer-DT_BasePlayer-m_iFOV" => 204,
+"DT_CSPlayer-DT_BasePlayer-m_flDuckSpeed" => 205,
+"DT_CSPlayer-DT_BaseEntity-m_iTeamNum" => 206,
+"DT_CSPlayer-DT_CSPlayer-m_nHeavyAssaultSuitCooldownRemaining" => 207,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-011" => 208,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-016" => 209,
+"DT_CSPlayer-DT_CSPlayer-m_bIsWalking" => 210,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-018" => 211,
+"DT_CSPlayer-DT_CSPlayer-m_bHasDefuser" => 212,
+"DT_CSPlayer-m_iMatchStats_Damage-017" => 213,
+"DT_CSPlayer-m_iMatchStats_KillReward-021" => 214,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-002" => 215,
+"DT_CSPlayer-DT_Local-m_aimPunchAngleVel" => 216,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-001" => 217,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-000" => 218,
+"DT_CSPlayer-DT_BasePlayer-m_flDuckAmount" => 219,
+"DT_CSPlayer-DT_CollisionProperty-m_vecMaxs" => 220,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-003" => 222,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-048" => 223,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-017" => 224,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-006" => 225,
+"DT_CSPlayer-m_iMatchStats_Deaths-010" => 226,
+"DT_CSPlayer-m_iMatchStats_Damage-018" => 227,
+"DT_CSPlayer-m_iMatchStats_Assists-024" => 228,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-019" => 229,
+"DT_CSPlayer-m_iMatchStats_Deaths-023" => 230,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-024" => 231,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-008" => 232,
+"DT_CSPlayer-m_iMatchStats_LiveTime-010" => 234,
+"DT_CSPlayer-m_iMatchStats_Assists-022" => 235,
+"DT_CSPlayer-m_iMatchStats_Kills-025" => 236,
+"DT_CSPlayer-m_iMatchStats_CashEarned-015" => 237,
+"DT_CSPlayer-DT_CSPlayer-m_nLastKillerIndex" => 238,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-015" => 239,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-040" => 240,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-050" => 242,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-009" => 244,
+"DT_CSPlayer-m_iMatchStats_Kills-021" => 245,
+"DT_CSPlayer-m_iMatchStats_LiveTime-002" => 246,
+"DT_CSPlayer-m_iMatchStats_Deaths-018" => 247,
+"DT_CSPlayer-m_iMatchStats_Damage-014" => 248,
+"DT_CSPlayer-DT_Animationlayer-m_flWeightDeltaRate" => 250,
+"DT_CSPlayer-m_iMatchStats_Assists-015" => 251,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-005" => 252,
+"DT_CSPlayer-DT_CSPlayer-m_iAccount" => 254,
+"DT_CSPlayer-m_iMatchStats_Damage-019" => 255,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-024" => 256,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-017" => 257,
+"DT_CSPlayer-DT_CSPlayer-m_bIsRescuing" => 258,
+"DT_CSPlayer-m_iMatchStats_CashEarned-020" => 259,
+"DT_CSPlayer-m_iMatchStats_LiveTime-015" => 260,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-005" => 262,
+"DT_CSPlayer-m_iMatchStats_CashEarned-014" => 263,
+"DT_CSPlayer-m_iMatchStats_Kills-015" => 264,
+"DT_CSPlayer-DT_BaseCombatCharacter-m_hActiveWeapon" => 265,
+"DT_CSPlayer-DT_CSPlayer-m_unRoundStartEquipmentValue" => 266,
+"DT_CSPlayer-m_chAreaPortalBits-000" => 267,
+"DT_CSPlayer-m_iMatchStats_KillReward-004" => 268,
+"DT_CSPlayer-m_iMatchStats_KillReward-016" => 269,
+"DT_CSPlayer-m_iAmmo-015" => 270,
+"DT_CSPlayer-DT_CSPlayer-m_bInHostageRescueZone" => 271,
+"DT_CSPlayer-m_iMatchStats_CashEarned-005" => 272,
+"DT_CSPlayer-m_iMatchStats_CashEarned-017" => 273,
+"DT_CSPlayer-m_iMatchStats_Assists-003" => 274,
+"DT_CSPlayer-DT_Local-m_audio.entIndex" => 275,
+"DT_CSPlayer-DT_CSPlayer-m_fMolotovDamageTime" => 276,
+"DT_CSPlayer-DT_CSNonLocalPlayerExclusive-m_vecOrigin[2]" => 277,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-008" => 279,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-009" => 280,
+"DT_CSPlayer-m_iMatchStats_Damage-015" => 281,
+"DT_CSPlayer-m_iMatchStats_KillReward-001" => 282,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-011" => 283,
+"DT_CSPlayer-m_iMatchStats_Kills-023" => 284,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-009" => 286,
+"DT_CSPlayer-DT_CSPlayer-m_unMusicID" => 287,
+"DT_CSPlayer-m_iMatchStats_LiveTime-014" => 288,
+"DT_CSPlayer-m_iMatchStats_CashEarned-010" => 289,
+"DT_CSPlayer-m_iMatchStats_LiveTime-024" => 291,
+"DT_CSPlayer-m_iMatchStats_Deaths-009" => 292,
+"DT_CSPlayer-m_iMatchStats_Damage-020" => 293,
+"DT_CSPlayer-DT_CSPlayer-m_flGroundAccelLinearFracLastTime" => 294,
+"DT_CSPlayer-m_iMatchStats_Damage-024" => 295,
+"DT_CSPlayer-m_iMatchStats_Deaths-008" => 296,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-020" => 298,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-006" => 299,
+"DT_CSPlayer-m_iMatchStats_CashEarned-023" => 300,
+"DT_CSPlayer-DT_CSPlayer-m_unFreezetimeEndEquipmentValue" => 301,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-010" => 302,
+"DT_CSPlayer-m_iMatchStats_LiveTime-013" => 303,
+"DT_CSPlayer-DT_BasePlayer-m_hViewModel" => 304,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-002" => 305,
+"DT_CSPlayer-m_iMatchStats_Kills-008" => 306,
+"DT_CSPlayer-DT_CSPlayer-m_flFlashMaxAlpha" => 307,
+"DT_CSPlayer-m_iAmmo-016" => 308,
+"DT_CSPlayer-DT_BaseCombatCharacter-m_flTimeOfLastInjury" => 309,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-063" => 310,
+"DT_CSPlayer-DT_BasePlayer-m_hPostProcessCtrl" => 311,
+"DT_CSPlayer-DT_CSPlayer-m_bInBuyZone" => 312,
+"DT_CSPlayer-m_iMatchStats_Damage-023" => 313,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-023" => 314,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-005" => 315,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-023" => 316,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-019" => 317,
+"DT_CSPlayer-DT_BaseCombatCharacter-m_nRelativeDirectionOfLastInjury" => 318,
+"DT_CSPlayer-m_iMatchStats_LiveTime-022" => 319,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-023" => 320,
+"DT_CSPlayer-DT_BasePlayer-m_hColorCorrectionCtrl" => 321,
+"DT_CSPlayer-DT_CSPlayer-m_bIsScoped" => 322,
+"DT_CSPlayer-m_iMatchStats_CashEarned-024" => 323,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-023" => 325,
+"DT_CSPlayer-m_iMatchStats_Assists-010" => 326,
+"DT_CSPlayer-DT_CSPlayer-m_hPlayerPing" => 327,
+"DT_CSPlayer-DT_CSPlayer-m_iProgressBarDuration" => 328,
+"DT_CSPlayer-m_iMatchStats_Deaths-007" => 329,
+"DT_CSPlayer-m_iMatchStats_Deaths-021" => 330,
+"DT_CSPlayer-DT_BaseEntity-m_bAnimatedEveryTick" => 331,
+"DT_CSPlayer-m_iMatchStats_Kills-009" => 332,
+"DT_CSPlayer-m_iMatchStats_Deaths-015" => 333,
+"DT_CSPlayer-m_iMatchStats_KillReward-024" => 334,
+"DT_CSPlayer-DT_Local-m_bDucked" => 335,
+"DT_CSPlayer-m_hMyWeapons-000" => 336,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-063" => 337,
+"DT_CSPlayer-m_iMatchStats_LiveTime-001" => 338,
+"DT_CSPlayer-DT_BasePlayer-m_PlayerFog.m_hCtrl" => 339,
+"DT_CSPlayer-DT_Local-m_skybox3d.origin" => 340,
+"DT_CSPlayer-DT_Local-m_audio.soundscapeIndex" => 341,
+"DT_CSPlayer-DT_BasePlayer-m_iHealth" => 342,
+"DT_CSPlayer-m_iMatchStats_Assists-008" => 343,
+"DT_CSPlayer-DT_Local-m_flFallVelocity" => 344,
+"DT_CSPlayer-DT_Local-m_skybox3d.fog.end" => 345,
+"DT_CSPlayer-m_iMatchStats_Kills-010" => 346,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-016" => 347,
+"DT_CSPlayer-m_iMatchStats_Damage-006" => 348,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-048" => 349,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-011" => 350,
+"DT_CSPlayer-DT_CSPlayer-m_bWaitForNoAttack" => 351,
+"DT_CSPlayer-m_iMatchStats_KillReward-005" => 352,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-055" => 353,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-022" => 354,
+"DT_CSPlayer-m_iMatchStats_CashEarned-022" => 356,
+"DT_CSPlayer-DT_BaseCombatCharacter-m_LastHitGroup" => 357,
+"DT_CSPlayer-DT_Local-m_skybox3d.area" => 358,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-029" => 359,
+"DT_CSPlayer-m_iMatchStats_Damage-010" => 360,
+"DT_CSPlayer-m_hMyWeapons-003" => 361,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-016" => 362,
+"DT_CSPlayer-DT_Local-m_flLastDuckTime" => 363,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-021" => 364,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-008" => 365,
+"DT_CSPlayer-m_iMatchStats_KillReward-017" => 366,
+"DT_CSPlayer-DT_BasePlayer-m_lifeState" => 367,
+"DT_CSPlayer-DT_CollisionProperty-m_vecMins" => 368,
+"DT_CSPlayer-m_iMatchStats_Deaths-016" => 369,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-044" => 370,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-015" => 371,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-007" => 372,
+"DT_CSPlayer-DT_LocalPlayerExclusive-m_vecViewOffset[2]" => 373,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-022" => 374,
+"DT_CSPlayer-DT_CSLocalPlayerExclusive-m_vecOrigin[2]" => 375,
+"DT_CSPlayer-DT_LocalPlayerExclusive-m_hLastWeapon" => 376,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-022" => 377,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-011" => 378,
+"DT_CSPlayer-DT_CSPlayer-m_flProgressBarStartTime" => 379,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-014" => 380,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-033" => 381,
+"DT_CSPlayer-DT_BaseEntity-m_iPendingTeamNum" => 382,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-034" => 383,
+"DT_CSPlayer-m_iMatchStats_Kills-005" => 384,
+"DT_CSPlayer-m_iMatchStats_Assists-013" => 386,
+"DT_CSPlayer-m_iAmmo-014" => 387,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-011" => 388,
+"DT_CSPlayer-DT_BasePlayer-m_iFOVStart" => 389,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-029" => 390,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-029" => 391,
+"DT_CSPlayer-m_iMatchStats_CashEarned-001" => 392,
+"DT_CSPlayer-DT_BaseAnimating-m_nForceBone" => 393,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-011" => 394,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-043" => 395,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-019" => 397,
+"DT_CSPlayer-m_iMatchStats_Deaths-005" => 398,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-012" => 399,
+"DT_CSPlayer-DT_BasePlayer-m_hZoomOwner" => 402,
+"DT_CSPlayer-m_iMatchStats_LiveTime-000" => 403,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-020" => 404,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-043" => 405,
+"DT_CSPlayer-m_iMatchStats_Kills-016" => 406,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-025" => 407,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-015" => 408,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-017" => 409,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-012" => 410,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-017" => 411,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-005" => 412,
+"DT_CSPlayer-DT_CSPlayer-m_bStrafing" => 413,
+"DT_CSPlayer-m_iMatchStats_Damage-007" => 414,
+"DT_CSPlayer-DT_CSPlayer-m_bIsHoldingLookAtWeapon" => 415,
+"DT_CSPlayer-m_iMatchStats_Damage-000" => 416,
+"DT_CSPlayer-DT_BaseEntity-m_nModelIndex" => 417,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-051" => 418,
+"DT_CSPlayer-DT_CSLocalPlayerExclusive-m_nQuestProgressReason" => 419,
+"DT_CSPlayer-DT_CSPlayer-m_flLowerBodyYawTarget" => 420,
+"DT_CSPlayer-m_iMatchStats_KillReward-010" => 421,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-040" => 422,
+"DT_CSPlayer-m_iMatchStats_CashEarned-016" => 423,
+"DT_CSPlayer-m_iMatchStats_LiveTime-012" => 424,
+"DT_CSPlayer-m_iMatchStats_Damage-021" => 425,
+"DT_CSPlayer-m_iMatchStats_LiveTime-008" => 426,
+"DT_CSPlayer-m_iMatchStats_Deaths-014" => 428,
+"DT_CSPlayer-DT_CSPlayer-m_ArmorValue" => 429,
+"DT_CSPlayer-m_iMatchStats_Deaths-017" => 430,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-044" => 431,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-001" => 432,
+"DT_CSPlayer-DT_CSLocalPlayerExclusive-m_flVelocityModifier" => 433,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-024" => 434,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-003" => 435,
+"DT_CSPlayer-m_iAmmo-017" => 436,
+"DT_CSPlayer-DT_LocalPlayerExclusive-m_flDeathTime" => 437,
+"DT_CSPlayer-m_iMatchStats_LiveTime-007" => 438,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-045" => 439,
+"DT_CSPlayer-m_iMatchStats_Assists-017" => 440,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-020" => 442,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-008" => 443,
+"DT_CSPlayer-m_hMyWeapons-002" => 444,
+"DT_CSPlayer-DT_BaseEntity-m_bSpotted" => 445,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-030" => 446,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-001" => 447,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-015" => 448,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-001" => 449,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-034" => 450,
+"DT_CSPlayer-DT_CSPlayer-m_iPlayerState" => 451,
+"DT_CSPlayer-DT_LocalPlayerExclusive-m_vecVelocity[1]" => 453,
+"DT_CSPlayer-m_iMatchStats_Kills-001" => 455,
+"DT_CSPlayer-DT_BCCLocalPlayerExclusive-m_flNextAttack" => 456,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-002" => 458,
+"DT_CSPlayer-m_iMatchStats_Assists-004" => 459,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-055" => 460,
+"DT_CSPlayer-DT_CSPlayer-m_bIsGrabbingHostage" => 461,
+"DT_CSPlayer-DT_Local-m_skybox3d.fog.HDRColorScale" => 462,
+"DT_CSPlayer-DT_CSPlayer-m_bHasMovedSinceSpawn" => 463,
+"DT_CSPlayer-m_bSpottedByMask-000" => 464,
+"DT_CSPlayer-m_iMatchStats_Deaths-004" => 465,
+"DT_CSPlayer-m_iMatchStats_LiveTime-017" => 466,
+"DT_CSPlayer-m_iMatchStats_Deaths-002" => 467,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-028" => 468,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-054" => 469,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-046" => 470,
+"DT_CSPlayer-DT_BasePlayer-m_iDeathPostEffect" => 471,
+"DT_CSPlayer-DT_Local-m_viewPunchAngle" => 472,
+"DT_CSPlayer-m_iMatchStats_Assists-014" => 473,
+"DT_CSPlayer-m_iMatchStats_Damage-016" => 474,
+"DT_CSPlayer-DT_CSPlayer-m_iNumRoundKills" => 475,
+"DT_CSPlayer-DT_CSPlayer-m_flFlashDuration" => 476,
+"DT_CSPlayer-DT_BaseEntity-movetype" => 477,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-004" => 478,
+"DT_CSPlayer-DT_PlayerState-deadflag" => 479,
+"DT_CSPlayer-m_iMatchStats_Assists-000" => 480,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-018" => 481,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-010" => 482,
+"DT_CSPlayer-m_iMatchStats_Damage-025" => 483,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-060" => 484,
+"DT_CSPlayer-m_iMatchStats_CashEarned-013" => 485,
+"DT_CSPlayer-m_iMatchStats_Deaths-013" => 486,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-000" => 487,
+"DT_CSPlayer-DT_BasePlayer-m_szLastPlaceName" => 490,
+"DT_CSPlayer-m_iMatchStats_Assists-009" => 491,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-027" => 492,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-010" => 493,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-013" => 494,
+"DT_CSPlayer-DT_Local-m_flFOVRate" => 495,
+"DT_CSPlayer-m_iMatchStats_Damage-003" => 497,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-012" => 498,
+"DT_CSPlayer-m_iMatchStats_Deaths-024" => 499,
+"DT_CSPlayer-m_iMatchStats_Kills-018" => 500,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-025" => 501,
+"DT_CSPlayer-DT_CollisionProperty-m_usSolidFlags" => 502,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-009" => 503,
+"DT_CSPlayer-m_iMatchStats_Assists-002" => 504,
+"DT_CSPlayer-m_hMyWeapons-005" => 505,
+"DT_CSPlayer-m_iMatchStats_Deaths-003" => 506,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-012" => 507,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-051" => 508,
+"DT_CSPlayer-m_iMatchStats_Damage-005" => 509,
+"DT_CSPlayer-DT_CSPlayer-m_bResumeZoom" => 511,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-025" => 512,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-011" => 513,
+"DT_CSPlayer-m_iMatchStats_LiveTime-023" => 514,
+"DT_CSPlayer-m_iMatchStats_Kills-006" => 515,
+"DT_CSPlayer-m_iMatchStats_Assists-012" => 516,
+"DT_CSPlayer-m_iMatchStats_Deaths-011" => 517,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-024" => 518,
+"DT_CSPlayer-DT_CSPlayer-m_iClass" => 519,
+"DT_CSPlayer-m_iMatchStats_LiveTime-011" => 520,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-008" => 521,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-031" => 523,
+"DT_CSPlayer-DT_BaseEntity-m_fEffects" => 524,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-013" => 525,
+"DT_CSPlayer-m_iMatchStats_CashEarned-011" => 526,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-017" => 527,
+"DT_CSPlayer-DT_LocalPlayerExclusive-m_vecVelocity[0]" => 528,
+"DT_CSPlayer-DT_CSPlayer-m_angEyeAngles[0]" => 529,
+"DT_CSPlayer-DT_Local-m_aimPunchAngle" => 530,
+"DT_CSPlayer-m_iMatchStats_LiveTime-018" => 531,
+"DT_CSPlayer-m_iMatchStats_Kills-003" => 532,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-013" => 533,
+"DT_CSPlayer-m_iMatchStats_Deaths-025" => 534,
+"DT_CSPlayer-DT_CSPlayer-m_hRagdoll" => 535,
+"DT_CSPlayer-DT_BaseAnimating-m_vecForce" => 536,
+"DT_CSPlayer-m_iMatchStats_Deaths-006" => 537,
+"DT_CSPlayer-m_iMatchStats_KillReward-013" => 538,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-050" => 539,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-035" => 540,
+"DT_CSPlayer-DT_CSPlayer-m_hCarriedHostageProp" => 541,
+"DT_CSPlayer-m_iMatchStats_Damage-011" => 542,
+"DT_CSPlayer-m_iMatchStats_KillReward-014" => 543,
+"DT_CSPlayer-DT_CSPlayer-m_angEyeAngles[1]" => 544,
+"DT_CSPlayer-m_iMatchStats_Assists-023" => 545,
+"DT_CSPlayer-m_iMatchStats_KillReward-007" => 546,
+"DT_CSPlayer-m_iMatchStats_Kills-000" => 548,
+"DT_CSPlayer-DT_CSPlayer-m_nLastConcurrentKilled" => 549,
+"DT_CSPlayer-m_iMatchStats_Assists-019" => 550,
+"DT_CSPlayer-m_iMatchStats_Kills-007" => 551,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-002" => 553,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-007" => 555,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-006" => 556,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-009" => 557,
+"DT_CSPlayer-DT_Local-m_bDucking" => 558,
+"DT_CSPlayer-m_iMatchStats_LiveTime-009" => 559,
+"DT_CSPlayer-DT_Local-m_skybox3d.fog.colorSecondary" => 560,
+"DT_CSPlayer-DT_BasePlayer-m_ubEFNoInterpParity" => 561,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-020" => 562,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-021" => 563,
+"DT_CSPlayer-m_iMatchStats_KillReward-009" => 564,
+"DT_CSPlayer-m_iMatchStats_LiveTime-006" => 565,
+"DT_CSPlayer-DT_CSLocalPlayerExclusive-m_flStamina" => 566,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-000" => 567,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-031" => 568,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-003" => 569,
+"DT_CSPlayer-m_iMatchStats_KillReward-023" => 570,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-003" => 571,
+"DT_CSPlayer-DT_Animationlayer-m_flCycle" => 572,
+"DT_CSPlayer-m_chAreaBits-000" => 573,
+"DT_CSPlayer-DT_CSPlayer-m_hCarriedHostage" => 574,
+"DT_CSPlayer-m_iMatchStats_Kills-004" => 575,
+"DT_CSPlayer-m_iMatchStats_Kills-020" => 576,
+"DT_CSPlayer-m_iMatchStats_Kills-012" => 577,
+"DT_CSPlayer-m_iMatchStats_LiveTime-025" => 578,
+"DT_CSPlayer-m_iMatchStats_LiveTime-004" => 579,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-008" => 580,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-032" => 581,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-046" => 582,
+"DT_CSPlayer-m_iMatchStats_Assists-011" => 583,
+"DT_CSPlayer-DT_LocalPlayerExclusive-m_vecVelocity[2]" => 584,
+"DT_CSPlayer-m_iMatchStats_Deaths-020" => 586,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-002" => 587,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-004" => 588,
+"DT_CSPlayer-m_iMatchStats_CashEarned-009" => 590,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-038" => 591,
+"DT_CSPlayer-m_rank-005" => 592,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-007" => 593,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-022" => 594,
+"DT_CSPlayer-DT_CSNonLocalPlayerExclusive-m_vecOrigin" => 595,
+"DT_CSPlayer-DT_BasePlayer-m_fFlags" => 596,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-008" => 597,
+"DT_CSPlayer-m_iMatchStats_CashEarned-000" => 598,
+"DT_CSPlayer-m_iMatchStats_EquipmentValue-018" => 599,
+"DT_CSPlayer-m_hMyWeapons-001" => 600,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-024" => 601,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-026" => 602,
+"DT_CSPlayer-m_iMatchStats_Kills-014" => 603,
+"DT_CSPlayer-DT_Local-m_skybox3d.fog.colorPrimary" => 604,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-001" => 605,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-003" => 606,
+"DT_CSPlayer-m_iMatchStats_KillReward-006" => 607,
+"DT_CSPlayer-m_iMatchStats_Damage-004" => 608,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-034" => 609,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-020" => 610,
+"DT_CSPlayer-m_hMyWeapons-004" => 611,
+"DT_CSPlayer-DT_CSPlayer-m_bHasHelmet" => 612,
+"DT_CSPlayer-m_iMatchStats_CashEarned-007" => 613,
+"DT_CSPlayer-m_iMatchStats_KillReward-015" => 614,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-009" => 615,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-022" => 616,
+"DT_CSPlayer-m_iMatchStats_KillReward-025" => 617,
+"DT_CSPlayer-DT_BasePlayer-m_vecLadderNormal" => 618,
+"DT_CSPlayer-m_iMatchStats_CashEarned-004" => 619,
+"DT_CSPlayer-m_iMatchStats_CashEarned-008" => 620,
+"DT_CSPlayer-m_iMatchStats_Damage-022" => 621,
+"DT_CSPlayer-m_iMatchStats_Assists-018" => 622,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-018" => 623,
+"DT_CSPlayer-DT_Local-m_skybox3d.fog.start" => 624,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-009" => 625,
+"DT_CSPlayer-m_iMatchStats_CashEarned-003" => 626,
+"DT_CSPlayer-m_iMatchStats_LiveTime-021" => 627,
+"DT_CSPlayer-m_iMatchStats_Damage-001" => 628,
+"DT_CSPlayer-m_iMatchStats_CashEarned-019" => 629,
+"DT_CSPlayer-m_EquippedLoadoutItemDefIndices-014" => 630,
+"DT_CSPlayer-DT_CSPlayer-m_bIsLookingAtWeapon" => 631,
+"DT_CSPlayer-m_iMatchStats_Deaths-022" => 632,
+"DT_CSPlayer-DT_BaseAnimating-m_bClientSideRagdoll" => 633,
+"DT_CSPlayer-m_iMatchStats_MoneySaved-010" => 634,
+"DT_CSPlayer-DT_CSPlayer-m_unCurrentEquipmentValue" => 635,
+"DT_CSPlayer-m_iMatchStats_Assists-025" => 636,
+"DT_CSPlayer-DT_Local-m_skybox3d.fog.enable" => 637,
+"DT_CSPlayer-m_iWeaponPurchasesThisRound-045" => 638,
+"DT_CSPlayer-DT_CSPlayer-m_iSecondaryAddon" => 639,
+"DT_CSPlayer-m_iMatchStats_Damage-009" => 640,
+"DT_CSPlayer-m_iMatchStats_KillReward-012" => 641,
+"DT_CSPlayer-m_iMatchStats_Deaths-012" => 642,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-019" => 643,
+"DT_CSPlayer-m_iMatchStats_UtilityDamage-023" => 644,
+"DT_CSPlayer-m_iMatchStats_KillReward-000" => 645,
+"DT_CSPlayer-DT_CSPlayer-m_iMoveState" => 646,
+"DT_CSPlayer-DT_BasePlayer-m_hGroundEntity" => 647,
+"DT_CSPlayer-m_iMatchStats_HeadShotKills-002" => 648,
+"DT_CSPlayer-m_iWeaponPurchasesThisMatch-001" => 649,
+"DT_CSPlayer-m_iMatchStats_Deaths-001" => 650,
+"DT_CSPlayer-m_iMatchStats_Kills-019" => 652,
+"DT_CSPlayer-m_iMatchStats_Assists-020" => 653,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-005" => 654,
+"DT_CSPlayerResource-m_nCharacterDefIndex-005" => 655,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-011" => 656,
+"DT_CSPlayerResource-m_iLifetimeEnd-004" => 657,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-009" => 658,
+"DT_CSPlayerResource-m_nMusicID-005" => 659,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-007" => 660,
+"DT_CSPlayerResource-m_bHasHelmet-008" => 661,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-005" => 662,
+"DT_CSPlayerResource-m_iPing-004" => 663,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-037" => 664,
+"DT_CSPlayerResource-m_iPing-011" => 665,
+"DT_CSPlayerResource-m_iCompTeammateColor-004" => 666,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-010" => 667,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-002" => 668,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-001" => 669,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-013" => 670,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-003" => 671,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-010" => 672,
+"DT_CSPlayerResource-m_bConnected-009" => 673,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-007" => 674,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-006" => 675,
+"DT_CSPlayerResource-m_iTeam-002" => 676,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-006" => 677,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-005" => 678,
+"DT_CSPlayerResource-m_iTotalCashSpent-002" => 679,
+"DT_CSPlayerResource-m_iHostageEntityIDs-008" => 680,
+"DT_CSPlayerResource-m_iArmor-011" => 681,
+"DT_CSPlayerResource-m_iScore-008" => 682,
+"DT_CSPlayerResource-m_iHealth-003" => 683,
+"DT_CSPlayerResource-m_iPendingTeam-006" => 684,
+"DT_CSPlayerResource-m_szCrosshairCodes-013" => 685,
+"DT_CSPlayerResource-m_iTotalCashSpent-011" => 686,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-003" => 687,
+"DT_CSPlayerResource-m_iLifetimeStart-011" => 688,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-001" => 689,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-011" => 690,
+"DT_CSPlayerResource-m_iCashSpentThisRound-012" => 691,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-007" => 692,
+"DT_CSPlayerResource-m_iTotalCashSpent-007" => 693,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-018" => 694,
+"DT_CSPlayerResource-m_nCharacterDefIndex-009" => 695,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-042" => 696,
+"DT_CSPlayerResource-m_iTeam-010" => 697,
+"DT_CSPlayerResource-m_bConnected-004" => 698,
+"DT_CSPlayerResource-m_iLifetimeStart-010" => 699,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-008" => 700,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-009" => 701,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-016" => 702,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-012" => 703,
+"DT_CSPlayerResource-m_iTeam-012" => 704,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-003" => 705,
+"DT_CSPlayerResource-m_bConnected-003" => 706,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-008" => 707,
+"DT_CSPlayerResource-m_iCashSpentThisRound-006" => 708,
+"DT_CSPlayerResource-m_nActiveCoinRank-006" => 709,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-002" => 710,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-038" => 711,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-049" => 712,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-010" => 713,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-009" => 714,
+"DT_CSPlayerResource-m_iDeaths-012" => 715,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-022" => 716,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-035" => 717,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-001" => 718,
+"DT_CSPlayerResource-m_bAlive-004" => 719,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-009" => 720,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-012" => 721,
+"DT_CSPlayerResource-m_nMusicID-011" => 722,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-058" => 723,
+"DT_CSPlayerResource-m_iPing-010" => 724,
+"DT_CSPlayerResource-m_iKills-006" => 725,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-013" => 726,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-009" => 727,
+"DT_CSPlayerResource-m_bAlive-009" => 728,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-001" => 729,
+"DT_CSPlayerResource-m_iAssists-008" => 730,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-006" => 731,
+"DT_CSPlayerResource-m_iDeaths-004" => 732,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-010" => 733,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-011" => 734,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-007" => 735,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-006" => 736,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-013" => 737,
+"DT_CSPlayerResource-m_iArmor-013" => 738,
+"DT_CSPlayerResource-m_iHealth-013" => 739,
+"DT_CSPlayerResource-m_bHostageAlive-008" => 740,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-008" => 741,
+"DT_CSPlayerResource-m_iTotalCashSpent-013" => 742,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-011" => 743,
+"DT_CSPlayerResource-m_iCompTeammateColor-013" => 744,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-013" => 745,
+"DT_CSPlayerResource-m_iAssists-006" => 746,
+"DT_CSPlayerResource-m_bHostageAlive-002" => 747,
+"DT_CSPlayerResource-m_nCharacterDefIndex-008" => 748,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-004" => 749,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-008" => 750,
+"DT_CSPlayerResource-m_nMusicID-009" => 751,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-012" => 752,
+"DT_CSPlayerResource-m_iCashSpentThisRound-003" => 753,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-010" => 754,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-004" => 755,
+"DT_CSPlayerResource-m_iAssists-012" => 756,
+"DT_CSPlayerResource-m_iAssists-002" => 757,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-019" => 758,
+"DT_CSPlayerResource-m_iTeam-011" => 759,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-007" => 760,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-007" => 761,
+"DT_CSPlayerResource-m_iTeam-009" => 762,
+"DT_CSPlayerResource-m_szCrosshairCodes-007" => 763,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-013" => 764,
+"DT_CSPlayerResource-m_iKills-010" => 765,
+"DT_CSPlayerResource-m_iPing-003" => 766,
+"DT_CSPlayerResource-m_iTotalCashSpent-004" => 767,
+"DT_CSPlayerResource-m_iCompTeammateColor-003" => 768,
+"DT_CSPlayerResource-m_iAssists-010" => 769,
+"DT_CSPlayerResource-m_hostageRescueY-001" => 770,
+"DT_CSPlayerResource-m_iTotalCashSpent-012" => 771,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-006" => 772,
+"DT_CSPlayerResource-m_bConnected-001" => 773,
+"DT_CSPlayerResource-m_iPendingTeam-003" => 774,
+"DT_CSPlayerResource-m_iTeam-008" => 775,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-002" => 776,
+"DT_CSPlayerResource-m_szCrosshairCodes-008" => 777,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-005" => 778,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-008" => 779,
+"DT_CSPlayerResource-m_bHasDefuser-012" => 780,
+"DT_CSPlayerResource-m_nCharacterDefIndex-011" => 781,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-013" => 782,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-005" => 783,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-002" => 784,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-010" => 785,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-034" => 786,
+"DT_CSPlayerResource-m_bHasHelmet-010" => 787,
+"DT_CSPlayerResource-m_bConnected-008" => 788,
+"DT_CSPlayerResource-m_iHealth-002" => 789,
+"DT_CSPlayerResource-m_bAlive-013" => 790,
+"DT_CSPlayerResource-m_iCashSpentThisRound-004" => 791,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-048" => 792,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-013" => 793,
+"DT_CSPlayerResource-m_iCashSpentThisRound-007" => 794,
+"DT_CSPlayerResource-m_bConnected-005" => 795,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-004" => 796,
+"DT_CSPlayerResource-m_bAlive-010" => 797,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-011" => 798,
+"DT_CSPlayerResource-m_iHealth-009" => 799,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-008" => 800,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-008" => 801,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-011" => 802,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-009" => 803,
+"DT_CSPlayerResource-m_iDeaths-008" => 804,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-010" => 805,
+"DT_CSPlayerResource-m_iHostageEntityIDs-002" => 806,
+"DT_CSPlayerResource-m_iPendingTeam-012" => 807,
+"DT_CSPlayerResource-m_iHealth-006" => 808,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-011" => 809,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-006" => 810,
+"DT_CSPlayerResource-m_iLifetimeEnd-009" => 811,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-061" => 812,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-005" => 813,
+"DT_CSPlayerResource-m_iAssists-009" => 814,
+"DT_CSPlayerResource-m_iLifetimeStart-002" => 815,
+"DT_CSPlayerResource-m_iLifetimeEnd-011" => 816,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-059" => 817,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-008" => 818,
+"DT_CSPlayerResource-m_nCharacterDefIndex-010" => 819,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-009" => 820,
+"DT_CSPlayerResource-m_bConnected-002" => 821,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-009" => 822,
+"DT_CSPlayerResource-m_nCharacterDefIndex-012" => 823,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-008" => 824,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-012" => 825,
+"DT_CSPlayerResource-m_bAlive-006" => 826,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-007" => 827,
+"DT_CSPlayerResource-m_iHealth-012" => 828,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-040" => 829,
+"DT_CSPlayerResource-m_iDeaths-009" => 830,
+"DT_CSPlayerResource-m_iPendingTeam-002" => 831,
+"DT_CSPlayerResource-m_iAssists-004" => 832,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-004" => 833,
+"DT_CSPlayerResource-m_hostageRescueZ-000" => 834,
+"DT_CSPlayerResource-m_iHostageEntityIDs-004" => 835,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-003" => 836,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-005" => 837,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-004" => 838,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-006" => 839,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-007" => 840,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-001" => 841,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-006" => 842,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-009" => 843,
+"DT_CSPlayerResource-m_iScore-003" => 844,
+"DT_CSPlayerResource-m_iPing-009" => 845,
+"DT_CSPlayerResource-m_iDeaths-002" => 846,
+"DT_CSPlayerResource-m_nActiveCoinRank-001" => 847,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-007" => 848,
+"DT_CSPlayerResource-m_nActiveCoinRank-010" => 849,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-030" => 850,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-008" => 851,
+"DT_CSPlayerResource-m_nMusicID-012" => 852,
+"DT_CSPlayerResource-m_bHasCommunicationAbuseMute-010" => 853,
+"DT_CSPlayerResource-m_iHostageEntityIDs-001" => 854,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-011" => 855,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-011" => 856,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-008" => 857,
+"DT_CSPlayerResource-m_nMusicID-002" => 858,
+"DT_CSPlayerResource-m_bConnected-013" => 859,
+"DT_CSPlayerResource-m_iLifetimeEnd-012" => 860,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-012" => 861,
+"DT_CSPlayerResource-m_szCrosshairCodes-011" => 862,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-009" => 863,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-011" => 864,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-005" => 865,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-010" => 866,
+"DT_CSPlayerResource-m_iCompTeammateColor-002" => 867,
+"DT_CSPlayerResource-m_isHostageFollowingSomeone-001" => 868,
+"DT_CSPlayerResource-m_iLifetimeEnd-003" => 869,
+"DT_CSPlayerResource-m_bHostageAlive-006" => 870,
+"DT_CSPlayerResource-m_iLifetimeStart-013" => 871,
+"DT_CSPlayerResource-m_bConnected-007" => 872,
+"DT_CSPlayerResource-m_iScore-010" => 873,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-008" => 874,
+"DT_CSPlayerResource-m_iCashSpentThisRound-010" => 875,
+"DT_CSPlayerResource-m_bHasHelmet-002" => 876,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-003" => 877,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-010" => 878,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-008" => 879,
+"DT_CSPlayerResource-m_iAssists-013" => 880,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-051" => 881,
+"DT_CSPlayerResource-m_iMVPs-002" => 882,
+"DT_CSPlayerResource-m_iPendingTeam-009" => 883,
+"DT_CSPlayerResource-m_nMusicID-006" => 884,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-012" => 885,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-012" => 886,
+"DT_CSPlayerResource-m_nActiveCoinRank-012" => 887,
+"DT_CSPlayerResource-m_bHasHelmet-012" => 888,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-056" => 889,
+"DT_CSPlayerResource-m_iArmor-007" => 890,
+"DT_CSPlayerResource-m_iDeaths-003" => 891,
+"DT_CSPlayerResource-m_iKills-003" => 892,
+"DT_CSPlayerResource-m_iLifetimeEnd-013" => 893,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-007" => 894,
+"DT_CSPlayerResource-m_iCashSpentThisRound-009" => 895,
+"DT_CSPlayerResource-m_bHostageAlive-004" => 896,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-001" => 897,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-002" => 898,
+"DT_CSPlayerResource-m_nActiveCoinRank-003" => 899,
+"DT_CSPlayerResource-m_iPendingTeam-008" => 900,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-002" => 901,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-005" => 902,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-017" => 903,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-005" => 904,
+"DT_CSPlayerResource-m_nActiveCoinRank-002" => 905,
+"DT_CSPlayerResource-m_iLifetimeStart-006" => 906,
+"DT_CSPlayerResource-m_iDeaths-010" => 907,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-009" => 908,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-002" => 909,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-006" => 910,
+"DT_CSPlayerResource-m_iMVPs-008" => 911,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-003" => 912,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-007" => 913,
+"DT_CSPlayerResource-m_iLifetimeEnd-008" => 914,
+"DT_CSPlayerResource-m_iHostageEntityIDs-006" => 915,
+"DT_CSPlayerResource-m_nMusicID-010" => 916,
+"DT_CSPlayerResource-m_iArmor-006" => 917,
+"DT_CSPlayerResource-m_iHealth-010" => 918,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-023" => 919,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-002" => 920,
+"DT_CSPlayerResource-m_bAlive-005" => 921,
+"DT_CSPlayerResource-m_bConnected-012" => 922,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-009" => 923,
+"DT_CSPlayerResource-m_bHasDefuser-002" => 924,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-013" => 925,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-004" => 926,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-003" => 927,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-055" => 928,
+"DT_CSPlayerResource-m_nCharacterDefIndex-004" => 929,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-013" => 930,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-002" => 931,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-044" => 932,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-012" => 933,
+"DT_CSPlayerResource-m_bAlive-003" => 934,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-009" => 935,
+"DT_CSPlayerResource-m_iLifetimeEnd-006" => 936,
+"DT_CSPlayerResource-m_iArmor-012" => 937,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-021" => 938,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-006" => 939,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-008" => 940,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-013" => 941,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-013" => 942,
+"DT_CSPlayerResource-m_iKills-008" => 943,
+"DT_CSPlayerResource-m_szCrosshairCodes-004" => 944,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-010" => 945,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-029" => 946,
+"DT_CSPlayerResource-m_iLifetimeStart-004" => 947,
+"DT_CSPlayerResource-m_iArmor-010" => 948,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-052" => 949,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-011" => 950,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-028" => 951,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-045" => 952,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-057" => 953,
+"DT_CSPlayerResource-m_szClan-010" => 954,
+"DT_CSPlayerResource-m_iCashSpentThisRound-013" => 955,
+"DT_CSPlayerResource-m_iLifetimeEnd-002" => 956,
+"DT_CSPlayerResource-m_bAlive-011" => 957,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-006" => 958,
+"DT_CSPlayerResource-m_iHostageEntityIDs-005" => 959,
+"DT_CSPlayerResource-m_iCompTeammateColor-011" => 960,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-006" => 961,
+"DT_CSPlayerResource-m_szCrosshairCodes-009" => 962,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-004" => 963,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-024" => 964,
+"DT_CSPlayerResource-m_hostageRescueZ-001" => 965,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-012" => 966,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-010" => 967,
+"DT_CSPlayerResource-m_bHostageAlive-001" => 968,
+"DT_CSPlayerResource-m_iArmor-002" => 969,
+"DT_CSPlayerResource-m_iLifetimeEnd-010" => 970,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-013" => 971,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-025" => 972,
+"DT_CSPlayerResource-m_nCharacterDefIndex-001" => 973,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-004" => 974,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-001" => 975,
+"DT_CSPlayerResource-m_iScore-013" => 976,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-050" => 977,
+"DT_CSPlayerResource-m_iScore-012" => 978,
+"DT_CSPlayerResource-m_iAssists-003" => 979,
+"DT_CSPlayerResource-m_szCrosshairCodes-006" => 980,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-033" => 981,
+"DT_CSPlayerResource-m_nMusicID-013" => 982,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-004" => 983,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-009" => 984,
+"DT_CSPlayerResource-m_iHealth-005" => 985,
+"DT_CSPlayerResource-m_iHealth-011" => 986,
+"DT_CSPlayerResource-m_bAlive-002" => 987,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-006" => 988,
+"DT_CSPlayerResource-m_iScore-004" => 989,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-012" => 990,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-046" => 991,
+"DT_CSPlayerResource-m_iLifetimeStart-012" => 992,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-027" => 993,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-011" => 994,
+"DT_CSPlayerResource-m_iHealth-004" => 995,
+"DT_CSPlayerResource-m_nActiveCoinRank-008" => 996,
+"DT_CSPlayerResource-m_iMVPs-006" => 997,
+"DT_CSPlayerResource-m_bConnected-010" => 998,
+"DT_CSPlayerResource-m_iCompTeammateColor-012" => 999,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-011" => 1000,
+"DT_CSPlayerResource-m_bHasHelmet-004" => 1001,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-005" => 1002,
+"DT_CSPlayerResource-m_iTeam-006" => 1003,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-013" => 1004,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-020" => 1005,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-010" => 1006,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-003" => 1007,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-007" => 1008,
+"DT_CSPlayerResource-m_bHostageAlive-007" => 1009,
+"DT_CSPlayerResource-m_szClan-011" => 1010,
+"DT_CSPlayerResource-m_nActiveCoinRank-007" => 1011,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-043" => 1012,
+"DT_CSPlayerResource-m_iKills-002" => 1013,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-003" => 1014,
+"DT_CSPlayerResource-m_iTeam-013" => 1015,
+"DT_CSPlayerResource-m_nActiveCoinRank-011" => 1016,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-011" => 1017,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-011" => 1018,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-006" => 1019,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-010" => 1020,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-047" => 1021,
+"DT_CSPlayerResource-m_iDeaths-006" => 1022,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-012" => 1023,
+"DT_CSPlayerResource-m_nActiveCoinRank-004" => 1024,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-013" => 1025,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-003" => 1026,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-002" => 1027,
+"DT_CSPlayerResource-m_bHasHelmet-011" => 1028,
+"DT_CSPlayerResource-m_bHasHelmet-007" => 1029,
+"DT_CSPlayerResource-m_nMusicID-008" => 1030,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-001" => 1031,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-003" => 1032,
+"DT_CSPlayerResource-m_iPing-008" => 1033,
+"DT_CSPlayerResource-m_isHostageFollowingSomeone-000" => 1034,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-001" => 1035,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-004" => 1036,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-012" => 1037,
+"DT_CSPlayerResource-m_nCharacterDefIndex-007" => 1038,
+"DT_CSPlayerResource-m_iHostageEntityIDs-003" => 1039,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-008" => 1040,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-012" => 1041,
+"DT_CSPlayerResource-m_iCashSpentThisRound-002" => 1042,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-039" => 1043,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-060" => 1044,
+"DT_CSPlayerResource-m_nActiveCoinRank-005" => 1045,
+"DT_CSPlayerResource-m_iTeam-004" => 1046,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-001" => 1047,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-012" => 1048,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-011" => 1049,
+"DT_CSPlayerResource-m_iPendingTeam-007" => 1050,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-010" => 1051,
+"DT_CSPlayerResource-m_iLifetimeStart-009" => 1052,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-004" => 1053,
+"DT_CSPlayerResource-m_szCrosshairCodes-002" => 1054,
+"DT_CSPlayerResource-m_iArmor-004" => 1055,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-036" => 1056,
+"DT_CSPlayerResource-m_iTeam-003" => 1057,
+"DT_CSPlayerResource-m_iLifetimeStart-008" => 1058,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-008" => 1059,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-005" => 1060,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-011" => 1061,
+"DT_CSPlayerResource-m_szClan-007" => 1062,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-003" => 1063,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-011" => 1064,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-012" => 1065,
+"DT_CSPlayerResource-m_iKills-012" => 1066,
+"DT_CSPlayerResource-m_iArmor-003" => 1067,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-008" => 1068,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-002" => 1069,
+"DT_CSPlayerResource-m_iLifetimeStart-005" => 1070,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-015" => 1071,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-004" => 1072,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-003" => 1073,
+"DT_CSPlayerResource-m_iDeaths-013" => 1074,
+"DT_CSPlayerResource-m_iCompTeammateColor-005" => 1075,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-004" => 1076,
+"DT_CSPlayerResource-m_nCharacterDefIndex-013" => 1077,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-002" => 1078,
+"DT_CSPlayerResource-m_iTotalCashSpent-009" => 1079,
+"DT_CSPlayerResource-m_iKills-007" => 1080,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-032" => 1081,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-003" => 1082,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-009" => 1083,
+"DT_CSPlayerResource-m_iScore-007" => 1084,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-002" => 1085,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-006" => 1086,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-001" => 1087,
+"DT_CSPlayerResource-m_iPing-012" => 1088,
+"DT_CSPlayerResource-m_iCompTeammateColor-009" => 1089,
+"DT_CSPlayerResource-m_iPendingTeam-013" => 1090,
+"DT_CSPlayerResource-m_bConnected-011" => 1091,
+"DT_CSPlayerResource-m_iMVPs-012" => 1092,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-014" => 1093,
+"DT_CSPlayerResource-m_iMVPs-010" => 1094,
+"DT_CSPlayerResource-m_iTotalCashSpent-006" => 1095,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-003" => 1096,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-010" => 1097,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-004" => 1098,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-013" => 1099,
+"DT_CSPlayerResource-m_iLifetimeStart-007" => 1100,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-002" => 1101,
+"DT_CSPlayerResource-m_nCharacterDefIndex-003" => 1102,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsTeacher-003" => 1103,
+"DT_CSPlayerResource-m_iCompTeammateColor-008" => 1104,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-005" => 1105,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-001" => 1106,
+"DT_CSPlayerResource-m_bHasHelmet-009" => 1107,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-003" => 1108,
+"DT_CSPlayerResource-m_hostageRescueY-000" => 1109,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-007" => 1110,
+"DT_CSPlayerResource-m_iArmor-009" => 1111,
+"DT_CSPlayerResource-m_iPendingTeam-011" => 1112,
+"DT_CSPlayerResource-m_iCompTeammateColor-010" => 1113,
+"DT_CSPlayerResource-m_bHasHelmet-013" => 1114,
+"DT_CSPlayerResource-m_iHealth-008" => 1115,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-001" => 1116,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-006" => 1117,
+"DT_CSPlayerResource-m_iTeam-005" => 1118,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-010" => 1119,
+"DT_CSPlayerResource-m_iMVPs-007" => 1120,
+"DT_CSPlayerResource-m_iScore-009" => 1121,
+"DT_CSPlayerResource-m_iPendingTeam-010" => 1122,
+"DT_CSPlayerResource-m_iMatchStats_Objective_Total-002" => 1123,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-009" => 1124,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-012" => 1125,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-003" => 1126,
+"DT_CSPlayerResource-m_nCharacterDefIndex-006" => 1127,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-009" => 1128,
+"DT_CSPlayerResource-m_bHasHelmet-003" => 1129,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-010" => 1130,
+"DT_CSPlayerResource-m_iKills-004" => 1131,
+"DT_CSPlayerResource-m_iMVPs-009" => 1132,
+"DT_CSPlayerResource-m_bHasHelmet-006" => 1133,
+"DT_CSPlayerResource-m_bHostageAlive-005" => 1134,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-062" => 1135,
+"DT_CSPlayerResource-m_nMusicID-001" => 1136,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-012" => 1137,
+"DT_CSPlayerResource-m_szCrosshairCodes-003" => 1138,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-007" => 1139,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-001" => 1140,
+"DT_CSPlayerResource-m_iMVPs-013" => 1141,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-007" => 1142,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-004" => 1143,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-003" => 1144,
+"DT_CSPlayerResource-m_iPing-006" => 1145,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-007" => 1146,
+"DT_CSPlayerResource-m_nMusicID-004" => 1147,
+"DT_CSPlayerResource-m_iLifetimeStart-003" => 1148,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-008" => 1149,
+"DT_CSPlayerResource-m_iCashSpentThisRound-011" => 1150,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-031" => 1151,
+"DT_CSPlayerResource-m_iMatchStats_3k_Total-006" => 1152,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-008" => 1153,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-005" => 1154,
+"DT_CSPlayerResource-m_bConnected-006" => 1155,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-009" => 1156,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-001" => 1157,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-001" => 1158,
+"DT_CSPlayerResource-m_iCashSpentThisRound-008" => 1159,
+"DT_CSPlayerResource-m_iLifetimeEnd-007" => 1160,
+"DT_CSPlayerResource-m_nActiveCoinRank-013" => 1161,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-006" => 1162,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsFriendly-013" => 1163,
+"DT_CSPlayerResource-m_iBotDifficulty-005" => 1164,
+"DT_CSPlayerResource-m_iTotalCashSpent-008" => 1165,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-063" => 1166,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-011" => 1167,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-004" => 1168,
+"DT_CSPlayerResource-m_iPendingTeam-005" => 1169,
+"DT_CSPlayerResource-m_iDeaths-011" => 1170,
+"DT_CSPlayerResource-m_iTotalCashSpent-003" => 1171,
+"DT_CSPlayerResource-m_nCharacterDefIndex-002" => 1172,
+"DT_CSPlayerResource-m_bHostageAlive-003" => 1173,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-002" => 1174,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-026" => 1175,
+"DT_CSPlayerResource-m_iTeam-007" => 1176,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-011" => 1177,
+"DT_CSPlayerResource-m_iHealth-007" => 1178,
+"DT_CSPlayerResource-m_szCrosshairCodes-010" => 1179,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-007" => 1180,
+"DT_CSPlayerResource-m_iMatchStats_Assists_Total-013" => 1181,
+"DT_CSPlayerResource-m_iMatchStats_Kills_Total-006" => 1182,
+"DT_CSPlayerResource-m_iMatchStats_Damage_Total-009" => 1183,
+"DT_CSPlayerResource-m_iMatchStats_Deaths_Total-004" => 1184,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-004" => 1185,
+"DT_CSPlayerResource-m_hostageRescueX-000" => 1186,
+"DT_CSPlayerResource-m_iMatchStats_CashEarned_Total-006" => 1187,
+"DT_CSPlayerResource-m_iDeaths-007" => 1188,
+"DT_CSPlayerResource-m_nMusicID-003" => 1189,
+"DT_CSPlayerResource-m_nMusicID-007" => 1190,
+"DT_CSPlayerResource-m_szClan-002" => 1191,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-010" => 1192,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-009" => 1193,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-012" => 1194,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-010" => 1195,
+"DT_CSPlayerResource-m_iPendingTeam-004" => 1196,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-002" => 1197,
+"DT_CSPlayerResource-m_iCompTeammateColor-006" => 1198,
+"DT_CSPlayerResource-m_iArmor-008" => 1199,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-054" => 1200,
+"DT_CSPlayerResource-m_iCompTeammateColor-007" => 1201,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-005" => 1202,
+"DT_CSPlayerResource-m_iKills-013" => 1203,
+"DT_CSPlayerResource-m_iMatchStats_EnemiesFlashed_Total-013" => 1204,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-002" => 1205,
+"DT_CSPlayerResource-m_szClan-003" => 1206,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-002" => 1207,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-012" => 1208,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-053" => 1209,
+"DT_CSPlayerResource-m_iTotalCashSpent-010" => 1210,
+"DT_CSPlayerResource-m_iMatchStats_UtilityDamage_Total-013" => 1211,
+"DT_CSPlayerResource-m_iPing-007" => 1212,
+"DT_CSPlayerResource-m_hostageRescueX-001" => 1213,
+"DT_CSPlayerResource-m_bHostageAlive-000" => 1214,
+"DT_CSPlayerResource-m_iMVPs-003" => 1215,
+"DT_CSPlayerResource-m_iLifetimeStart-001" => 1216,
+"DT_CSPlayerResource-m_iScore-002" => 1217,
+"DT_CSPlayerResource-m_nPersonaDataPublicCommendsLeader-004" => 1218,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-008" => 1219,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-064" => 1220,
+"DT_CSPlayerResource-m_iMatchStats_4k_Total-010" => 1221,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-007" => 1222,
+"DT_CSPlayerResource-m_iHostageEntityIDs-000" => 1223,
+"DT_CSPlayerResource-m_iBotDifficulty-004" => 1224,
+"DT_CSPlayerResource-m_iMatchStats_KillReward_Total-012" => 1225,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-005" => 1226,
+"DT_CSPlayerResource-m_szClan-013" => 1227,
+"DT_CSPlayerResource-m_iScore-006" => 1228,
+"DT_CSPlayerResource-m_szCrosshairCodes-012" => 1229,
+"DT_CSPlayerResource-m_iMatchStats_5k_Total-013" => 1230,
+"DT_CSPlayerResource-m_nActiveCoinRank-009" => 1231,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-007" => 1232,
+"DT_CSPlayerResource-m_bAlive-012" => 1233,
+"DT_CSPlayerResource-m_iMatchStats_HeadShotKills_Total-003" => 1234,
+"DT_CSPlayerResource-m_iHostageEntityIDs-007" => 1235,
+"DT_CSPlayerResource-m_iMatchStats_LiveTime_Total-004" => 1236,
+"DT_CSPlayerResource-m_bAlive-007" => 1237,
+"DT_CSPlayerResource-m_nEndMatchNextMapVotes-041" => 1238,
+"DT_CSPlayerResource-m_iMatchStats_EquipmentValue_Total-007" => 1239,
+"DT_CSPlayerResource-m_iKills-009" => 1240,
+"DT_CSPlayerResource-m_bAlive-008" => 1241,
+"DT_CSPlayerResource-m_nPersonaDataPublicLevel-002" => 1242,
+"DT_CSPlayerResource-m_iPing-013" => 1243,
+
+};

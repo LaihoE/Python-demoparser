@@ -4,10 +4,10 @@ use crate::parsing::utils::TYPEHM;
 use crate::parsing::variants::BytesVariant::Mmap3;
 pub use crate::parsing::variants::*;
 use crate::Parser;
+use ahash::HashMap;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::*;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -23,19 +23,21 @@ pub struct ParserState {
     pub workhorse: Vec<i32>,
     pub workhorse_idx: usize,
     pub workhorse_tick_start: Vec<usize>,
+    pub frame_started_at: u64,
+    pub test: HashMap<u32, HashMap<u32, Vec<[i32; 3]>>>,
 }
 
 pub struct Maps {
     /*
     Different lookup maps used during parsing
     */
-    pub serverclass_map: HashMap<u16, ServerClass, RandomState>,
-    pub event_map: Option<HashMap<i32, Descriptor_t, RandomState>>,
-    pub dt_map: Option<HashMap<String, CSVCMsg_SendTable, RandomState>>,
+    pub serverclass_map: HashMap<u16, ServerClass>,
+    pub event_map: Option<HashMap<i32, Descriptor_t>>,
+    pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
     //pub players: HashMap<u64, UserInfo, RandomState>,
-    pub userid_sid_map: HashMap<u32, Vec<(u64, i32)>, RandomState>,
+    pub userid_sid_map: HashMap<u32, Vec<(u64, i32)>>,
     pub sid_entid_map: HashMap<u64, Vec<(u32, i32)>>,
-    pub uid_eid_map: HashMap<u32, Vec<(u32, i32)>, RandomState>,
+    pub uid_eid_map: HashMap<u32, Vec<(u32, i32)>>,
     pub baselines: HashMap<u32, HashMap<String, PropData>>,
     pub baseline_no_cls: HashMap<u32, Vec<u8>>,
 }
@@ -125,9 +127,11 @@ impl Parser {
                     //stringtables: vec![],
                     dt_started_at: 0,
                     ge_map_started_at: 0,
-                    workhorse: vec![0; 30_000_000],
+                    workhorse: vec![0; 20000],
                     workhorse_idx: 0,
                     workhorse_tick_start: vec![],
+                    frame_started_at: 0,
+                    test: HashMap::default(),
                 };
                 match data {
                     Mmap3(m) => Ok(Self {

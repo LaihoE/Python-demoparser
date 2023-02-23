@@ -21,7 +21,8 @@ impl Parser {
         /*
         Parse datatables. These are the tables that entities refer to for values. If this fails then gg?
         */
-        self.state.dt_started_at = (byte_reader.byte_idx - 6) as u64;
+        self.state.dt_started_at = self.state.frame_started_at;
+
         let _ = byte_reader.read_i32();
 
         loop {
@@ -55,7 +56,7 @@ impl Parser {
             let _ = byte_reader.read_string();
             let dt = byte_reader.read_string();
             // Ids for classes we use
-            //if id == 275 || id == 43 || id == 41 || id == 39 || id == 40 {
+            //if id == 275 || id == 40 || id == 0 {
             let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
             let server_class = ServerClass { id, dt, props };
             // Set baselines parsed earlier in stringtables.

@@ -11,7 +11,7 @@ pub struct ByteReader {
 }
 
 impl ByteReader {
-    pub fn get_byte_readers(bytes: &Arc<Mmap>, start_pos: Vec<&u64>) -> Vec<ByteReader> {
+    pub fn get_byte_readers(bytes: &Arc<Mmap>, start_pos: Vec<u64>) -> Vec<ByteReader> {
         /*
         Creates one byte reader per wanted start pos.
 
@@ -25,7 +25,7 @@ impl ByteReader {
         }
         let mut readers = vec![];
         for pos in start_pos {
-            readers.push(ByteReader::new(bytes.clone(), true, *pos as usize));
+            readers.push(ByteReader::new(bytes.clone(), true, pos as usize));
         }
         return readers;
     }

@@ -23,6 +23,8 @@ impl Parser {
     }
 
     pub fn parse_game_event_map(&mut self, byte_reader: &mut ByteReader, size: usize) {
+        self.state.ge_map_started_at = self.state.frame_started_at;
+        println!("START {:?}", self.state.dt_started_at);
         let wanted_bytes = &self.bytes[byte_reader.byte_idx..byte_reader.byte_idx + size as usize];
         byte_reader.skip_n_bytes(size.try_into().unwrap());
         let game_event_list: CSVCMsg_GameEventList =

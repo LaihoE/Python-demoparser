@@ -1,10 +1,17 @@
 mod parsing;
 use mimalloc::MiMalloc;
+use ndarray::{arr1, Array1};
 use parsing::parser::Parser;
 use parsing::utils::Header;
-use rayon::prelude::IntoParallelIterator;
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 use std::fs;
 use std::time::Instant;
+
+use std::env;
+fn x() {
+    // this method needs to be inside main() method
+    env::set_var("RUST_BACKTRACE", "1");
+}
 
 fn parse_demo(demo_path: String) -> i32 {
     // m_iHealth
@@ -72,10 +79,7 @@ fn main() {
 
     use rayon::iter::ParallelIterator;
 
-    let x: Vec<i32> = single
-        .into_iter()
-        .map(|f| parse_demo(f.to_string()))
-        .collect();
+    let x: Vec<i32> = single.iter().map(|f| parse_demo(f.to_string())).collect();
 
     // 145
     let elapsed = now.elapsed();

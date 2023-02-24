@@ -15,7 +15,7 @@ pub struct ParserState {
     pub fp: usize,
     pub tick: i32,
     pub round: i32,
-    pub entities: Vec<(u32, Entity)>,
+    pub entities: HashMap<i32, Entity>,
     //pub stringtables: Vec<StringTable>,
     //pub game_events: Vec<GameEvent>,
     pub ge_map_started_at: u64,
@@ -25,6 +25,9 @@ pub struct ParserState {
     pub workhorse_tick_start: Vec<usize>,
     pub frame_started_at: u64,
     pub test: HashMap<u32, HashMap<u32, Vec<[i32; 3]>>>,
+    pub eid_cls_history: Vec<EidClsHistoryEntry>,
+    pub game_event_history: Vec<GameEventHistory>,
+    pub stringtable_history: Vec<StringTableHistory>,
 }
 
 pub struct Maps {
@@ -122,7 +125,7 @@ impl Parser {
                     fp: 0,
                     round: 0,
                     tick: 0,
-                    entities: vec![],
+                    entities: HashMap::default(),
                     //game_events: vec![],
                     //stringtables: vec![],
                     dt_started_at: 0,
@@ -132,6 +135,9 @@ impl Parser {
                     workhorse_tick_start: vec![],
                     frame_started_at: 0,
                     test: HashMap::default(),
+                    eid_cls_history: vec![],
+                    game_event_history: vec![],
+                    stringtable_history: vec![],
                 };
                 match data {
                     Mmap3(m) => Ok(Self {

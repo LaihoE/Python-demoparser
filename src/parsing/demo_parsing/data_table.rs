@@ -56,22 +56,22 @@ impl Parser {
             let _ = byte_reader.read_string();
             let dt = byte_reader.read_string();
             // Ids for classes we use
-            //if id == 275 || id == 40 || id == 0 {
-            let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
-            let server_class = ServerClass { id, dt, props };
-            // Set baselines parsed earlier in stringtables.
-            // Happens when stringtable, with instancebaseline, comes
-            // before this event. Seems oddly complicated
-            match self.maps.baseline_no_cls.get(&(id as u32)) {
-                Some(user_data) => {
-                    parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
-                    // Remove after being parsed
-                    self.maps.baseline_no_cls.remove(&(id as u32));
+            if id == 275 || id == 40 || id == 0 {
+                let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
+                let server_class = ServerClass { id, dt, props };
+                // Set baselines parsed earlier in stringtables.
+                // Happens when stringtable, with instancebaseline, comes
+                // before this event. Seems oddly complicated
+                match self.maps.baseline_no_cls.get(&(id as u32)) {
+                    Some(user_data) => {
+                        parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
+                        // Remove after being parsed
+                        self.maps.baseline_no_cls.remove(&(id as u32));
+                    }
+                    None => {}
                 }
-                None => {}
+                self.maps.serverclass_map.insert(id, server_class);
             }
-            self.maps.serverclass_map.insert(id, server_class);
-            //}
         }
     }
     pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 32]> {

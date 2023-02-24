@@ -1,4 +1,7 @@
+use crate::parsing::demo_parsing::EidClsHistoryEntry;
+use crate::parsing::demo_parsing::GameEventHistory;
 use crate::parsing::demo_parsing::ServerClass;
+use crate::parsing::demo_parsing::StringTableHistory;
 use ahash::HashMap;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -11,7 +14,11 @@ use serde_json::to_string;
 use std::fs;
 use std::io::prelude::*;
 
-const HASH_BYTE_LENGTH: usize = 10000;
+pub const HASH_BYTE_LENGTH: usize = 10000;
+pub const EID_CLS_MAP_ID: i32 = 99999;
+pub const GAME_EVENT_ID: i32 = -5;
+pub const STRING_TABLE_ID: i32 = -6;
+
 #[derive(Debug)]
 pub struct WriteCache {
     pub path: String,
@@ -34,6 +41,12 @@ impl WriteCache {
             buffer: vec![],
         }
     }
+    pub fn write_dt_ge_map(&mut self, ge_start_at: u64, dt_start_at: u64) {
+        let mut bytes = vec![];
+        bytes.extend(dt_start_at.to_le_bytes());
+        bytes.extend(ge_start_at.to_le_bytes());
+        self.append_to_buffer(&bytes, -2);
+    }
     pub fn flush(&mut self) {
         let mut index_bytes = vec![];
         let index_starts_at_byte = self.buffer.len();
@@ -47,29 +60,38 @@ impl WriteCache {
         println!("wrote: {} bytes", self.buffer.len());
         fs::write(&self.path, &self.buffer).unwrap();
     }
+    pub fn write_eid_cls_map(&mut self, eid_cls_map: &Vec<EidClsHistoryEntry>) {
+        let mut bytes = vec![];
+        bytes.extend(eid_cls_map.iter().flat_map(|x| x.cls_id.to_le_bytes()));
+        bytes.extend(eid_cls_map.iter().flat_map(|x| x.eid.to_le_bytes()));
+        bytes.extend(eid_cls_map.iter().flat_map(|x| x.tick.to_le_bytes()));
+        self.append_to_buffer(&bytes, EID_CLS_MAP_ID);
+    }
     pub fn compress_bytes(&mut self, bytes: &[u8]) -> Vec<u8> {
         let mut e = ZlibEncoder::new(Vec::new(), Compression::fast());
         e.write_all(bytes).unwrap();
         e.finish().unwrap()
     }
     pub fn append_to_buffer(&mut self, bytes: &[u8], id: i32) {
+        let compressed = self.compress_bytes(bytes);
         let entry = IndexEntry {
             byte_start_at: self.buffer.len() as i32,
-            byte_end_at: (self.buffer.len() + bytes.len()) as i32,
+            byte_end_at: (self.buffer.len() + compressed.len()) as i32,
             id: id,
         };
         self.index.push(entry);
-        let compressed = self.compress_bytes(bytes);
         self.buffer.extend(compressed);
     }
-
-    pub fn write_maps(&mut self, dt_start_at: u64, ge_start_at: u64) {
-        /*
-        let arr = arr1(&vec![
-            dt_start_at.try_into().unwrap(),
-            ge_start_at.try_into().unwrap(),
-        ]);
-        */
+    pub fn write_game_events(&mut self, game_events: &Vec<GameEventHistory>) {
+        let mut bytes = vec![];
+        bytes.extend(game_events.iter().flat_map(|x| x.byte.to_le_bytes()));
+        bytes.extend(game_events.iter().flat_map(|x| x.id.to_le_bytes()));
+        self.append_to_buffer(&bytes, GAME_EVENT_ID)
+    }
+    pub fn write_stringtables(&mut self, stringtables: &Vec<StringTableHistory>) {
+        let mut bytes = vec![];
+        bytes.extend(stringtables.iter().flat_map(|x| x.byte.to_le_bytes()));
+        self.append_to_buffer(&bytes, STRING_TABLE_ID)
     }
 
     pub fn write_packet_ents(
@@ -88,8 +110,11 @@ impl WriteCache {
 
                         let prop_name =
                             serverclass.dt.to_string() + "-" + &prop.table + "-" + &prop.name;
-                        let prop_id = TYPEHM[&prop_name];
-                        self.append_to_buffer(&temp_arr, prop_id)
+                        let prop_id = match TYPEHM.get(&prop_name) {
+                            Some(k) => k,
+                            None => &-69,
+                        };
+                        self.append_to_buffer(&temp_arr, *prop_id)
                     }
                 }
             }

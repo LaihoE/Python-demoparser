@@ -13,11 +13,20 @@ use protobuf::Message;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
+pub struct GameEventHistory {
+    pub byte: i32,
+    pub id: i32,
+}
+
 impl Parser {
     pub fn parse_game_event(&mut self, byte_reader: &mut ByteReader, size: usize) {
         let wanted_bytes = &self.bytes[byte_reader.byte_idx..byte_reader.byte_idx + size as usize];
         byte_reader.skip_n_bytes(size.try_into().unwrap());
         let game_event: CSVCMsg_GameEvent = Message::parse_from_bytes(wanted_bytes).unwrap();
+        self.state.game_event_history.push(GameEventHistory {
+            byte: self.state.frame_started_at as i32,
+            id: game_event.eventid(),
+        });
         let event_desc = &self.maps.event_map.as_ref().unwrap()[&game_event.eventid()];
         let name_data_pairs = gen_name_val_pairs(&game_event, event_desc, &self.state.tick.clone());
     }

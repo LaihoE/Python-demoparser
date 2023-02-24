@@ -39,21 +39,35 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 
 impl Parser {
     pub fn start_parsing(&mut self) {
-        self.parse_bytes(vec![]);
+        self.speed();
+        //self.parse_bytes(vec![]);
+        //self.indicies_modify();
+    }
+    pub fn speed(&mut self) {
+        let mut rc = ReadCache::new(&self.bytes);
+        rc.read_index();
+        let mut wanted_bytes = vec![];
+        let (dt_start, ge_start) = rc.read_dt_ge_map();
+        wanted_bytes.push(dt_start);
+        wanted_bytes.push(ge_start);
+
+        let map = rc.get_eid_cls_map();
+        self.state.eid_cls_history = map;
+
+        let mut byt = rc.read_by_id(529);
+        let before = Instant::now();
+
+        let sts = rc.read_stringtables();
+        println!("ST {:?}", sts);
+        wanted_bytes.extend(byt);
+
+        self.parse_bytes(wanted_bytes);
+        println!("SPEED {:2?}", before.elapsed());
     }
 
     pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>) {
-        for _ in 0..5000 {
-            self.state.entities.push((
-                1111111,
-                Entity {
-                    class_id: 0,
-                    entity_id: 1111111,
-                    //props: HashMap::default(),
-                },
-            ));
-        }
-        let byte_readers = ByteReader::get_byte_readers(&self.bytes, vec![]);
+        let byte_readers = ByteReader::get_byte_readers(&self.bytes, wanted_bytes);
+        let n_byte_readers = byte_readers.len();
 
         for mut byte_reader in byte_readers {
             while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
@@ -61,9 +75,11 @@ impl Parser {
                 let (cmd, tick) = byte_reader.read_frame();
                 self.state.tick = tick;
                 self.parse_cmd(cmd, &mut byte_reader);
+                if n_byte_readers > 1 {
+                    break;
+                }
             }
         }
-        self.indicies_modify();
     }
     pub fn indicies_modify(&mut self) -> Vec<u64> {
         /*
@@ -71,15 +87,26 @@ impl Parser {
         and transforms into pidx: Vec<(tick, entid)> pairs.
         */
         let mut wc = WriteCache::new(&self.bytes);
-        wc.write_maps(self.state.dt_started_at, self.state.ge_map_started_at);
+
+        //wc.write_maps(self.state.dt_started_at, self.state.ge_map_started_at);
         wc.write_packet_ents(&self.state.test, &self.maps.serverclass_map);
         let before = Instant::now();
+        wc.write_eid_cls_map(&self.state.eid_cls_history);
+        wc.write_dt_ge_map(self.state.dt_started_at, self.state.ge_map_started_at);
+        wc.write_game_events(&self.state.game_event_history);
+        wc.write_stringtables(&self.state.stringtable_history);
         wc.flush();
 
         let mut rc = ReadCache::new(&self.bytes);
         rc.read_index();
-        rc.read_by_id(189);
-        println!("{:2?}", before.elapsed());
+        let map = rc.get_eid_cls_map();
+        self.state.eid_cls_history = map;
+
+        let byt = rc.read_by_id(558);
+        let before = Instant::now();
+        println!("{:?}", byt);
+        self.parse_bytes(byt);
+        println!("SPEED {:2?}", before.elapsed());
         vec![]
     }
     pub fn parse_cmd(&mut self, cmd: u8, byte_reader: &mut ByteReader) {
@@ -95,9 +122,9 @@ impl Parser {
     pub fn msg_handler(&mut self, msg: u32, size: u32, byte_reader: &mut ByteReader) {
         //println!("{} {}", msg, self.state.tick);
         match msg {
-            //12 => self.create_string_table(byte_reader, size as usize),
-            //13 => self.update_string_table_msg(byte_reader, size as usize),
-            //25 => self.parse_game_event(byte_reader, size as usize),
+            12 => self.create_string_table(byte_reader, size as usize),
+            13 => self.update_string_table_msg(byte_reader, size as usize),
+            25 => self.parse_game_event(byte_reader, size as usize),
             26 => self.parse_packet_entities(byte_reader, size as usize),
             30 => self.parse_game_event_map(byte_reader, size as usize),
             _ => {

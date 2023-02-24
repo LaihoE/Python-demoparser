@@ -70,7 +70,7 @@ fn main() {
     }
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(24)
+        .num_threads(12)
         .build_global()
         .unwrap();
 
@@ -78,7 +78,6 @@ fn main() {
     let single = vec![this_p];
 
     use rayon::iter::ParallelIterator;
-
     let x: Vec<i32> = single.iter().map(|f| parse_demo(f.to_string())).collect();
 
     // 145

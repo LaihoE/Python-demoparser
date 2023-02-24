@@ -29,6 +29,9 @@ pub struct StringTable {
 pub struct StField {
     entry: String,
 }
+pub struct StringTableHistory {
+    pub byte: i32,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UserInfo {
@@ -89,6 +92,9 @@ impl Parser {
     }
 
     pub fn create_string_table(&mut self, byte_reader: &mut ByteReader, size: usize) {
+        self.state.stringtable_history.push(StringTableHistory {
+            byte: self.state.frame_started_at as i32,
+        });
         let wanted_bytes = &self.bytes[byte_reader.byte_idx..byte_reader.byte_idx + size as usize];
         byte_reader.skip_n_bytes(size.try_into().unwrap());
         let data: CSVCMsg_CreateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
@@ -183,7 +189,7 @@ impl Parser {
                 /*
                 if st.name == "instancebaseline" {
                     let k = entry.parse::<u32>().unwrap_or(999999);
-                    match self.serverclass_map.get(&(k as u16)) {
+                    match self.state.serverclass_map.get(&(k as u16)) {
                         Some(sv_cls) => {
                             parse_baselines(&user_data, sv_cls, &mut self.baselines);
                         }
@@ -212,6 +218,9 @@ impl Parser {
         }
     }
     pub fn update_string_table_msg(&mut self, byte_reader: &mut ByteReader, size: usize) {
+        self.state.stringtable_history.push(StringTableHistory {
+            byte: self.state.frame_started_at as i32,
+        });
         let wanted_bytes = &self.bytes[byte_reader.byte_idx..byte_reader.byte_idx + size as usize];
         byte_reader.skip_n_bytes(size.try_into().unwrap());
         let data: CSVCMsg_UpdateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();

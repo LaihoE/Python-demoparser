@@ -18,8 +18,8 @@ use zip::{ZipArchive, ZipWriter};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Delta {
-    pub byte: u64,
-    pub entid: i16,
+    pub byte: i32,
+    pub entid: i32,
     pub tick: i32,
 }
 #[derive(Debug, Deserialize, Serialize)]
@@ -33,7 +33,7 @@ pub struct Stringtables {
 }
 
 pub struct ReadCache {
-    pub deltas: HashMap<String, Vec<Delta>>,
+    pub deltas: HashMap<i32, Vec<Delta>>,
     pub path: String,
     pub bytes: Mmap,
     pub index: HashMap<i32, IndexEntry>,
@@ -61,7 +61,6 @@ impl ReadCache {
         }
     }
     pub fn read_index(&mut self) {
-        let file = File::open(self.path.clone()).unwrap();
         let index_starts_at = &self.bytes[self.bytes.len() - 8..];
         let index_starts_at = usize::from_le_bytes(index_starts_at.try_into().unwrap());
         let before = Instant::now();
@@ -86,7 +85,7 @@ impl ReadCache {
         &self,
         deltas: &Vec<Delta>,
         wanted_ticks: &Vec<i32>,
-    ) -> Vec<u64> {
+    ) -> Vec<i32> {
         if deltas.len() == 0 {
             return vec![];
         }
@@ -121,23 +120,44 @@ impl ReadCache {
         let mut decompressed_bytes = vec![];
         z.read_to_end(&mut decompressed_bytes).unwrap();
 
-        let total_entries = decompressed_bytes.len() / 12;
+        let number_structs = decompressed_bytes.len() / 12;
 
-        /*
-        self.deltas.insert(name.to_string(), vec![]);
-        let v = self.deltas.get_mut(&name).unwrap();
-        v.reserve(ticks.len());
+        let TICKS_SIZE = 4;
+        let BYTES_SIZE = 4;
+        let ENTIDS_SIZE = 4;
 
-        for (tick, byte, entid) in izip!(ticks, bytes, entids) {
-            v.push(Delta {
-                byte: *byte as u64,
-                entid: *entid as i16,
-                tick: *tick,
-            })
+        let ticks_end_at = number_structs * BYTES_SIZE;
+        let bytes_start_at = ticks_end_at;
+        let bytes_end_at = bytes_start_at + (number_structs * BYTES_SIZE);
+        let entids_start_at = bytes_end_at;
+
+        let mut start_bytes = vec![];
+        let mut entids = vec![];
+        let mut ticks = vec![];
+
+        for bytes in decompressed_bytes[..ticks_end_at].chunks(TICKS_SIZE) {
+            ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
-        let my = self.deltas.get(&name).unwrap();
-        let wanted_ticks = (10000..11000).collect_vec();
-        self.filter_delta_ticks_wanted(my, &wanted_ticks)
-        */
+        for bytes in decompressed_bytes[bytes_start_at..bytes_end_at].chunks(BYTES_SIZE) {
+            start_bytes.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        }
+        for bytes in decompressed_bytes[entids_start_at..].chunks(ENTIDS_SIZE) {
+            entids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        }
+        self.deltas.insert(id, vec![]);
+        let v = self.deltas.get_mut(&id).unwrap();
+        v.reserve(number_structs);
+
+        for (byte, entid, tick) in izip!(&start_bytes, &entids, &ticks) {
+            v.push(Delta {
+                byte: *byte,
+                entid: *entid,
+                tick: *tick,
+            });
+        }
+        //println!("{:?}", self.deltas);
+        let x = &self.deltas[&id];
+        let res = self.filter_delta_ticks_wanted(x, &vec![55555]);
+        //println!("{:?}", res);
     }
 }

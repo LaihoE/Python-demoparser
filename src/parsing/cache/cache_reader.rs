@@ -247,7 +247,6 @@ impl ReadCache {
                 tick: *tick,
             });
         }
-
         let mut bytes = HashSet::default();
         let all_deltas = &self.deltas[&id];
 
@@ -261,4 +260,5 @@ impl ReadCache {
         }
         bytes.iter().map(|x| *x).collect_vec()
     }
+    pub fn find_weapon(&mut self) {}
 }

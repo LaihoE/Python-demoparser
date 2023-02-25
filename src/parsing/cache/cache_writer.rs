@@ -111,6 +111,8 @@ impl WriteCache {
 
                         let prop_name =
                             serverclass.dt.to_string() + "-" + &prop.table + "-" + &prop.name;
+                        println!("{} {} {:?}", cls_id, pidx, prop_name);
+
                         let prop_id = match TYPEHM.get(&prop_name) {
                             Some(k) => k,
                             None => &-69,

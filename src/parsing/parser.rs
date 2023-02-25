@@ -40,10 +40,10 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 
 impl Parser {
     pub fn start_parsing(&mut self) {
-        self.speed();
+        //self.speed();
         // println!("{:?}", self.state.output);
-        //self.parse_bytes(vec![]);
-        //self.indicies_modify();
+        self.parse_bytes(vec![]);
+        self.indicies_modify();
     }
     fn generate_name_id_map(&mut self) -> HashMap<String, usize> {
         let mut mapping = HashMap::default();

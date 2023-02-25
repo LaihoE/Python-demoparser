@@ -57,9 +57,6 @@ impl Parser {
 
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var().unwrap() as i32);
-            if entity_id > 64 {
-                break;
-            }
 
             if b.read_boolie().unwrap() {
                 b.read_boolie();
@@ -135,7 +132,7 @@ impl Parser {
             if val == -1 {
                 break;
             }
-            if !forbidden.contains(&val) && entity_id < 75 {
+            if !forbidden.contains(&val) {
                 self.state
                     .test
                     .entry(entity.class_id)

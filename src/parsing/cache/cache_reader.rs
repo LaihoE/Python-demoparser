@@ -81,6 +81,9 @@ impl ReadCache {
     }
     pub fn read_dt_ge_map(&mut self) -> (u64, u64) {
         let decompressed_bytes = self.read_bytes_from_index(-2);
+        if decompressed_bytes.len() == 0 {
+            return (0, 0);
+        }
         let dt_started_at = u64::from_le_bytes(decompressed_bytes[..8].try_into().unwrap());
         let ge_started_at = u64::from_le_bytes(decompressed_bytes[8..].try_into().unwrap());
         (dt_started_at, ge_started_at)
@@ -109,6 +112,7 @@ impl ReadCache {
         }
     }
     pub fn filter_game_events(&mut self, id: i32) -> Vec<u64> {
+        self.read_game_events();
         self.game_events
             .iter()
             .filter(|x| x.id == id)
@@ -196,7 +200,10 @@ impl ReadCache {
     }
     pub fn read_bytes_from_index(&mut self, id: i32) -> Vec<u8> {
         // Finds offsets for our wanted data
-        let entry = &self.index[&id];
+        let entry = match self.index.get(&id) {
+            Some(entry) => entry,
+            None => return vec![],
+        };
         let start_byte = entry.byte_start_at;
         let end_byte = entry.byte_end_at;
         // Return decompressed data at those offsets

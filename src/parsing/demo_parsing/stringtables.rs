@@ -211,6 +211,7 @@ impl Parser {
                     ui.entity_id = entry_index as u32 + 1;
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
+                    self.maps.userid_sid_map.insert(ui.user_id, ui.xuid);
                     self.maps.players.insert(ui.xuid, ui);
                 }
             }

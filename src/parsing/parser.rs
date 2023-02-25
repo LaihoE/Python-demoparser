@@ -41,7 +41,7 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 impl Parser {
     pub fn start_parsing(&mut self) {
         self.speed();
-        //println!("{:?}", self.state.output);
+        // println!("{:?}", self.state.output);
         //self.parse_bytes(vec![]);
         //self.indicies_modify();
     }
@@ -54,7 +54,10 @@ impl Parser {
         }
         mapping
     }
-    fn parse_mandatory_ticks(&mut self, read_cache: &mut ReadCache) -> HashMap<String, usize> {
+    fn parse_mandatory_ticks(
+        &mut self,
+        read_cache: &mut ReadCache,
+    ) -> Option<HashMap<String, usize>> {
         // Read index at end of file
         read_cache.read_index();
         // Used in entities.rs
@@ -62,22 +65,30 @@ impl Parser {
         let mut wanted_bytes = vec![];
         // 2 maps needed for parsing
         let (dt_start, ge_start) = read_cache.read_dt_ge_map();
+        if dt_start == 0 && ge_start == 0 {
+            return None;
+        }
         // Players come trough here (name, steamid, entid etc.)
         let string_table_bytes = read_cache.read_stringtables();
         wanted_bytes.push(dt_start);
         wanted_bytes.push(ge_start);
         wanted_bytes.extend(string_table_bytes);
         self.parse_bytes(wanted_bytes);
-        self.generate_name_id_map()
+        //Some(self.generate_name_id_map())
+        Some(HashMap::default())
     }
     pub fn speed(&mut self) {
         let mut read_cache = ReadCache::new(&self.bytes);
 
-        let name_id_map = self.parse_mandatory_ticks(&mut read_cache);
-
+        let name_id_map = match self.parse_mandatory_ticks(&mut read_cache) {
+            Some(map) => map,
+            None => return,
+        };
         let mut wanted_bytes = vec![];
+        wanted_bytes.extend(read_cache.filter_game_events(24));
+
         for prop in &self.settings.wanted_props {
-            wanted_bytes.extend(read_cache.read_by_id(342, &self.settings.wanted_ticks));
+            //wanted_bytes.extend(read_cache.read_by_id(342, &self.settings.wanted_ticks));
         }
 
         wanted_bytes.sort();
@@ -120,7 +131,6 @@ impl Parser {
         rc.read_index();
         let map = rc.get_eid_cls_map();
         self.state.eid_cls_history = map;
-
         vec![]
     }
     pub fn parse_cmd(&mut self, cmd: u8, byte_reader: &mut ByteReader) {

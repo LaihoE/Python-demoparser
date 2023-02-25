@@ -3,6 +3,7 @@ mod parsing;
 use arrow::ffi;
 use flate2::read::GzDecoder;
 
+use itertools::Itertools;
 use parsing::demo_parsing::*;
 use parsing::parser::Parser;
 //use parsing::tick_cache::gather_props_backwards;
@@ -143,7 +144,7 @@ impl DemoParser {
     pub fn py_new(demo_path: String) -> PyResult<Self> {
         Ok(DemoParser { path: demo_path })
     }
-    /*
+
     #[args(py_kwargs = "**")]
     pub fn parse_events(
         &self,
@@ -152,6 +153,7 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<Py<PyAny>> {
         let (rounds, wanted_props) = parse_kwargs_event(py_kwargs);
+        /*
         let real_props = rm_user_friendly_names(&wanted_props);
         let unk_props = check_validity_props(&real_props);
         if !unk_props.is_empty() {
@@ -160,20 +162,22 @@ impl DemoParser {
                 unk_props
             )));
         }
+        */
         let parse_props = !wanted_props.is_empty() || rounds;
-        let parser = Parser::new(
+        let mut parser = Parser::new(
             self.path.clone(),
-            parse_props,
             true,
+            false,
+            //vec![],
+            (1000..1001).collect(),
             vec![],
+            vec!["player@m_vecOrigin_X".to_string()],
+            event_name.to_string(),
+            false,
+            false,
+            false,
+            1000000,
             vec![],
-            real_props,
-            event_name,
-            false,
-            false,
-            false,
-            9999999,
-            wanted_props,
         );
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err(format!(
@@ -185,12 +189,14 @@ impl DemoParser {
 
                 parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
                 let mut ss = vec![];
-                let output = parser.start_parsing();
+                parser.start_parsing();
+
+                let event_series = parser.series_from_events(&parser.state.game_events);
 
                 let column_names: Vec<&str> =
-                    output.events.iter().map(|x| x.name().clone()).collect();
+                    event_series.iter().map(|x| x.name().clone()).collect();
                 let mut rows = 0;
-                for s in &output.events {
+                for s in &event_series {
                     rows = s.len().max(rows);
                     let py_series = rust_series_to_py_series(&s).unwrap();
                     ss.push(py_series);
@@ -213,7 +219,7 @@ impl DemoParser {
             }
         }
     }
-    */
+
     #[args(py_kwargs = "**")]
     pub fn parse_ticks(
         &self,
@@ -293,26 +299,23 @@ impl DemoParser {
         }
     }
 
-    /*
     #[args(py_kwargs = "**")]
     pub fn parse_players(&self, py: Python) -> PyResult<PyObject> {
-        // Need to clean up this function.
-        let wanted_props = vec!["player@DT_BaseEntity.m_iTeamNum".to_string()];
-        let parser = Parser::new(
+        let mut parser = Parser::new(
             self.path.clone(),
             true,
             false,
-            (0..1 as i32).collect(),
+            //vec![],
+            (1000..1001).collect(),
             vec![],
-            wanted_props.clone(),
-            "".to_string(),
+            vec!["player@m_vecOrigin_X".to_string()],
+            "-".to_string(),
             false,
             false,
-            true,
-            9999999,
-            wanted_props.clone(),
+            false,
+            1000000,
+            vec![],
         );
-
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err(format!(
                 "Couldnt read demo file. Error: {}",
@@ -320,63 +323,28 @@ impl DemoParser {
             ))),
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
+                parser.start_parsing();
 
-                parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
-                let mut ss = vec![];
-                let output = parser.start_parsing();
-
-                let mut df = output.df;
-                let mut filtered_series = vec![];
-
-                let mut teamnums_vec = vec![];
-                for s in &mut df {
-                    if s.name() == "player@DT_BaseEntity.m_iTeamNum" {
-                        s.rename("starting_team");
-                        let teamnums = s.f32().unwrap();
-                        for x in teamnums {
-                            teamnums_vec.push(x.unwrap() as i32);
-                        }
-                    } else if s.name() != "tick" {
-                        filtered_series.push(s);
-                    }
-                }
-
-                let mut mapping = HashMap::default();
-                mapping.insert(0, "?");
-                mapping.insert(1, "spectator");
-                mapping.insert(2, "CT");
-                mapping.insert(3, "T");
-
-                let mut team_names = vec![];
-                for ti in teamnums_vec {
-                    println!("{}", ti);
-                    team_names.push(mapping[&ti]);
-                }
-
-                let mut column_names: Vec<String> = filtered_series
+                let names: Vec<String> = parser
+                    .maps
+                    .players
                     .iter()
-                    .map(|x| x.name().to_string())
-                    .collect();
-                column_names.push("starting_team".to_string());
-
-                for s in &filtered_series {
-                    let py_series = rust_series_to_py_series(&s).unwrap();
-                    ss.push(py_series);
-                }
-                let starting_team_name =
-                    rust_series_to_py_series(&Series::new("starting_team", team_names)).unwrap();
-                ss.push(starting_team_name);
+                    .map(|x| x.1.name.clone())
+                    .collect_vec();
+                let steamids: Vec<u64> = parser.maps.players.iter().map(|x| x.1.xuid).collect_vec();
+                let name_series = rust_series_to_py_series(&Series::new("name", names)).unwrap();
+                let steamids = rust_series_to_py_series(&Series::new("steamid", steamids)).unwrap();
+                let all_series = vec![name_series, steamids];
+                let column_names = vec!["name", "steamid"];
 
                 let polars = py.import("polars").unwrap();
-                // let all_series_py = ss.to_object(py);
-                let df = polars.call_method1("DataFrame", (ss,)).unwrap();
+                let df = polars.call_method1("DataFrame", (all_series,)).unwrap();
                 df.setattr("columns", column_names.to_object(py)).unwrap();
                 let pandas_df = df.call_method0("to_pandas").unwrap();
                 Ok(pandas_df.to_object(py))
             }
         }
     }
-    */
 
     pub fn parse_header(&self) -> PyResult<Py<PyAny>> {
         let parser = Parser::new(

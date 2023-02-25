@@ -128,7 +128,7 @@ impl Parser {
         let mut idx = 0;
 
         self.create_ent_if_not_exist(entity_id);
-        let mut entity = self.state.entities.get_mut(&entity_id).unwrap();
+        let entity = self.state.entities.get_mut(&entity_id).unwrap();
 
         loop {
             val = bitreader.read_inx(val, new_way).unwrap();
@@ -159,9 +159,6 @@ impl Parser {
             let idx = self.state.workhorse[i];
             let prop = &sv_cls.props[idx as usize];
             let p = bitreader.decode(prop);
-            if prop.name.contains("m_iHealth") {
-                println!("{} {} {} {:?}", idx, prop.name, self.state.tick, p);
-            }
 
             entity.props[idx as usize] = p;
         }

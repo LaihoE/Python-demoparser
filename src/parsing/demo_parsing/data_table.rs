@@ -23,10 +23,15 @@ impl Parser {
         */
         self.state.dt_started_at = self.state.frame_started_at;
 
-        let _ = byte_reader.read_i32();
+        let dt_size = byte_reader.read_i32();
+
+        if self.settings.only_events {
+            byte_reader.skip_n_bytes(dt_size as u32);
+            return;
+        }
 
         loop {
-            let x = byte_reader.read_varint();
+            let _ = byte_reader.read_varint();
             let size = byte_reader.read_varint();
             let data = byte_reader.read_n_bytes(size);
 
@@ -56,22 +61,20 @@ impl Parser {
             let _ = byte_reader.read_string();
             let dt = byte_reader.read_string();
             // Ids for classes we use
-            if id == 275 || id == 40 || id == 0 {
-                let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
-                let server_class = ServerClass { id, dt, props };
-                // Set baselines parsed earlier in stringtables.
-                // Happens when stringtable, with instancebaseline, comes
-                // before this event. Seems oddly complicated
-                match self.maps.baseline_no_cls.get(&(id as u32)) {
-                    Some(user_data) => {
-                        parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
-                        // Remove after being parsed
-                        self.maps.baseline_no_cls.remove(&(id as u32));
-                    }
-                    None => {}
+            let props = self.flatten_dt(&self.maps.dt_map.as_ref().unwrap()[&dt], dt.clone());
+            let server_class = ServerClass { id, dt, props };
+            // Set baselines parsed earlier in stringtables.
+            // Happens when stringtable, with instancebaseline, comes
+            // before this event. Seems oddly complicated
+            match self.maps.baseline_no_cls.get(&(id as u32)) {
+                Some(user_data) => {
+                    parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
+                    // Remove after being parsed
+                    self.maps.baseline_no_cls.remove(&(id as u32));
                 }
-                self.maps.serverclass_map.insert(id, server_class);
+                None => {}
             }
+            self.maps.serverclass_map.insert(id, server_class);
         }
     }
     pub fn get_excl_props(&self, table: &CSVCMsg_SendTable) -> SmallVec<[Sendprop_t; 32]> {

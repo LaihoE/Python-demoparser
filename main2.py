@@ -10,27 +10,30 @@ import numpy as np
 
 
 def coordinates(file):
-    print(file)
+    if file == "/home/laiho/Documents/demos/faceits/cu/003309131115255562271_1824323488 (1).dem":
+        return
+
     parser = DemoParser(file)
+    #df = pd.DataFrame(parser.parse_events("player_death"))
+    print(parser.parse_players())
 
-    ticks = [110000]
-
-    df = pd.DataFrame(parser.parse_ticks(["player@DT_BaseCombatCharacter.m_hActiveWeapon"], ticks=ticks))
-    print(df)
     # print(df.columns)
-    #print(df.loc[:, ["name", "weapid", "tick", "Ammo", "player@m_vecOrigin_X"]])
+    # print(df.loc[:, ["name", "weapid", "tick", "Ammo", "player@m_vecOrigin_X"]])
 
 if __name__ == "__main__":
-    files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5:6]
-    # files = glob.glob("/home/laiho/Documents/demos/mygames/*")[22:23]
+    # files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5:60]
+    files = glob.glob("/home/laiho/Documents/demos/mygames/*")[22:83]
     # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[240:]
-    # files = glob.glob("/home/laiho/Documents/demos/bench_pro_demos/*")[4:5]
+    # files = glob.glob("/home/laiho/Documents/demos/bench_pro_demos/*")[:20]
 
     before = time.time()
-    with mp.Pool(processes=1) as pool:
+    with mp.Pool(processes=8) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(
             coordinates, files), total=len(files), desc="Parsing demos"))
-    print(time.time() - before)
+    
+    df = pd.concat(results)
+    df = df[(df["distance"] > 30) & (df["noscope"] == True)]
+    print(df)
 
 
 """

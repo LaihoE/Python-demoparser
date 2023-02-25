@@ -34,7 +34,7 @@ fn parse_demo(demo_path: String) -> i32 {
         true,
         false,
         //vec![],
-        (0..10000).collect(),
+        (1000..1001).collect(),
         vec![],
         vec!["player@m_vecOrigin_X".to_string()],
         "player_death".to_string(),
@@ -68,17 +68,20 @@ fn main() {
         let p = path.as_ref().unwrap().path().to_str().unwrap().to_string();
         paths_v.push(p);
     }
-
+    /*
     rayon::ThreadPoolBuilder::new()
         .num_threads(12)
         .build_global()
         .unwrap();
-
+    */
     let this_p = &paths_v[0];
     let single = vec![this_p];
 
     use rayon::iter::ParallelIterator;
-    let x: Vec<i32> = single.iter().map(|f| parse_demo(f.to_string())).collect();
+    let x: Vec<i32> = paths_v[4..5]
+        .iter()
+        .map(|f| parse_demo(f.to_string()))
+        .collect();
 
     // 145
     let elapsed = now.elapsed();

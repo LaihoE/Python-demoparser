@@ -55,3 +55,90 @@ impl BytesVariant {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct PropColumn {
+    pub data: VarVec,
+}
+
+impl VarVec {
+    // TODO GENERICS HELLO? map propdata to varvec directly
+    pub fn push_propdata(&mut self, item: PropData) {
+        match item {
+            PropData::F32(p) => match self {
+                VarVec::F32(f) => f.push(Some(p)),
+                _ => {
+                    panic!("Tried to push a {:?} into a {:?} column", item, self);
+                }
+            },
+            PropData::I32(p) => match self {
+                VarVec::I32(f) => f.push(Some(p)),
+                _ => {
+                    panic!("Tried to push a {:?} into a {:?} column", item, self);
+                }
+            },
+            PropData::I64(p) => match self {
+                VarVec::I64(f) => f.push(Some(p)),
+                _ => {
+                    panic!("Tried to push a {:?} into a {:?} column", item, self);
+                }
+            },
+            PropData::String(p) => match self {
+                VarVec::String(f) => f.push(Some(p)),
+                _ => {
+                    println!("{:?}", self);
+                    panic!("Tried to push a {:?} into a string column", p);
+                }
+            },
+            _ => panic!("bad type for prop"),
+        }
+    }
+    pub fn push_string(&mut self, data: String) {
+        if let VarVec::String(f) = self {
+            f.push(Some(data))
+        }
+    }
+    pub fn push_string_none(&mut self) {
+        if let VarVec::String(f) = self {
+            f.push(None)
+        }
+    }
+    pub fn push_float_none(&mut self) {
+        if let VarVec::F32(f) = self {
+            f.push(None)
+        }
+    }
+    pub fn push_i32_none(&mut self) {
+        if let VarVec::I32(f) = self {
+            f.push(None)
+        }
+    }
+    pub fn push_none(&mut self) {
+        match self {
+            VarVec::I32(f) => f.push(None),
+            VarVec::F32(f) => f.push(None),
+            VarVec::String(f) => f.push(None),
+            _ => panic!("unk col while pushing none"),
+        }
+    }
+    pub fn push_u64(&mut self, data: u64) {
+        match self {
+            VarVec::U64(f) => f.push(Some(data)),
+            _ => panic!("TRIED TO PUSH SMALLER TYPE TO U64"),
+        }
+    }
+    pub fn push_i32(&mut self, data: i32) {
+        match self {
+            VarVec::I32(f) => f.push(Some(data)),
+            _ => panic!("i32 push panic"),
+        }
+    }
+    pub fn get_len(&self) -> usize {
+        match self {
+            VarVec::I32(v) => v.len(),
+            VarVec::F32(v) => v.len(),
+            VarVec::String(v) => v.len(),
+            _ => panic!("bad len type"),
+        }
+    }
+}

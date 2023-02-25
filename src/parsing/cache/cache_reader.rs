@@ -3,6 +3,7 @@ use crate::parsing::cache::GAME_EVENT_ID;
 use crate::parsing::demo_parsing::EidClsHistoryEntry;
 use crate::parsing::demo_parsing::ServerClass;
 use ahash::HashMap;
+use ahash::HashSet;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use flate2::bufread::ZlibDecoder;
 use itertools::izip;
@@ -65,9 +66,10 @@ impl ReadCache {
         }
     }
     pub fn read_index(&mut self) {
+        // Last 8 bytes is the offset
         let index_starts_at = &self.bytes[self.bytes.len() - 8..];
         let index_starts_at = usize::from_le_bytes(index_starts_at.try_into().unwrap());
-        let before = Instant::now();
+
         for chunk in self.bytes[index_starts_at..(self.bytes.len() - 8)].chunks(12) {
             let entry = IndexEntry {
                 byte_start_at: i32::from_le_bytes(chunk[..4].try_into().unwrap()),
@@ -76,7 +78,6 @@ impl ReadCache {
             };
             self.index.insert(entry.id, entry);
         }
-        println!("Serializing took: {:2?}", before.elapsed());
     }
     pub fn read_dt_ge_map(&mut self) -> (u64, u64) {
         let decompressed_bytes = self.read_bytes_from_index(-2);
@@ -131,7 +132,7 @@ impl ReadCache {
 
     pub fn filter_delta_ticks_wanted(
         &self,
-        deltas: &Vec<Delta>,
+        deltas: &Vec<&Delta>,
         wanted_ticks: &Vec<i32>,
     ) -> Vec<u64> {
         if deltas.len() == 0 {
@@ -150,10 +151,8 @@ impl ReadCache {
     }
     pub fn get_eid_cls_map(&mut self) -> Vec<EidClsHistoryEntry> {
         let decompressed_bytes = self.read_bytes_from_index(99999);
-        println!("READ {:?}", &decompressed_bytes[..10]);
 
         let number_structs = decompressed_bytes.len() / 12;
-        println!("NUM STRUCTS {}", number_structs);
 
         let CLS_SIZE = 4;
         let EID_SIZE = 4;
@@ -204,7 +203,7 @@ impl ReadCache {
         self.decompress_bytes(start_byte, end_byte)
     }
 
-    pub fn read_by_id(&mut self, id: i32) -> Vec<u64> {
+    pub fn read_by_id(&mut self, id: i32, wanted_ticks: &Vec<i32>) -> Vec<u64> {
         let decompressed_bytes = self.read_bytes_from_index(id);
         let number_structs = decompressed_bytes.len() / 12;
 
@@ -241,8 +240,18 @@ impl ReadCache {
                 tick: *tick,
             });
         }
-        let x = &self.deltas[&id];
-        let res = self.filter_delta_ticks_wanted(x, &vec![11111, 66666]);
-        res
+
+        let mut bytes = HashSet::default();
+        let all_deltas = &self.deltas[&id];
+
+        for entid in 1..64 {
+            let this_ent_deltas: Vec<&Delta> =
+                all_deltas.iter().filter(|x| x.entid == entid).collect_vec();
+            let this_bytes = self.filter_delta_ticks_wanted(&this_ent_deltas, wanted_ticks);
+            for b in this_bytes {
+                bytes.insert(b);
+            }
+        }
+        bytes.iter().map(|x| *x).collect_vec()
     }
 }

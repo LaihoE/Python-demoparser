@@ -20,7 +20,7 @@ static forbidden: &'static [i32] = &[0, 1, 2, 37, 103, 93, 59, 58, 40, 41, 26, 2
 pub struct Entity {
     pub class_id: u32,
     pub entity_id: i32,
-    // pub props: HashMap<String, PropAtom, RandomState>,
+    pub props: Vec<Option<PropData>>,
 }
 
 #[derive(Debug, Clone)]
@@ -71,7 +71,7 @@ impl Parser {
                 let mut entity = Entity {
                     class_id: cls_id,
                     entity_id: entity_id,
-                    //props: HashMap::default(),
+                    props: vec![None; 10000],
                 };
                 self.state.eid_cls_history.push(EidClsHistoryEntry {
                     eid: entity_id,
@@ -114,6 +114,7 @@ impl Parser {
                 let entity = Entity {
                     class_id: cls_id,
                     entity_id: entity_id,
+                    props: vec![None; 10000],
                 };
                 self.state.entities.insert(entity_id, entity);
             }
@@ -127,7 +128,7 @@ impl Parser {
         let mut idx = 0;
 
         self.create_ent_if_not_exist(entity_id);
-        let entity = &self.state.entities[&entity_id];
+        let mut entity = self.state.entities.get_mut(&entity_id).unwrap();
 
         loop {
             val = bitreader.read_inx(val, new_way).unwrap();
@@ -158,7 +159,11 @@ impl Parser {
             let idx = self.state.workhorse[i];
             let prop = &sv_cls.props[idx as usize];
             let p = bitreader.decode(prop);
-            println!("{} {:?}", self.state.tick, p);
+            if prop.name.contains("m_iHealth") {
+                println!("{} {} {} {:?}", idx, prop.name, self.state.tick, p);
+            }
+
+            entity.props[idx as usize] = p;
         }
     }
 }
@@ -168,7 +173,6 @@ pub fn parse_baselines(
     sv_cls: &ServerClass,
     baselines: &mut HashMap<u32, HashMap<String, PropData>>,
 ) {
-    println!("{:?}", data.len());
     let mut b = MyBitreader::new(data);
     let mut val = -1;
     let new_way = b.read_boolie().unwrap();

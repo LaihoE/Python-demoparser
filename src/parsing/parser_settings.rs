@@ -28,6 +28,7 @@ pub struct ParserState {
     pub eid_cls_history: Vec<EidClsHistoryEntry>,
     pub game_event_history: Vec<GameEventHistory>,
     pub stringtable_history: Vec<StringTableHistory>,
+    pub output: HashMap<i32, PropColumn>,
 }
 
 pub struct Maps {
@@ -37,7 +38,7 @@ pub struct Maps {
     pub serverclass_map: HashMap<u16, ServerClass>,
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
-    //pub players: HashMap<u64, UserInfo, RandomState>,
+    pub players: HashMap<u64, UserInfo>,
     pub userid_sid_map: HashMap<u32, Vec<(u64, i32)>>,
     pub sid_entid_map: HashMap<u64, Vec<(u32, i32)>>,
     pub uid_eid_map: HashMap<u32, Vec<(u32, i32)>>,
@@ -99,7 +100,7 @@ impl Parser {
                     serverclass_map: HashMap::default(),
                     event_map: Some(HashMap::default()),
                     dt_map: Some(HashMap::default()),
-                    //players: HashMap::default(),
+                    players: HashMap::default(),
                     userid_sid_map: HashMap::default(),
                     baselines: HashMap::default(),
                     baseline_no_cls: HashMap::default(),
@@ -138,6 +139,7 @@ impl Parser {
                     eid_cls_history: vec![],
                     game_event_history: vec![],
                     stringtable_history: vec![],
+                    output: HashMap::default(),
                 };
                 match data {
                     Mmap3(m) => Ok(Self {

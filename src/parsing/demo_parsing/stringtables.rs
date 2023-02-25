@@ -92,12 +92,15 @@ impl Parser {
     }
 
     pub fn create_string_table(&mut self, byte_reader: &mut ByteReader, size: usize) {
-        self.state.stringtable_history.push(StringTableHistory {
-            byte: self.state.frame_started_at as i32,
-        });
         let wanted_bytes = &self.bytes[byte_reader.byte_idx..byte_reader.byte_idx + size as usize];
         byte_reader.skip_n_bytes(size.try_into().unwrap());
         let data: CSVCMsg_CreateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
+
+        if data.name() == "userinfo" {
+            self.state.stringtable_history.push(StringTableHistory {
+                byte: self.state.frame_started_at as i32,
+            });
+        }
 
         let mut st = StringTable {
             name: data.name().to_string(),
@@ -122,7 +125,7 @@ impl Parser {
                     entry: "".to_string(),
                 })
             }
-            let new_players = Parser::update_string_table(
+            let new_players = self.update_string_table(
                 data.string_data(),
                 &st,
                 data.num_entries(),
@@ -134,6 +137,7 @@ impl Parser {
     }
 
     pub fn update_string_table(
+        &mut self,
         data: &[u8],
         st: &StringTable,
         num_entries: i32,
@@ -207,7 +211,7 @@ impl Parser {
                     ui.entity_id = entry_index as u32 + 1;
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
-                    new_userinfo.push(ui);
+                    self.maps.players.insert(ui.xuid, ui);
                 }
             }
         }
@@ -218,9 +222,6 @@ impl Parser {
         }
     }
     pub fn update_string_table_msg(&mut self, byte_reader: &mut ByteReader, size: usize) {
-        self.state.stringtable_history.push(StringTableHistory {
-            byte: self.state.frame_started_at as i32,
-        });
         let wanted_bytes = &self.bytes[byte_reader.byte_idx..byte_reader.byte_idx + size as usize];
         byte_reader.skip_n_bytes(size.try_into().unwrap());
         let data: CSVCMsg_UpdateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
@@ -228,7 +229,9 @@ impl Parser {
         if data.table_id() != 7 {
             return;
         }
-
+        self.state.stringtable_history.push(StringTableHistory {
+            byte: self.state.frame_started_at as i32,
+        });
         let st = StringTable {
             userinfo: true,
             name: "userinfo".to_string(),
@@ -237,7 +240,7 @@ impl Parser {
             udfs: false,
             data: vec![],
         };
-        let new_userinfos = Parser::update_string_table(
+        let new_userinfos = self.update_string_table(
             data.string_data(),
             &st,
             data.num_changed_entries(),

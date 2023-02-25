@@ -1,4 +1,3 @@
-/*
 mod parsing;
 
 use arrow::ffi;
@@ -26,6 +25,7 @@ use pyo3::{PyAny, PyObject, PyResult};
 use pyo3::{PyErr, Python};
 
 use parsing::utils::TYPEHM;
+use parsing::variants::*;
 use pyo3::types::IntoPyDict;
 use std::io::prelude::*;
 use std::path::Path;
@@ -143,7 +143,7 @@ impl DemoParser {
     pub fn py_new(demo_path: String) -> PyResult<Self> {
         Ok(DemoParser { path: demo_path })
     }
-
+    /*
     #[args(py_kwargs = "**")]
     pub fn parse_events(
         &self,
@@ -213,7 +213,7 @@ impl DemoParser {
             }
         }
     }
-
+    */
     #[args(py_kwargs = "**")]
     pub fn parse_ticks(
         &self,
@@ -222,7 +222,7 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
         let mut real_props = rm_user_friendly_names(&wanted_props);
-
+        /*
         let unk_props = check_validity_props(&real_props);
         if !unk_props.is_empty() {
             return Err(PyKeyError::new_err(format!(
@@ -230,6 +230,7 @@ impl DemoParser {
                 unk_props
             )));
         }
+        */
         let (wanted_players, wanted_ticks) = parse_kwargs_ticks(py_kwargs);
         let wanted_ticks_len = wanted_ticks.len();
         let biggest_wanted_tick = if wanted_ticks_len > 0 {
@@ -237,20 +238,20 @@ impl DemoParser {
         } else {
             &99999999
         };
-
-        let parser = Parser::new(
+        let mut parser = Parser::new(
             self.path.clone(),
             true,
             false,
-            wanted_ticks.clone(),
-            wanted_players,
-            real_props.clone(),
-            "".to_string(),
+            //vec![],
+            (1000..1001).collect(),
+            vec![],
+            vec!["player@m_vecOrigin_X".to_string()],
+            "player_death".to_string(),
             false,
             false,
-            true,
-            *biggest_wanted_tick,
-            wanted_props.clone(),
+            false,
+            1000000,
+            vec![],
         );
 
         match parser {
@@ -261,33 +262,38 @@ impl DemoParser {
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
 
-                parser.settings.playback_frames = if wanted_ticks_len == 0 {
-                    h.playback_frames as usize
-                } else {
-                    wanted_ticks_len
-                };
-                parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
-                let mut ss = vec![];
-                let output = parser.start_parsing();
+                parser.start_parsing();
 
-                let column_names: Vec<&str> = output.df.iter().map(|x| x.name().clone()).collect();
-                for s in &output.df {
-                    let py_series = rust_series_to_py_series(&s).unwrap();
-                    ss.push(py_series);
+                real_props.push("tick".to_string());
+                real_props.push("steamid".to_string());
+                real_props.push("name".to_string());
+                wanted_props.push("tick".to_string());
+                wanted_props.push("steamid".to_string());
+                wanted_props.push("name".to_string());
+
+                let mut series = vec![];
+
+                let v = &parser.state.output[&1229];
+                match &v.data {
+                    VarVec::I32(i) => {
+                        let s = Series::new("x", i);
+                        let py_series = rust_series_to_py_series(&s).unwrap();
+                        series.push(py_series);
+                    }
+                    _ => {}
                 }
 
-                wanted_props.push("steamid".to_string());
-                wanted_props.push("tick".to_string());
-                let polars = py.import("polars").unwrap();
-                // let all_series_py = ss.to_object(py);
-                let df = polars.call_method1("DataFrame", (ss,)).unwrap();
-                df.setattr("columns", column_names.to_object(py)).unwrap();
+                let polars = py.import("polars")?;
+                let all_series_py = series.to_object(py);
+                let df = polars.call_method1("DataFrame", (all_series_py,))?;
+                //df.setattr("columns", wanted_props.to_object(py)).unwrap();
                 let pandas_df = df.call_method0("to_pandas").unwrap();
                 Ok(pandas_df.to_object(py))
             }
         }
     }
 
+    /*
     #[args(py_kwargs = "**")]
     pub fn parse_players(&self, py: Python) -> PyResult<PyObject> {
         // Need to clean up this function.
@@ -370,6 +376,7 @@ impl DemoParser {
             }
         }
     }
+    */
 
     pub fn parse_header(&self) -> PyResult<Py<PyAny>> {
         let parser = Parser::new(
@@ -399,7 +406,7 @@ impl DemoParser {
         }
     }
 }
-
+/*
 pub fn get_player_team(ent: &Entity) -> i32 {
     match ent.props.get("m_iTeamNum") {
         Some(p) => match p.data {
@@ -477,6 +484,7 @@ pub fn rank_id_to_name(id: i32) -> String {
         _ => "Unranked".to_string(),
     }
 }
+*/
 pub fn rm_user_friendly_names(names: &Vec<String>) -> Vec<String> {
     let mut unfriendly_names = vec![];
     for name in names {
@@ -617,4 +625,3 @@ fn demoparser(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<DemoParser>()?;
     Ok(())
 }
-*/

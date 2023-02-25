@@ -26,7 +26,7 @@ impl Parser {
         let _ = byte_reader.read_i32();
 
         loop {
-            let _ = byte_reader.read_varint();
+            let x = byte_reader.read_varint();
             let size = byte_reader.read_varint();
             let data = byte_reader.read_n_bytes(size);
 
@@ -132,9 +132,6 @@ impl Parser {
         table: &CSVCMsg_SendTable,
         prop: &Sendprop_t,
     ) -> bool {
-        /*
-        excl is very short so O(n) probably best/fine
-        */
         for item in excl {
             if table.net_table_name() == item.dt_name() && prop.var_name() == item.var_name() {
                 return true;

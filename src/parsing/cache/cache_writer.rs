@@ -41,32 +41,6 @@ impl WriteCache {
             buffer: vec![],
         }
     }
-    pub fn write_dt_ge_map(&mut self, ge_start_at: u64, dt_start_at: u64) {
-        let mut bytes = vec![];
-        bytes.extend(dt_start_at.to_le_bytes());
-        bytes.extend(ge_start_at.to_le_bytes());
-        self.append_to_buffer(&bytes, -2);
-    }
-    pub fn flush(&mut self) {
-        let mut index_bytes = vec![];
-        let index_starts_at_byte = self.buffer.len();
-        for entry in &self.index {
-            index_bytes.extend(entry.byte_start_at.to_le_bytes());
-            index_bytes.extend(entry.byte_end_at.to_le_bytes());
-            index_bytes.extend(entry.id.to_le_bytes());
-        }
-        self.buffer.extend(index_bytes);
-        self.buffer.extend(index_starts_at_byte.to_le_bytes());
-        println!("wrote: {} bytes", self.buffer.len());
-        fs::write(&self.path, &self.buffer).unwrap();
-    }
-    pub fn write_eid_cls_map(&mut self, eid_cls_map: &Vec<EidClsHistoryEntry>) {
-        let mut bytes = vec![];
-        bytes.extend(eid_cls_map.iter().flat_map(|x| x.cls_id.to_le_bytes()));
-        bytes.extend(eid_cls_map.iter().flat_map(|x| x.eid.to_le_bytes()));
-        bytes.extend(eid_cls_map.iter().flat_map(|x| x.tick.to_le_bytes()));
-        self.append_to_buffer(&bytes, EID_CLS_MAP_ID);
-    }
     pub fn compress_bytes(&mut self, bytes: &[u8]) -> Vec<u8> {
         let mut e = ZlibEncoder::new(Vec::new(), Compression::fast());
         e.write_all(bytes).unwrap();
@@ -82,6 +56,33 @@ impl WriteCache {
         self.index.push(entry);
         self.buffer.extend(compressed);
     }
+    pub fn flush(&mut self) {
+        let mut index_bytes = vec![];
+        let index_starts_at_byte = self.buffer.len();
+        for entry in &self.index {
+            index_bytes.extend(entry.byte_start_at.to_le_bytes());
+            index_bytes.extend(entry.byte_end_at.to_le_bytes());
+            index_bytes.extend(entry.id.to_le_bytes());
+        }
+        self.buffer.extend(index_bytes);
+        self.buffer.extend(index_starts_at_byte.to_le_bytes());
+        fs::write(&self.path, &self.buffer).unwrap();
+    }
+    pub fn write_dt_ge_map(&mut self, ge_start_at: u64, dt_start_at: u64) {
+        let mut bytes = vec![];
+        bytes.extend(dt_start_at.to_le_bytes());
+        bytes.extend(ge_start_at.to_le_bytes());
+        self.append_to_buffer(&bytes, -2);
+    }
+
+    pub fn write_eid_cls_map(&mut self, eid_cls_map: &Vec<EidClsHistoryEntry>) {
+        let mut bytes = vec![];
+        bytes.extend(eid_cls_map.iter().flat_map(|x| x.cls_id.to_le_bytes()));
+        bytes.extend(eid_cls_map.iter().flat_map(|x| x.eid.to_le_bytes()));
+        bytes.extend(eid_cls_map.iter().flat_map(|x| x.tick.to_le_bytes()));
+        self.append_to_buffer(&bytes, EID_CLS_MAP_ID);
+    }
+
     pub fn write_game_events(&mut self, game_events: &Vec<GameEventHistory>) {
         let mut bytes = vec![];
         bytes.extend(game_events.iter().flat_map(|x| x.byte.to_le_bytes()));
@@ -1333,5 +1334,4 @@ pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
 "DT_CSPlayerResource-m_bAlive-008" => 1241,
 "DT_CSPlayerResource-m_nPersonaDataPublicLevel-002" => 1242,
 "DT_CSPlayerResource-m_iPing-013" => 1243,
-
 };

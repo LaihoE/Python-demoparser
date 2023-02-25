@@ -12,6 +12,7 @@ use mimalloc::MiMalloc;
 use ndarray::arr1;
 use ndarray::{arr2, s};
 use polars::export::regex::internal::Inst;
+use polars::prelude::NamedFrom;
 use polars::series::Series;
 use rayon::prelude::IntoParallelRefIterator;
 use std::collections::HashSet;
@@ -40,29 +41,49 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 impl Parser {
     pub fn start_parsing(&mut self) {
         self.speed();
+        //println!("{:?}", self.state.output);
         //self.parse_bytes(vec![]);
         //self.indicies_modify();
     }
-    pub fn speed(&mut self) {
-        let mut rc = ReadCache::new(&self.bytes);
-        rc.read_index();
+    fn generate_name_id_map(&mut self) -> HashMap<String, usize> {
+        let mut mapping = HashMap::default();
+        let m = &self.maps.serverclass_map[&40];
+        for (idx, p) in m.props.iter().enumerate() {
+            let key = p.table.to_owned() + "-" + &p.name;
+            mapping.insert(key, idx);
+        }
+        mapping
+    }
+    fn parse_mandatory_ticks(&mut self, read_cache: &mut ReadCache) -> HashMap<String, usize> {
+        // Read index at end of file
+        read_cache.read_index();
+        // Used in entities.rs
+        self.state.eid_cls_history = read_cache.get_eid_cls_map();
         let mut wanted_bytes = vec![];
-        let (dt_start, ge_start) = rc.read_dt_ge_map();
+        // 2 maps needed for parsing
+        let (dt_start, ge_start) = read_cache.read_dt_ge_map();
+        // Players come trough here (name, steamid, entid etc.)
+        let string_table_bytes = read_cache.read_stringtables();
         wanted_bytes.push(dt_start);
         wanted_bytes.push(ge_start);
-
-        let map = rc.get_eid_cls_map();
-        self.state.eid_cls_history = map;
-
-        let mut byt = rc.read_by_id(529);
-        let before = Instant::now();
-
-        let sts = rc.read_stringtables();
-        println!("ST {:?}", sts);
-        wanted_bytes.extend(byt);
-
+        wanted_bytes.extend(string_table_bytes);
         self.parse_bytes(wanted_bytes);
-        println!("SPEED {:2?}", before.elapsed());
+        self.generate_name_id_map()
+    }
+    pub fn speed(&mut self) {
+        let mut read_cache = ReadCache::new(&self.bytes);
+
+        let name_id_map = self.parse_mandatory_ticks(&mut read_cache);
+
+        let mut wanted_bytes = vec![];
+        for prop in &self.settings.wanted_props {
+            wanted_bytes.extend(read_cache.read_by_id(342, &self.settings.wanted_ticks));
+        }
+
+        wanted_bytes.sort();
+        let uniq: Vec<u64> = wanted_bytes.iter().map(|x| *x).unique().collect();
+
+        self.parse_bytes(uniq);
     }
 
     pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>) {
@@ -75,6 +96,7 @@ impl Parser {
                 let (cmd, tick) = byte_reader.read_frame();
                 self.state.tick = tick;
                 self.parse_cmd(cmd, &mut byte_reader);
+                self.collect_data();
                 if n_byte_readers > 1 {
                     break;
                 }
@@ -87,10 +109,7 @@ impl Parser {
         and transforms into pidx: Vec<(tick, entid)> pairs.
         */
         let mut wc = WriteCache::new(&self.bytes);
-
-        //wc.write_maps(self.state.dt_started_at, self.state.ge_map_started_at);
         wc.write_packet_ents(&self.state.test, &self.maps.serverclass_map);
-        let before = Instant::now();
         wc.write_eid_cls_map(&self.state.eid_cls_history);
         wc.write_dt_ge_map(self.state.dt_started_at, self.state.ge_map_started_at);
         wc.write_game_events(&self.state.game_event_history);
@@ -102,11 +121,6 @@ impl Parser {
         let map = rc.get_eid_cls_map();
         self.state.eid_cls_history = map;
 
-        let byt = rc.read_by_id(558);
-        let before = Instant::now();
-        println!("{:?}", byt);
-        self.parse_bytes(byt);
-        println!("SPEED {:2?}", before.elapsed());
         vec![]
     }
     pub fn parse_cmd(&mut self, cmd: u8, byte_reader: &mut ByteReader) {

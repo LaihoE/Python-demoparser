@@ -4,6 +4,9 @@ use arrow::ffi;
 use flate2::read::GzDecoder;
 
 use itertools::Itertools;
+use parsing::demo_parsing::collect_data::AMMO_ID;
+use parsing::demo_parsing::collect_data::NAME_ID;
+use parsing::demo_parsing::collect_data::TICK_ID;
 use parsing::demo_parsing::*;
 use parsing::parser::Parser;
 //use parsing::tick_cache::gather_props_backwards;
@@ -25,7 +28,7 @@ use pyo3::types::PyDict;
 use pyo3::{PyAny, PyObject, PyResult};
 use pyo3::{PyErr, Python};
 
-use parsing::utils::TYPEHM;
+use parsing::utils::CACHE_ID_MAP;
 use parsing::variants::*;
 use pyo3::types::IntoPyDict;
 use std::io::prelude::*;
@@ -249,9 +252,9 @@ impl DemoParser {
             true,
             false,
             //vec![],
-            (1000..1001).collect(),
+            (1000..100001).collect(),
             vec![],
-            vec!["player@m_vecOrigin_X".to_string()],
+            wanted_props.clone(),
             "player_death".to_string(),
             false,
             false,
@@ -279,10 +282,41 @@ impl DemoParser {
 
                 let mut series = vec![];
 
-                let v = &parser.state.output[&1229];
+                let v = &parser.state.output[&-20];
+                match &v.data {
+                    VarVec::String(i) => {
+                        let s = Series::new("weapon", i);
+                        println!("{:?}", s);
+                        let py_series = rust_series_to_py_series(&s).unwrap();
+                        series.push(py_series);
+                    }
+                    _ => {}
+                }
+                let v = &parser.state.output[&NAME_ID];
+                match &v.data {
+                    VarVec::String(i) => {
+                        let s = Series::new("name", i);
+                        println!("{:?}", s);
+                        let py_series = rust_series_to_py_series(&s).unwrap();
+                        series.push(py_series);
+                    }
+                    _ => {}
+                }
+                let v = &parser.state.output[&TICK_ID];
                 match &v.data {
                     VarVec::I32(i) => {
-                        let s = Series::new("x", i);
+                        let s = Series::new("tick", i);
+                        println!("{:?}", s);
+                        let py_series = rust_series_to_py_series(&s).unwrap();
+                        series.push(py_series);
+                    }
+                    _ => {}
+                }
+                let v = &parser.state.output[&AMMO_ID];
+                match &v.data {
+                    VarVec::I32(i) => {
+                        let s = Series::new("ammo", i);
+                        println!("{:?}", s);
                         let py_series = rust_series_to_py_series(&s).unwrap();
                         series.push(py_series);
                     }

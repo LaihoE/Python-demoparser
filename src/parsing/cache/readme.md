@@ -17,7 +17,7 @@ The 3 main things that we need to focus on is small file size, fast read and som
 Especially important is to be able to quickly find the correct rows for rare props that are only set a couple of times during the demo. We don't want to uncompress the entire cache just to be able to find where players ranks are stored. This leads to Optimization 1:
 
 ## Optimization 1 - Store each prop seperately
-While this makes the file bigger, this is almost a must for fast performance. Currently the cache is just a ZIP archive with one file per prop. I'm not completely happy with ZIP due to the central header being somewhat expensive to parse when you have many files. HDF5 is the other obvious alternative, but the dependencies seem quite heavy and im not sure about how fast its "central header" is to parse. Please share if you have other suggestions.
+While this makes the file bigger, this is almost a must for fast performance. Currently the cache is just a simple sequential file with an index in the end.
 
 
 ## Optimization 2 - Byte and tick to id

@@ -1,6 +1,8 @@
 use crate::parsing::cache::cache_reader::ReadCache;
+use crate::parsing::cache::AMMO_ID;
 use crate::parsing::demo_parsing::*;
 use crate::parsing::parser_settings::*;
+use crate::parsing::utils::CACHE_ID_MAP;
 pub use crate::parsing::variants::*;
 use ahash::HashMap;
 #[cfg(feature = "blosc")]
@@ -9,15 +11,8 @@ use hdf5::{File, H5Type, Result};
 use itertools::Itertools;
 use memmap2::Mmap;
 use mimalloc::MiMalloc;
-use ndarray::arr1;
 use ndarray::{arr2, s};
-use polars::export::regex::internal::Inst;
-use polars::prelude::NamedFrom;
-use polars::series::Series;
-use rayon::prelude::IntoParallelRefIterator;
-use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Instant;
 use std::u8;
 
 use super::cache::WriteCache;
@@ -40,17 +35,21 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 
 impl Parser {
     pub fn start_parsing(&mut self) {
-        //self.speed();
-        // println!("{:?}", self.state.output);
-        self.parse_bytes(vec![]);
-        self.indicies_modify();
+        self.speed();
+        //self.parse_bytes(vec![], true);
+        //self.indicies_modify();
     }
     fn generate_name_id_map(&mut self) -> HashMap<String, usize> {
         let mut mapping = HashMap::default();
-        let m = &self.maps.serverclass_map[&40];
-        for (idx, p) in m.props.iter().enumerate() {
-            let key = p.table.to_owned() + "-" + &p.name;
-            mapping.insert(key, idx);
+
+        for (k, m) in &self.maps.serverclass_map {
+            for (idx, p) in m.props.iter().enumerate() {
+                if p.name == "m_hActiveWeapon" && k == &40 {
+                    println!("{} {}", k, p.name);
+                    self.state.weapon_handle_id = idx as i32;
+                }
+                mapping.insert(p.name.clone(), idx);
+            }
         }
         mapping
     }
@@ -62,10 +61,12 @@ impl Parser {
         read_cache.read_index();
         // Used in entities.rs
         self.state.eid_cls_history = read_cache.get_eid_cls_map();
+
         let mut wanted_bytes = vec![];
         // 2 maps needed for parsing
         let (dt_start, ge_start) = read_cache.read_dt_ge_map();
         if dt_start == 0 && ge_start == 0 {
+            println!("NO MAP");
             return None;
         }
         // Players come trough here (name, steamid, entid etc.)
@@ -73,9 +74,9 @@ impl Parser {
         wanted_bytes.push(dt_start);
         wanted_bytes.push(ge_start);
         wanted_bytes.extend(string_table_bytes);
-        self.parse_bytes(wanted_bytes);
-        //Some(self.generate_name_id_map())
-        Some(HashMap::default())
+        self.parse_bytes(wanted_bytes, false);
+        Some(self.generate_name_id_map())
+        //Some(HashMap::default())
     }
     pub fn speed(&mut self) {
         let mut read_cache = ReadCache::new(&self.bytes);
@@ -84,20 +85,28 @@ impl Parser {
             Some(map) => map,
             None => return,
         };
-        let mut wanted_bytes = vec![];
-        wanted_bytes.extend(read_cache.filter_game_events(24));
 
+        let mut wanted_bytes = vec![];
         for prop in &self.settings.wanted_props {
-            //wanted_bytes.extend(read_cache.read_by_id(342, &self.settings.wanted_ticks));
+            let prop_id = CACHE_ID_MAP[prop];
+            let b = read_cache.read_by_id_players(prop_id as i32, &self.settings.wanted_ticks);
+            wanted_bytes.extend(b);
         }
+        wanted_bytes.extend(read_cache.read_weapons());
+
+        println!("WBL: {:?}", wanted_bytes.len());
 
         wanted_bytes.sort();
         let uniq: Vec<u64> = wanted_bytes.iter().map(|x| *x).unique().collect();
 
-        self.parse_bytes(uniq);
+        self.state.clip_id = name_id_map["m_iClip1"] as i32;
+        self.state.item_def_id = name_id_map["m_iItemDefinitionIndex"] as i32;
+        println!("SSSS {}", name_id_map["m_iItemDefinitionIndex"]);
+
+        self.parse_bytes(uniq, true);
     }
 
-    pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>) {
+    pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>, should_collect: bool) {
         let byte_readers = ByteReader::get_byte_readers(&self.bytes, wanted_bytes);
         let n_byte_readers = byte_readers.len();
 
@@ -106,8 +115,13 @@ impl Parser {
                 self.state.frame_started_at = byte_reader.byte_idx as u64;
                 let (cmd, tick) = byte_reader.read_frame();
                 self.state.tick = tick;
+                //println!("{} {}", self.state.weapon_handle_id, self.state.item_def_id);
                 self.parse_cmd(cmd, &mut byte_reader);
-                self.collect_data();
+                if should_collect {
+                    self.collect_data(21);
+                    self.collect_weapons();
+                }
+
                 if n_byte_readers > 1 {
                     break;
                 }

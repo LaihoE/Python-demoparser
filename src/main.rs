@@ -3,6 +3,7 @@ use mimalloc::MiMalloc;
 use ndarray::{arr1, Array1};
 use parsing::parser::Parser;
 use parsing::utils::Header;
+use parsing::utils::CACHE_ID_MAP;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 use std::fs;
 use std::time::Instant;
@@ -17,6 +18,12 @@ fn parse_demo(demo_path: String) -> i32 {
     // m_iHealth
     // m_angEyeAngles[1]
     println!("{}", demo_path);
+
+    let mut idx = 0;
+    for (k, v) in &CACHE_ID_MAP {
+        //println!("{:?} => {},", k, idx);
+        idx += 1;
+    }
 
     if demo_path
         == "/home/laiho/Documents/demos/faceits/cu/003309131115255562271_1824323488 (1).dem"
@@ -34,9 +41,9 @@ fn parse_demo(demo_path: String) -> i32 {
         true,
         false,
         //vec![],
-        (1000..1001).collect(),
+        (50000..50001).collect(),
         vec![],
-        vec!["player@m_vecOrigin_X".to_string()],
+        vec!["m_vecOrigin".to_string()],
         "player_death".to_string(),
         false,
         false,
@@ -74,11 +81,11 @@ fn main() {
         .build_global()
         .unwrap();
 
-    let this_p = &paths_v[0];
+    let this_p = &paths_v[8];
     let single = vec![this_p];
 
     use rayon::iter::ParallelIterator;
-    let x: Vec<i32> = paths_v
+    let x: Vec<i32> = single
         .par_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();

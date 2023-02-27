@@ -23,6 +23,8 @@ use std::time::Instant;
 use zip::result::ZipError;
 use zip::{ZipArchive, ZipWriter};
 
+use super::AMMO_ID;
+use super::ITEMDEF_ID;
 use super::STRING_TABLE_ID;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -210,7 +212,7 @@ impl ReadCache {
         self.decompress_bytes(start_byte, end_byte)
     }
 
-    pub fn read_by_id(&mut self, id: i32, wanted_ticks: &Vec<i32>) -> Vec<u64> {
+    pub fn read_by_id_players(&mut self, id: i32, wanted_ticks: &Vec<i32>) -> Vec<u64> {
         let decompressed_bytes = self.read_bytes_from_index(id);
         let number_structs = decompressed_bytes.len() / 12;
 
@@ -260,5 +262,37 @@ impl ReadCache {
         }
         bytes.iter().map(|x| *x).collect_vec()
     }
-    pub fn find_weapon(&mut self) {}
+    pub fn read_weapons(&mut self) -> Vec<u64> {
+        let ids = vec![AMMO_ID, ITEMDEF_ID];
+        let mut out_bytes = vec![];
+        for id in ids {
+            let decompressed_bytes = self.read_bytes_from_index(id);
+            let number_structs = decompressed_bytes.len() / 12;
+
+            let TICKS_SIZE = 4;
+            let BYTES_SIZE = 4;
+            let ENTIDS_SIZE = 4;
+
+            let ticks_end_at = number_structs * BYTES_SIZE;
+            let bytes_start_at = ticks_end_at;
+            let bytes_end_at = bytes_start_at + (number_structs * BYTES_SIZE);
+            let entids_start_at = bytes_end_at;
+
+            let mut start_bytes = vec![];
+            let mut entids = vec![];
+            let mut ticks = vec![];
+
+            for bytes in decompressed_bytes[..ticks_end_at].chunks(TICKS_SIZE) {
+                ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+            }
+            for bytes in decompressed_bytes[bytes_start_at..bytes_end_at].chunks(BYTES_SIZE) {
+                start_bytes.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+            }
+            for bytes in decompressed_bytes[entids_start_at..].chunks(ENTIDS_SIZE) {
+                entids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+            }
+            out_bytes.extend(start_bytes.iter().map(|x| *x as u64).unique());
+        }
+        out_bytes
+    }
 }

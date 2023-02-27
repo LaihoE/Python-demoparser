@@ -1,6 +1,6 @@
 use crate::parsing::demo_parsing::*;
 use crate::parsing::utils::read_file;
-use crate::parsing::utils::TYPEHM;
+use crate::parsing::utils::CACHE_ID_MAP;
 use crate::parsing::variants::BytesVariant::Mmap3;
 pub use crate::parsing::variants::*;
 use crate::Parser;
@@ -16,7 +16,7 @@ pub struct ParserState {
     pub tick: i32,
     pub round: i32,
     pub entities: HashMap<i32, Entity>,
-    //pub stringtables: Vec<StringTable>,
+    pub stringtables: Vec<StringTable>,
     pub game_events: Vec<GameEvent>,
     pub ge_map_started_at: u64,
     pub dt_started_at: u64,
@@ -29,6 +29,9 @@ pub struct ParserState {
     pub game_event_history: Vec<GameEventHistory>,
     pub stringtable_history: Vec<StringTableHistory>,
     pub output: HashMap<i32, PropColumn>,
+    pub weapon_handle_id: i32,
+    pub clip_id: i32,
+    pub item_def_id: i32,
 }
 
 pub struct Maps {
@@ -42,7 +45,7 @@ pub struct Maps {
     pub userid_sid_map: HashMap<u32, u64>,
     pub sid_entid_map: HashMap<u64, u32>,
     pub uid_eid_map: HashMap<u32, u32>,
-    pub baselines: HashMap<u32, HashMap<String, PropData>>,
+    pub baselines: HashMap<u32, HashMap<i32, PropData>>,
     pub baseline_no_cls: HashMap<u32, Vec<u8>>,
 }
 
@@ -80,7 +83,7 @@ impl Parser {
         let mut extra_wanted_props = vec![];
 
         for p in &wanted_props {
-            match TYPEHM.get(p) {
+            match CACHE_ID_MAP.get(p) {
                 Some(_) => match &p[(p.len() - 1)..] {
                     "X" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
                     "Y" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
@@ -128,7 +131,7 @@ impl Parser {
                     tick: 0,
                     entities: HashMap::default(),
                     game_events: vec![],
-                    //stringtables: vec![],
+                    stringtables: vec![],
                     dt_started_at: 0,
                     ge_map_started_at: 0,
                     workhorse: vec![0; 20000],
@@ -140,6 +143,9 @@ impl Parser {
                     game_event_history: vec![],
                     stringtable_history: vec![],
                     output: HashMap::default(),
+                    clip_id: 0,
+                    weapon_handle_id: 0,
+                    item_def_id: 0,
                 };
                 match data {
                     Mmap3(m) => Ok(Self {

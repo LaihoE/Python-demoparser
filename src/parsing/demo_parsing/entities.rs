@@ -6,6 +6,7 @@ use crate::parsing::variants::PropData;
 use crate::Parser;
 use ahash::HashMap;
 use ahash::RandomState;
+use bitter::BitReader;
 use csgoproto::netmessages::csvcmsg_send_table::Sendprop_t;
 use csgoproto::netmessages::CSVCMsg_PacketEntities;
 use protobuf::Message;
@@ -43,6 +44,7 @@ pub struct EidClsHistoryEntry {
     pub eid: i32,
     pub cls_id: u32,
     pub tick: i32,
+    pub byte: i32,
 }
 
 impl Parser {
@@ -57,7 +59,7 @@ impl Parser {
 
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var().unwrap() as i32);
-
+            //println!("{}", entity_id);
             if b.read_boolie().unwrap() {
                 b.read_boolie();
             } else if b.read_boolie().unwrap() {
@@ -70,10 +72,20 @@ impl Parser {
                     entity_id: entity_id,
                     props: vec![None; 10000],
                 };
+                match self.maps.baselines.get(&cls_id) {
+                    Some(baseline) => {
+                        for (k, v) in baseline {
+                            entity.props[*k as usize] = Some(v.clone());
+                        }
+                    }
+                    None => {}
+                }
+
                 self.state.eid_cls_history.push(EidClsHistoryEntry {
                     eid: entity_id,
                     cls_id: cls_id,
                     tick: self.state.tick,
+                    byte: self.state.frame_started_at as i32,
                 });
                 self.state.entities.insert(entity_id, entity);
                 self.update_entity(&mut b, entity_id);
@@ -86,8 +98,9 @@ impl Parser {
     fn find_cls_id(history: &Vec<EidClsHistoryEntry>, entity_id: i32, tick: i32) -> u32 {
         // Finds current cls id for entity. Has to be mapped based on tick because
         // entity ids are reused :(
-        let myid: Vec<&EidClsHistoryEntry> =
+        let mut myid: Vec<&EidClsHistoryEntry> =
             history.iter().filter(|x| x.eid == entity_id).collect();
+        myid.sort_by_key(|x| x.tick);
         if myid.len() == 0 {
             panic!("ENITD {} NO CLS", entity_id);
         }
@@ -108,15 +121,26 @@ impl Parser {
             None => {
                 let cls_id =
                     Parser::find_cls_id(&self.state.eid_cls_history, entity_id, self.state.tick);
-                let entity = Entity {
+                let mut entity = Entity {
                     class_id: cls_id,
                     entity_id: entity_id,
                     props: vec![None; 10000],
                 };
+                match self.maps.baselines.get(&cls_id) {
+                    Some(baseline) => {
+                        for (k, v) in baseline {
+                            //println!("{} {:?}", k, v);
+                            entity.props[*k as usize] = Some(v.clone());
+                        }
+                    }
+                    None => {}
+                }
                 self.state.entities.insert(entity_id, entity);
             }
         }
     }
+
+    // entid 10  --> weap 204
 
     #[inline(always)]
     pub fn update_entity(&mut self, bitreader: &mut MyBitreader, entity_id: i32) {
@@ -157,6 +181,13 @@ impl Parser {
             let prop = &sv_cls.props[idx as usize];
             let p = bitreader.decode(prop);
 
+            if prop.name.contains("Item") {
+                println!(
+                    "{} {} {} {} {:?}",
+                    idx, entity_id, self.state.tick, prop.name, p
+                );
+            }
+
             entity.props[idx as usize] = p;
         }
     }
@@ -165,13 +196,13 @@ impl Parser {
 pub fn parse_baselines(
     data: &[u8],
     sv_cls: &ServerClass,
-    baselines: &mut HashMap<u32, HashMap<String, PropData>>,
+    baselines: &mut HashMap<u32, HashMap<i32, PropData>>,
 ) {
     let mut b = MyBitreader::new(data);
     let mut val = -1;
     let new_way = b.read_boolie().unwrap();
     let mut indicies = vec![];
-    let mut baseline: HashMap<String, PropData> = HashMap::default();
+    let mut baseline: HashMap<i32, PropData> = HashMap::default();
     loop {
         val = b.read_inx(val, new_way).unwrap();
 
@@ -182,9 +213,9 @@ pub fn parse_baselines(
     }
     for inx in indicies {
         let prop = &sv_cls.props[inx as usize];
-        let pdata = b.decode(prop);
-        let ok = vec![43, 41, 39, 40];
-        //baseline.insert(prop.name.to_owned(), pdata);
+        let pdata = b.decode(prop).unwrap();
+        //println!("{} {:?}", prop.name.to_owned(), pdata);
+        baseline.insert(inx, pdata);
     }
     baselines.insert(sv_cls.id.try_into().unwrap(), baseline);
 }

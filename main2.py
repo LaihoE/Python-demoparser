@@ -13,10 +13,18 @@ def coordinates(file):
     if file == "/home/laiho/Documents/demos/faceits/cu/003309131115255562271_1824323488 (1).dem":
         return
 
-    parser = DemoParser(file)
+    parser = DemoParser("/home/laiho/Documents/programming/rust/newparser/Python-demoparser/tests/test_demo.dem")
     #df = pd.DataFrame(parser.parse_events("player_death"))
-    print(parser.parse_players())
+    df = parser.parse_ticks(["m_vecOrigin"], ticks=[55555, 55556])
+    print(Counter(df["column_2"]))
+    df = df[df["column_2"] == 56985]
+    #print(df.iloc[600000:600020, :])
+    #print(df)
 
+    print(df)
+    print(Counter(df["column_3"]))
+    #print(file)
+    # print(Counter(df["column_0"][40000:]))
     # print(df.columns)
     # print(df.loc[:, ["name", "weapid", "tick", "Ammo", "player@m_vecOrigin_X"]])
 
@@ -27,7 +35,7 @@ if __name__ == "__main__":
     # files = glob.glob("/home/laiho/Documents/demos/bench_pro_demos/*")[:20]
 
     before = time.time()
-    with mp.Pool(processes=8) as pool:
+    with mp.Pool(processes=1) as pool:
         results = list(tqdm.tqdm(pool.imap_unordered(
             coordinates, files), total=len(files), desc="Parsing demos"))
     

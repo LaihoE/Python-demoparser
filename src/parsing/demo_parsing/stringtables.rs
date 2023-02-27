@@ -96,12 +96,11 @@ impl Parser {
         byte_reader.skip_n_bytes(size.try_into().unwrap());
         let data: CSVCMsg_CreateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
 
-        if data.name() == "userinfo" {
+        if data.name() == "userinfo" || data.name() == "instancebaseline" {
             self.state.stringtable_history.push(StringTableHistory {
                 byte: self.state.frame_started_at as i32,
             });
         }
-
         let mut st = StringTable {
             name: data.name().to_string(),
             userinfo: data.name() == "userinfo",
@@ -110,36 +109,31 @@ impl Parser {
             uds: data.user_data_size(),
             data: Vec::new(),
         };
-        if st.name == "userinfo" {
-            let mut st = StringTable {
-                userinfo: true,
-                name: "userinfo".to_string(),
-                max_entries: 256,
-                uds: 0,
-                udfs: false,
-                data: vec![],
-            };
-
-            for _ in 1..2 {
+        if data.name() == "userinfo" || data.name() == "instancebaseline" {
+            for _ in 1..50000 {
                 st.data.push(StField {
                     entry: "".to_string(),
                 })
             }
+
             let new_players = self.update_string_table(
+                None,
                 data.string_data(),
-                &st,
+                Some(&mut st),
                 data.num_entries(),
                 data.max_entries(),
                 data.user_data_fixed_size(),
                 self.state.tick.clone(),
             );
         }
+        self.state.stringtables.push(st);
     }
 
     pub fn update_string_table(
         &mut self,
+        table_id: Option<i32>,
         data: &[u8],
-        st: &StringTable,
+        st: Option<&mut StringTable>,
         num_entries: i32,
         max_entries: i32,
         user_data_fixsize: bool,
@@ -152,7 +146,16 @@ impl Parser {
         let mut history: Vec<String> = Vec::new();
         let mut entry = String::new();
         let mut new_userinfo = vec![];
+
         buf.read_boolie().unwrap();
+
+        let st = match st {
+            Some(st) => st,
+            None => {
+                let tid = table_id.unwrap();
+                &mut self.state.stringtables[tid as usize]
+            }
+        };
 
         for _i in 0..num_entries {
             let mut user_data = vec![];
@@ -174,7 +177,7 @@ impl Parser {
                 } else {
                     entry = buf.read_string(4096)?;
                 }
-                //st.data[entry_index as usize].entry = entry.to_string()
+                st.data[entry_index as usize].entry = entry.to_string()
             }
             if history.len() >= 32 {
                 history.remove(0);
@@ -190,22 +193,22 @@ impl Parser {
                     let size = buf.read_nbits(14)?;
                     buf.read_bits_st(size)?
                 };
-                /*
+
                 if st.name == "instancebaseline" {
                     let k = entry.parse::<u32>().unwrap_or(999999);
-                    match self.state.serverclass_map.get(&(k as u16)) {
+                    match self.maps.serverclass_map.get(&(k as u16)) {
                         Some(sv_cls) => {
-                            parse_baselines(&user_data, sv_cls, &mut self.baselines);
+                            parse_baselines(&user_data, sv_cls, &mut self.maps.baselines);
                         }
                         None => {
                             // Serverclass_map is not initiated yet, we need to parse this
                             // later. Just why??? :() just seems unnecessarily complicated
-                            self.baseline_no_cls.insert(k, user_data.clone());
+                            self.maps.baseline_no_cls.insert(k, user_data.clone());
                         }
                     }
                     history.push(entry.to_string());
                 }
-                */
+
                 if st.userinfo {
                     let mut ui = Parser::parse_userinfo(user_data, tick);
                     ui.entity_id = entry_index as u32 + 1;
@@ -227,26 +230,23 @@ impl Parser {
         byte_reader.skip_n_bytes(size.try_into().unwrap());
         let data: CSVCMsg_UpdateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
 
-        if data.table_id() != 7 {
-            return;
-        }
         self.state.stringtable_history.push(StringTableHistory {
             byte: self.state.frame_started_at as i32,
         });
-        let st = StringTable {
-            userinfo: true,
-            name: "userinfo".to_string(),
-            max_entries: 256,
-            uds: 0,
-            udfs: false,
-            data: vec![],
-        };
+
+        let stx = &self.state.stringtables[(data.table_id() as usize)];
+
+        if !(data.table_id() == 5 || data.table_id() == 7) {
+            return;
+        }
+
         let new_userinfos = self.update_string_table(
+            Some(data.table_id()),
             data.string_data(),
-            &st,
+            None,
             data.num_changed_entries(),
-            st.max_entries,
-            st.udfs,
+            stx.max_entries,
+            stx.udfs,
             self.state.tick.clone(),
         );
     }

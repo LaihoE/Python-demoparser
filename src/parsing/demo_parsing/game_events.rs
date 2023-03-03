@@ -18,6 +18,7 @@ use std::collections::HashMap;
 
 pub struct GameEventHistory {
     pub byte: i32,
+    pub tick: i32,
     pub id: i32,
 }
 
@@ -29,9 +30,10 @@ impl Parser {
         self.state.game_event_history.push(GameEventHistory {
             byte: self.state.frame_started_at as i32,
             id: game_event.eventid(),
+            tick: self.state.tick as i32,
         });
         let event_desc = &self.maps.event_map.as_ref().unwrap()[&game_event.eventid()];
-        if event_desc.name() == self.settings.event_name {
+        if event_desc.name() == self.settings.event_name || self.settings.event_name == "" {
             let name_data_pairs =
                 self.gen_name_val_pairs(&game_event, event_desc, &self.state.tick);
 
@@ -55,6 +57,9 @@ impl Parser {
 
         let mut hm: HashMap<i32, Descriptor_t, RandomState> = HashMap::default();
         for event_desc in game_event_list.descriptors {
+            self.maps
+                .event_name_to_id
+                .insert(event_desc.name().to_string(), event_desc.eventid());
             hm.insert(event_desc.eventid(), event_desc);
         }
         self.maps.event_map = Some(hm);
@@ -90,6 +95,7 @@ impl Parser {
             let s = Parser::series_from_pairs(vals, name);
             series.push(s);
         }
+        series.sort_by_key(|x| x.name().to_string());
         series
     }
     fn parse_key_steamid(&self, key: &Key_t) -> KeyData {
@@ -102,6 +108,81 @@ impl Parser {
             }
         }
     }
+    fn get_tick_props(&self, pair: &NameDataPair, prefix: &str) -> Option<Vec<NameDataPair>> {
+        // Find wanted entity, return none on all failed branches
+        let wanted_entity = match pair.data {
+            KeyData::Uint64(steamid) => {
+                let entity = match self.maps.sid_entid_map.get(&steamid) {
+                    Some(entid) => match self.state.entities.get(&(*entid as i32)) {
+                        Some(ent) => Some(ent),
+                        None => None,
+                    },
+                    None => None,
+                };
+                entity
+            }
+            _ => None,
+        };
+        let mut found_props = vec![];
+        for prop_name in &self.settings.collect_props {
+            let prop_idx = match self.maps.name_entid_prop.get(prop_name) {
+                Some(idx) => *idx,
+                None => {
+                    found_props.push(NameDataPair {
+                        name: prefix.to_string() + &prop_name,
+                        data: KeyData::Float(0.0),
+                        data_type: 2,
+                    });
+                    continue;
+                }
+            };
+            match wanted_entity {
+                Some(ent) => {
+                    match ent.props.get(prop_idx) {
+                        Some(prop) => {
+                            println!("{:?} {}", prop, ent.tick_set_at[prop_idx]);
+                            let pair = match prop {
+                                Some(p) => {
+                                    let data = KeyData::from(p.clone());
+                                    let data_type = keydata_type_from_enum(&data);
+                                    NameDataPair {
+                                        name: prefix.to_string() + &prop_name,
+                                        data: data,
+                                        data_type: data_type,
+                                    }
+                                }
+                                None => {
+                                    println!("Entity id had no prop");
+                                    NameDataPair {
+                                        name: prefix.to_string() + &prop_name,
+                                        data: KeyData::Float(0.0),
+                                        data_type: 2,
+                                    }
+                                }
+                            };
+                            found_props.push(pair)
+                        }
+                        None => {
+                            found_props.push(NameDataPair {
+                                name: prefix.to_string() + &prop_name,
+                                data: KeyData::Float(0.0),
+                                data_type: 2,
+                            });
+                        }
+                    };
+                }
+                None => {
+                    found_props.push(NameDataPair {
+                        name: prefix.to_string() + &prop_name,
+                        data: KeyData::Float(0.0),
+                        data_type: 2,
+                    });
+                }
+            }
+        }
+        return Some(found_props);
+    }
+
     pub fn gen_name_val_pairs(
         &self,
         game_event: &CSVCMsg_GameEvent,
@@ -132,6 +213,19 @@ impl Parser {
                 data_type: data_type,
             })
         }
+        let mut new_pairs = vec![];
+        for pair in &kv_pairs {
+            let pairs = match pair.name.as_str() {
+                "userid" => self.get_tick_props(&pair, "user_"),
+                "attacker" => self.get_tick_props(&pair, "attacker_"),
+                _ => None,
+            };
+            match pairs {
+                Some(pairs) => new_pairs.extend(pairs),
+                None => {}
+            }
+        }
+        kv_pairs.extend(new_pairs);
         kv_pairs.push(NameDataPair {
             name: "tick".to_owned(),
             data: KeyData::Long(*tick),
@@ -165,6 +259,17 @@ pub enum KeyData {
     Bool(bool),
     Uint64(u64),
 }
+fn keydata_type_from_enum(value: &KeyData) -> i32 {
+    match value {
+        KeyData::Str(_) => 1,
+        KeyData::Float(_) => 2,
+        KeyData::Long(_) => 3,
+        KeyData::Short(_) => 4,
+        KeyData::Byte(_) => 5,
+        KeyData::Bool(_) => 6,
+        KeyData::Uint64(_) => 7,
+    }
+}
 
 impl Default for KeyData {
     fn default() -> Self {
@@ -186,6 +291,7 @@ impl TryInto<i64> for KeyData {
 }
 
 impl KeyData {
+    /*
     pub fn from_pdata(pdata: &PropData) -> Self {
         match pdata {
             PropData::F32(f) => KeyData::Float(*f),
@@ -194,6 +300,7 @@ impl KeyData {
             _ => panic!("not yet suppored"),
         }
     }
+    */
     pub fn to_string_py(&self, py: Python<'_>) -> PyObject {
         match self {
             KeyData::Str(f) => f.to_string().to_object(py),

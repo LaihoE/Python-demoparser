@@ -96,11 +96,6 @@ impl Parser {
         byte_reader.skip_n_bytes(size.try_into().unwrap());
         let data: CSVCMsg_CreateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
 
-        if data.name() == "userinfo" || data.name() == "instancebaseline" {
-            self.state.stringtable_history.push(StringTableHistory {
-                byte: self.state.frame_started_at as i32,
-            });
-        }
         let mut st = StringTable {
             name: data.name().to_string(),
             userinfo: data.name() == "userinfo",
@@ -195,10 +190,18 @@ impl Parser {
                 };
 
                 if st.name == "instancebaseline" {
+                    self.state.stringtable_history.push(StringTableHistory {
+                        byte: self.state.frame_started_at as i32,
+                    });
                     let k = entry.parse::<u32>().unwrap_or(999999);
                     match self.maps.serverclass_map.get(&(k as u16)) {
                         Some(sv_cls) => {
-                            parse_baselines(&user_data, sv_cls, &mut self.maps.baselines);
+                            parse_baselines(
+                                &user_data,
+                                sv_cls,
+                                &mut self.maps.baselines,
+                                self.state.tick,
+                            );
                         }
                         None => {
                             // Serverclass_map is not initiated yet, we need to parse this
@@ -210,11 +213,15 @@ impl Parser {
                 }
 
                 if st.userinfo {
+                    self.state.stringtable_history.push(StringTableHistory {
+                        byte: self.state.frame_started_at as i32,
+                    });
                     let mut ui = Parser::parse_userinfo(user_data, tick);
                     ui.entity_id = entry_index as u32 + 1;
                     ui.friends_name = ui.friends_name.trim_end_matches("\x00").to_string();
                     ui.name = ui.name.trim_end_matches("\x00").to_string();
                     self.maps.userid_sid_map.insert(ui.user_id, ui.xuid);
+                    self.maps.sid_entid_map.insert(ui.xuid, ui.entity_id);
                     self.maps.players.insert(ui.xuid, ui);
                 }
             }
@@ -229,10 +236,6 @@ impl Parser {
         let wanted_bytes = &self.bytes[byte_reader.byte_idx..byte_reader.byte_idx + size as usize];
         byte_reader.skip_n_bytes(size.try_into().unwrap());
         let data: CSVCMsg_UpdateStringTable = Message::parse_from_bytes(wanted_bytes).unwrap();
-
-        self.state.stringtable_history.push(StringTableHistory {
-            byte: self.state.frame_started_at as i32,
-        });
 
         let stx = &self.state.stringtables[(data.table_id() as usize)];
 

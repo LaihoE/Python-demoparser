@@ -26,6 +26,7 @@ use zip::{ZipArchive, ZipWriter};
 use super::AMMO_ID;
 use super::ITEMDEF_ID;
 use super::STRING_TABLE_ID;
+use crate::parsing::cache::ACTIVE_WEAPON_ID;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Delta {
@@ -36,6 +37,7 @@ pub struct Delta {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GameEventIdx {
     pub byte: i32,
+    pub tick: i32,
     pub id: i32,
 }
 #[derive(Debug, Deserialize, Serialize)]
@@ -92,33 +94,54 @@ impl ReadCache {
     }
     pub fn read_game_events(&mut self) {
         let decompressed_bytes = self.read_bytes_from_index(GAME_EVENT_ID);
-        let number_structs = decompressed_bytes.len() / 8;
+        let number_structs = decompressed_bytes.len() / 12;
 
         let byte_end_at = number_structs * 4;
-        let id_start_at = byte_end_at;
+        let tick_start_at = byte_end_at;
+        let tick_end_at = tick_start_at + (number_structs * 4);
+        let id_start_at = tick_end_at;
 
         let mut bytes_start = vec![];
+        let mut ticks = vec![];
         let mut ids = vec![];
 
         for bytes in decompressed_bytes[..byte_end_at].chunks(4) {
             bytes_start.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
+        for bytes in decompressed_bytes[tick_start_at..tick_end_at].chunks(4) {
+            ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
+        }
         for bytes in decompressed_bytes[id_start_at..].chunks(4) {
             ids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
-        for (byte, entid) in izip!(&bytes_start, &ids) {
+        for (byte, tick, entid) in izip!(&bytes_start, &ticks, &ids) {
             self.game_events.push(GameEventIdx {
                 byte: *byte,
+                tick: *tick,
                 id: *entid,
             });
         }
     }
-    pub fn filter_game_events(&mut self, id: i32) -> Vec<u64> {
+    pub fn game_events_by_id(&mut self, id: i32) -> Vec<u64> {
         self.read_game_events();
         self.game_events
             .iter()
             .filter(|x| x.id == id)
             .map(|x| x.byte as u64)
+            .collect_vec()
+    }
+    pub fn get_event_ticks(&mut self, id: i32) -> Vec<i32> {
+        self.read_game_events();
+        for ev in &self.game_events {
+            if ev.id == id {
+                println!("{:?}", ev);
+            }
+        }
+
+        self.game_events
+            .iter()
+            .filter(|x| x.id == id)
+            .map(|x| x.tick)
             .collect_vec()
     }
     pub fn read_stringtables(&mut self) -> Vec<u64> {
@@ -141,6 +164,11 @@ impl ReadCache {
         deltas: &Vec<&Delta>,
         wanted_ticks: &Vec<i32>,
     ) -> Vec<u64> {
+        println!(
+            "DELTA LEN {:?} WANTED_LEN {:?}",
+            deltas.len(),
+            wanted_ticks.len()
+        );
         if deltas.len() == 0 {
             return vec![];
         }
@@ -155,10 +183,10 @@ impl ReadCache {
         }
         wanted_bytes
     }
-    pub fn get_eid_cls_map(&mut self) -> Vec<EidClsHistoryEntry> {
+    pub fn get_eid_cls_map(&mut self) -> HashMap<i32, Vec<EidClsHistoryEntry>> {
         let decompressed_bytes = self.read_bytes_from_index(99999);
 
-        let number_structs = decompressed_bytes.len() / 12;
+        let number_structs = decompressed_bytes.len() / 16;
 
         let CLS_SIZE = 4;
         let EID_SIZE = 4;
@@ -168,10 +196,13 @@ impl ReadCache {
         let eid_start_at = cls_end_at;
         let eid_end_at = eid_start_at + (number_structs * EID_SIZE);
         let tick_start_at = eid_end_at;
+        let tick_end_at = eid_end_at + (number_structs * EID_SIZE);
+        let byte_start_at = tick_end_at;
 
         let mut cls_ids = vec![];
         let mut eids = vec![];
         let mut ticks = vec![];
+        let mut bytes_out = vec![];
 
         for bytes in decompressed_bytes[..cls_end_at].chunks(CLS_SIZE) {
             cls_ids.push(u32::from_le_bytes(bytes.try_into().unwrap()));
@@ -179,17 +210,27 @@ impl ReadCache {
         for bytes in decompressed_bytes[eid_start_at..eid_end_at].chunks(EID_SIZE) {
             eids.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
-        for bytes in decompressed_bytes[tick_start_at..].chunks(TICK_SIZE) {
+        for bytes in decompressed_bytes[tick_start_at..tick_end_at].chunks(TICK_SIZE) {
             ticks.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
-        let mut eid_history = vec![];
-        for (cls_id, entid, tick) in izip!(&cls_ids, &eids, &ticks) {
-            eid_history.push(EidClsHistoryEntry {
-                cls_id: *cls_id,
-                eid: *entid,
-                tick: *tick,
-            });
+        for bytes in decompressed_bytes[byte_start_at..].chunks(TICK_SIZE) {
+            bytes_out.push(i32::from_le_bytes(bytes.try_into().unwrap()));
         }
+
+        let mut eid_history = HashMap::default();
+        for (cls_id, entid, tick, byte) in izip!(&cls_ids, &eids, &ticks, &bytes_out) {
+            //println!("{} {} {} {}", cls_id, entid, tick, byte);
+            eid_history
+                .entry(*entid)
+                .or_insert(vec![])
+                .push(EidClsHistoryEntry {
+                    cls_id: *cls_id,
+                    eid: *entid,
+                    tick: *tick,
+                    byte: *byte,
+                });
+        }
+
         eid_history
     }
 
@@ -252,7 +293,7 @@ impl ReadCache {
         let mut bytes = HashSet::default();
         let all_deltas = &self.deltas[&id];
 
-        for entid in 1..64 {
+        for entid in 1..25 {
             let this_ent_deltas: Vec<&Delta> =
                 all_deltas.iter().filter(|x| x.entid == entid).collect_vec();
             let this_bytes = self.filter_delta_ticks_wanted(&this_ent_deltas, wanted_ticks);
@@ -263,7 +304,7 @@ impl ReadCache {
         bytes.iter().map(|x| *x).collect_vec()
     }
     pub fn read_weapons(&mut self) -> Vec<u64> {
-        let ids = vec![AMMO_ID, ITEMDEF_ID];
+        let ids = vec![AMMO_ID, ITEMDEF_ID, ACTIVE_WEAPON_ID];
         let mut out_bytes = vec![];
         for id in ids {
             let decompressed_bytes = self.read_bytes_from_index(id);

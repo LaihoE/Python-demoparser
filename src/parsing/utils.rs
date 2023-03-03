@@ -348,4 +348,6 @@ pub static CACHE_ID_MAP: phf::Map<&'static str, i32> = phf_map! {
 "m_bInBombZone" => 197,
 "m_bControllingBot" => 198,
 "m_unCurrentEquipmentValue" => 199,
+"ammo" => 200,
+"weapon" => 201,
 };

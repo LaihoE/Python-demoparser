@@ -1,16 +1,18 @@
 mod parsing;
 
+use crate::collect_data::STEAMID_ID;
 use arrow::ffi;
 use flate2::read::GzDecoder;
-
 use itertools::Itertools;
 use parsing::demo_parsing::collect_data::AMMO_ID;
 use parsing::demo_parsing::collect_data::NAME_ID;
 use parsing::demo_parsing::collect_data::TICK_ID;
+use parsing::demo_parsing::collect_data::WEAP_NAME_ID;
 use parsing::demo_parsing::*;
 use parsing::parser::Parser;
 //use parsing::tick_cache::gather_props_backwards;
 use ahash::HashMap;
+use parsing::parser_settings::ParserInputs;
 use parsing::utils::Header;
 use parsing::variants::PropData;
 use phf::phf_map;
@@ -156,7 +158,7 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<Py<PyAny>> {
         let (rounds, wanted_props) = parse_kwargs_event(py_kwargs);
-        /*
+        println!("{:?}", wanted_props);
         let real_props = rm_user_friendly_names(&wanted_props);
         let unk_props = check_validity_props(&real_props);
         if !unk_props.is_empty() {
@@ -165,23 +167,23 @@ impl DemoParser {
                 unk_props
             )));
         }
-        */
-        let parse_props = !wanted_props.is_empty() || rounds;
-        let mut parser = Parser::new(
-            self.path.clone(),
-            true,
-            false,
-            //vec![],
-            (1000..1001).collect(),
-            vec![],
-            vec!["player@m_vecOrigin_X".to_string()],
-            event_name.to_string(),
-            false,
-            false,
-            false,
-            1000000,
-            vec![],
-        );
+        println!("REAL {:?}", real_props);
+        let parser_inputs = ParserInputs {
+            demo_path: self.path.clone(),
+            parse_props: true,
+            only_events: false,
+            wanted_ticks: vec![],
+            wanted_players: vec![],
+            event_name: event_name,
+            only_players: false,
+            parse_game_events: true,
+            og_names: vec![],
+            collect_props: wanted_props,
+            wanted_props: real_props,
+        };
+
+        let mut parser = Parser::new(parser_inputs);
+
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err(format!(
                 "Couldnt read demo file. Error: {}",
@@ -190,11 +192,11 @@ impl DemoParser {
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
 
-                parser.settings.playback_frames = (h.playback_ticks + 100) as usize;
                 let mut ss = vec![];
                 parser.start_parsing();
 
-                let event_series = parser.series_from_events(&parser.state.game_events);
+                let mut event_series = parser.series_from_events(&parser.state.game_events);
+                //event_series.sort_by_key(|x| &x.name().clone());
 
                 let column_names: Vec<&str> =
                     event_series.iter().map(|x| x.name().clone()).collect();
@@ -231,7 +233,19 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<PyObject> {
         let mut real_props = rm_user_friendly_names(&wanted_props);
-        /*
+
+        let mut collect_props = vec![];
+        for p in &real_props {
+            if p != "m_vecOrigin" {
+                collect_props.push(p.clone())
+            }
+        }
+        for p in &wanted_props {
+            if p == "X" || p == "Y" {
+                collect_props.push(p.clone());
+            }
+        }
+
         let unk_props = check_validity_props(&real_props);
         if !unk_props.is_empty() {
             return Err(PyKeyError::new_err(format!(
@@ -239,7 +253,6 @@ impl DemoParser {
                 unk_props
             )));
         }
-        */
         let (wanted_players, wanted_ticks) = parse_kwargs_ticks(py_kwargs);
         let wanted_ticks_len = wanted_ticks.len();
         let biggest_wanted_tick = if wanted_ticks_len > 0 {
@@ -247,21 +260,21 @@ impl DemoParser {
         } else {
             &99999999
         };
-        let mut parser = Parser::new(
-            self.path.clone(),
-            true,
-            false,
-            //vec![],
-            (1000..100001).collect(),
-            vec![],
-            wanted_props.clone(),
-            "player_death".to_string(),
-            false,
-            false,
-            false,
-            1000000,
-            vec![],
-        );
+
+        let parser_inputs = ParserInputs {
+            demo_path: self.path.clone(),
+            parse_props: true,
+            only_events: false,
+            wanted_ticks: wanted_ticks,
+            wanted_players: wanted_players,
+            event_name: "".to_string(),
+            only_players: false,
+            parse_game_events: false,
+            og_names: vec![],
+            collect_props: collect_props.clone(),
+            wanted_props: real_props.clone(),
+        };
+        let mut parser = Parser::new(parser_inputs);
 
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err(format!(
@@ -270,63 +283,84 @@ impl DemoParser {
             ))),
             Ok(mut parser) => {
                 let h: Header = parser.parse_demo_header();
-
                 parser.start_parsing();
+                let mut df_column_names = vec![];
 
-                real_props.push("tick".to_string());
-                real_props.push("steamid".to_string());
-                real_props.push("name".to_string());
-                wanted_props.push("tick".to_string());
-                wanted_props.push("steamid".to_string());
-                wanted_props.push("name".to_string());
+                df_column_names.push("tick".to_string());
+                df_column_names.push("name".to_string());
+                df_column_names.push("steamid".to_string());
 
-                let mut series = vec![];
+                let mut rust_series = vec![];
+                let mut ids = vec![NAME_ID, STEAMID_ID];
 
-                let v = &parser.state.output[&-20];
-                match &v.data {
-                    VarVec::String(i) => {
-                        let s = Series::new("weapon", i);
-                        println!("{:?}", s);
-                        let py_series = rust_series_to_py_series(&s).unwrap();
-                        series.push(py_series);
+                for p in &wanted_props {
+                    if p == "ammo" || p == "weapon" {
+                        collect_props.push(p.clone());
                     }
-                    _ => {}
                 }
-                let v = &parser.state.output[&NAME_ID];
-                match &v.data {
-                    VarVec::String(i) => {
-                        let s = Series::new("name", i);
-                        println!("{:?}", s);
-                        let py_series = rust_series_to_py_series(&s).unwrap();
-                        series.push(py_series);
+
+                for prop in &collect_props {
+                    df_column_names.push(prop.clone());
+                    match prop.as_str() {
+                        "ammo" => ids.push(AMMO_ID),
+                        "weapon" => ids.push(WEAP_NAME_ID),
+                        _ => ids.push(parser.maps.name_entid_prop[prop] as i32),
                     }
-                    _ => {}
                 }
-                let v = &parser.state.output[&TICK_ID];
-                match &v.data {
+
+                match &parser.state.output[&TICK_ID].data {
                     VarVec::I32(i) => {
-                        let s = Series::new("tick", i);
-                        println!("{:?}", s);
-                        let py_series = rust_series_to_py_series(&s).unwrap();
-                        series.push(py_series);
+                        let (ticks, offsets) = find_copy_offsets(&i, &parser.settings.wanted_ticks);
+                        println!("{:?}", ticks);
+                        rust_series.push(Series::new(&"tick".to_string(), ticks));
+
+                        for id in ids {
+                            match &parser.state.output[&id].data {
+                                VarVec::F32(f) => {
+                                    let mut v = vec![];
+                                    for x in &offsets {
+                                        v.extend_from_slice(&f[x.0..x.1]);
+                                    }
+
+                                    rust_series.push(Series::new(&id.to_string(), v));
+                                }
+                                VarVec::U64(f) => {
+                                    let mut v = vec![];
+                                    for x in &offsets {
+                                        v.extend_from_slice(&f[x.0..x.1]);
+                                    }
+                                    rust_series.push(Series::new(&id.to_string(), v));
+                                }
+                                VarVec::I32(f) => {
+                                    let mut v = vec![];
+                                    for x in &offsets {
+                                        v.extend_from_slice(&f[x.0..x.1]);
+                                    }
+                                    rust_series.push(Series::new(&id.to_string(), v));
+                                }
+                                VarVec::String(f) => {
+                                    let mut v = vec![];
+                                    for x in &offsets {
+                                        v.extend_from_slice(&f[x.0..x.1]);
+                                    }
+                                    rust_series.push(Series::new(&id.to_string(), v));
+                                }
+                                _ => panic!("unknown varvec"),
+                            }
+                        }
                     }
-                    _ => {}
-                }
-                let v = &parser.state.output[&AMMO_ID];
-                match &v.data {
-                    VarVec::I32(i) => {
-                        let s = Series::new("ammo", i);
-                        println!("{:?}", s);
-                        let py_series = rust_series_to_py_series(&s).unwrap();
-                        series.push(py_series);
-                    }
-                    _ => {}
+                    _ => panic!("tick wrong varvec"),
                 }
 
+                let mut py_series = vec![];
+                for series in &rust_series {
+                    py_series.push(rust_series_to_py_series(&series).unwrap())
+                }
                 let polars = py.import("polars")?;
-                let all_series_py = series.to_object(py);
+                let all_series_py = py_series.to_object(py);
                 let df = polars.call_method1("DataFrame", (all_series_py,))?;
-                //df.setattr("columns", wanted_props.to_object(py)).unwrap();
+                df.setattr("columns", df_column_names.to_object(py))
+                    .unwrap();
                 let pandas_df = df.call_method0("to_pandas").unwrap();
                 Ok(pandas_df.to_object(py))
             }
@@ -335,21 +369,21 @@ impl DemoParser {
 
     #[args(py_kwargs = "**")]
     pub fn parse_players(&self, py: Python) -> PyResult<PyObject> {
-        let mut parser = Parser::new(
-            self.path.clone(),
-            true,
-            false,
-            //vec![],
-            (1000..1001).collect(),
-            vec![],
-            vec!["player@m_vecOrigin_X".to_string()],
-            "-".to_string(),
-            false,
-            false,
-            false,
-            1000000,
-            vec![],
-        );
+        let parser_inputs = ParserInputs {
+            demo_path: self.path.clone(),
+            parse_props: true,
+            only_events: false,
+            wanted_ticks: vec![],
+            wanted_players: vec![],
+            event_name: "".to_string(),
+            only_players: true,
+            parse_game_events: false,
+            og_names: vec![],
+            collect_props: vec![],
+            wanted_props: vec![],
+        };
+        let mut parser = Parser::new(parser_inputs);
+
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err(format!(
                 "Couldnt read demo file. Error: {}",
@@ -381,20 +415,21 @@ impl DemoParser {
     }
 
     pub fn parse_header(&self) -> PyResult<Py<PyAny>> {
-        let parser = Parser::new(
-            self.path.clone(),
-            false,
-            false,
-            vec![],
-            vec![],
-            vec![],
-            "".to_string(),
-            true,
-            false,
-            true,
-            9999999,
-            vec![],
-        );
+        let parser_inputs = ParserInputs {
+            demo_path: self.path.clone(),
+            parse_props: true,
+            only_events: false,
+            wanted_ticks: vec![],
+            wanted_players: vec![],
+            event_name: "".to_string(),
+            only_players: true,
+            parse_game_events: false,
+            og_names: vec![],
+            collect_props: vec![],
+            wanted_props: vec![],
+        };
+        let mut parser = Parser::new(parser_inputs);
+
         match parser {
             Err(e) => Err(PyFileNotFoundError::new_err(format!(
                 "Couldnt read demo file. Error: {}",
@@ -408,93 +443,162 @@ impl DemoParser {
         }
     }
 }
-/*
-pub fn get_player_team(ent: &Entity) -> i32 {
-    match ent.props.get("m_iTeamNum") {
-        Some(p) => match p.data {
-            PropData::I32(x) => x,
-            _ => -1,
-        },
-        None => -1,
-    }
+struct Offsets {
+    pub tick: i32,
+    pub start: usize,
+    pub end: usize,
 }
 
-pub fn get_manager_i32_prop(manager: &Entity, player: &UserInfo, prop_name: &str) -> i32 {
-    let key = if player.entity_id < 10 {
-        prop_name.to_string() + "00" + &player.entity_id.to_string()
-    } else if player.entity_id < 100 {
-        prop_name.to_string() + "0" + &player.entity_id.to_string()
-    } else {
-        panic!("Entity id > 100 ????: id:{}", player.entity_id);
-    };
-    match manager.props.get(&key) {
-        Some(p) => match p.data {
-            PropData::I32(x) => x,
-            _ => -1,
-        },
-        None => -1,
-    }
-}
+fn find_copy_offsets(
+    v1: &Vec<Option<i32>>,
+    wanted_ticks: &Vec<i32>,
+) -> (Vec<i32>, Vec<(usize, usize)>) {
+    let mut mapping: Vec<Offsets> = vec![];
+    let mut cur_tick = v1[0];
+    let mut tick_start = 0;
+    let mut tick_end = 0;
 
-pub fn get_manager_str_prop(manager: &Entity, player: &UserInfo, prop_name: &str) -> String {
-    let key = if player.entity_id < 10 {
-        prop_name.to_string() + "00" + &player.entity_id.to_string()
-    } else if player.entity_id < 100 {
-        prop_name.to_string() + "0" + &player.entity_id.to_string()
-    } else {
-        panic!("Entity id > 100 ????: id:{}", player.entity_id);
-    };
-    match manager.props.get(&key) {
-        Some(p) => match &p.data {
-            PropData::String(x) => x.to_string(),
-            _ => "".to_string(),
-        },
-        None => "".to_string(),
+    for i in 1..v1.len() - 1 {
+        if v1[i - 1] != v1[i] {
+            cur_tick = v1[i];
+            tick_start = i
+        }
+        if v1[i + 1] != v1[i] {
+            tick_end = i;
+            mapping.push(Offsets {
+                tick: cur_tick.unwrap(),
+                start: tick_start,
+                end: tick_end,
+            });
+        }
     }
-}
+    mapping.push(Offsets {
+        tick: cur_tick.unwrap(),
+        start: tick_start,
+        end: v1.len() - 1,
+    });
 
+    mapping.sort_by_key(|x| x.tick);
+
+    let mut tick_idx = 0;
+    let mut out: Vec<(usize, usize)> = vec![];
+    let mut new_ticks: Vec<i32> = vec![];
+
+    for wt in wanted_ticks {
+        loop {
+            if tick_idx + 1 >= mapping.len() {
+                out.push((mapping[tick_idx].start, v1.len()));
+                let dif = mapping[tick_idx].end + 1 - mapping[tick_idx].start;
+                new_ticks.extend(vec![wt; dif]);
+                break;
+            }
+            if mapping[tick_idx].tick <= *wt && mapping[tick_idx + 1].tick > *wt {
+                out.push((mapping[tick_idx].start, mapping[tick_idx].end + 1));
+                let dif = mapping[tick_idx].end + 1 - mapping[tick_idx].start;
+                new_ticks.extend(vec![wt; dif]);
+                break;
+            }
+            tick_idx += 1;
+        }
+    }
+    (new_ticks, out)
+} /*
+  pub fn get_player_team(ent: &Entity) -> i32 {
+      match ent.props.get("m_iTeamNum") {
+          Some(p) => match p.data {
+              PropData::I32(x) => x,
+              _ => -1,
+          },
+          None => -1,
+      }
+  }
+
+  pub fn get_manager_i32_prop(manager: &Entity, player: &UserInfo, prop_name: &str) -> i32 {
+      let key = if player.entity_id < 10 {
+          prop_name.to_string() + "00" + &player.entity_id.to_string()
+      } else if player.entity_id < 100 {
+          prop_name.to_string() + "0" + &player.entity_id.to_string()
+      } else {
+          panic!("Entity id > 100 ????: id:{}", player.entity_id);
+      };
+      match manager.props.get(&key) {
+          Some(p) => match p.data {
+              PropData::I32(x) => x,
+              _ => -1,
+          },
+          None => -1,
+      }
+  }
+
+  pub fn get_manager_str_prop(manager: &Entity, player: &UserInfo, prop_name: &str) -> String {
+      let key = if player.entity_id < 10 {
+          prop_name.to_string() + "00" + &player.entity_id.to_string()
+      } else if player.entity_id < 100 {
+          prop_name.to_string() + "0" + &player.entity_id.to_string()
+      } else {
+          panic!("Entity id > 100 ????: id:{}", player.entity_id);
+      };
+      match manager.props.get(&key) {
+          Some(p) => match &p.data {
+              PropData::String(x) => x.to_string(),
+              _ => "".to_string(),
+          },
+          None => "".to_string(),
+      }
+  }
+
+  pub fn check_validity_props(names: &Vec<String>) -> Vec<String> {
+      let mut unkown_props = vec![];
+      for name in names {
+          match TYPEHM.contains_key(name) {
+              true => {}
+              false => unkown_props.push(name.to_string()),
+          }
+      }
+      unkown_props
+  }
+  pub fn rank_id_to_name(id: i32) -> String {
+      match id {
+          1 => "Silver 1".to_string(),
+          2 => "Silver 2".to_string(),
+          3 => "Silver 3".to_string(),
+          4 => "Silver 4".to_string(),
+          5 => "Silver elite".to_string(),
+          6 => "Silver elite master".to_string(),
+          7 => "Nova 1".to_string(),
+          8 => "Nova 2".to_string(),
+          9 => "Nova 3".to_string(),
+          10 => "Nova 4".to_string(),
+          11 => "MG1".to_string(),
+          12 => "MG2".to_string(),
+          13 => "MGE".to_string(),
+          14 => "DMG".to_string(),
+          15 => "LE".to_string(),
+          16 => "LEM".to_string(),
+          17 => "Supreme".to_string(),
+          18 => "Global elite".to_string(),
+          _ => "Unranked".to_string(),
+      }
+  }
+  */
 pub fn check_validity_props(names: &Vec<String>) -> Vec<String> {
     let mut unkown_props = vec![];
     for name in names {
-        match TYPEHM.contains_key(name) {
+        match CACHE_ID_MAP.contains_key(name) {
             true => {}
             false => unkown_props.push(name.to_string()),
         }
     }
     unkown_props
 }
-pub fn rank_id_to_name(id: i32) -> String {
-    match id {
-        1 => "Silver 1".to_string(),
-        2 => "Silver 2".to_string(),
-        3 => "Silver 3".to_string(),
-        4 => "Silver 4".to_string(),
-        5 => "Silver elite".to_string(),
-        6 => "Silver elite master".to_string(),
-        7 => "Nova 1".to_string(),
-        8 => "Nova 2".to_string(),
-        9 => "Nova 3".to_string(),
-        10 => "Nova 4".to_string(),
-        11 => "MG1".to_string(),
-        12 => "MG2".to_string(),
-        13 => "MGE".to_string(),
-        14 => "DMG".to_string(),
-        15 => "LE".to_string(),
-        16 => "LEM".to_string(),
-        17 => "Supreme".to_string(),
-        18 => "Global elite".to_string(),
-        _ => "Unranked".to_string(),
-    }
-}
-*/
+
 pub fn rm_user_friendly_names(names: &Vec<String>) -> Vec<String> {
     let mut unfriendly_names = vec![];
     for name in names {
         match &name[..] {
-            "X" => unfriendly_names.push("m_vecOrigin_X".to_string()),
-            "Y" => unfriendly_names.push("m_vecOrigin_Y".to_string()),
+            "X" => unfriendly_names.push("m_vecOrigin".to_string()),
+            "Y" => unfriendly_names.push("m_vecOrigin".to_string()),
             "Z" => unfriendly_names.push("m_vecOrigin[2]".to_string()),
-            "ammo" => unfriendly_names.push("m_iClip1".to_string()),
             "velocity_X" => unfriendly_names.push("m_vecVelocity[0]".to_string()),
             "velocity_Y" => unfriendly_names.push("m_vecVelocity[1]".to_string()),
             "velocity_Z" => unfriendly_names.push("m_vecVelocity[2]".to_string()),
@@ -615,7 +719,8 @@ pub fn rm_user_friendly_names(names: &Vec<String>) -> Vec<String> {
             "in_duck_jump" => unfriendly_names.push("m_bInDuckJump".to_string()),
             "last_duck_time" => unfriendly_names.push("m_flLastDuckTime".to_string()),
             "is_ducking" => unfriendly_names.push("m_bDucking".to_string()),
-
+            "ammo" => {}
+            "weapon" => {}
             _ => unfriendly_names.push(name.to_string()),
         }
     }

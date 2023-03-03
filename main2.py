@@ -7,32 +7,17 @@ from collections import Counter
 import time
 import matplotlib.pyplot as plt
 import numpy as np
-
+from pandas.testing import assert_frame_equal
 
 def coordinates(file):
-    if file == "/home/laiho/Documents/demos/faceits/cu/003309131115255562271_1824323488 (1).dem":
-        return
-
     parser = DemoParser("/home/laiho/Documents/programming/rust/newparser/Python-demoparser/tests/test_demo.dem")
-    #df = pd.DataFrame(parser.parse_events("player_death"))
-    df = parser.parse_ticks(["m_vecOrigin"], ticks=[55555, 55556])
-    print(Counter(df["column_2"]))
-    df = df[df["column_2"] == 56985]
-    #print(df.iloc[600000:600020, :])
-    #print(df)
-
+    df = parser.parse_ticks(["X"], wanted_ticks=[x for x in range(10000, 20000)])
     print(df)
-    print(Counter(df["column_3"]))
-    #print(file)
-    # print(Counter(df["column_0"][40000:]))
-    # print(df.columns)
-    # print(df.loc[:, ["name", "weapid", "tick", "Ammo", "player@m_vecOrigin_X"]])
+
+
 
 if __name__ == "__main__":
-    # files = glob.glob("/home/laiho/Documents/demos/faceits/cu/*")#[5:60]
-    files = glob.glob("/home/laiho/Documents/demos/mygames/*")[22:23]
-    # files = glob.glob("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/*")#[240:]
-    # files = glob.glob("/home/laiho/Documents/demos/bench_pro_demos/*")[:20]
+    files = glob.glob("/home/laiho/Documents/demos/mygames/*")[30:31]
 
     before = time.time()
     with mp.Pool(processes=1) as pool:
@@ -40,8 +25,8 @@ if __name__ == "__main__":
             coordinates, files), total=len(files), desc="Parsing demos"))
     
     df = pd.concat(results)
-    df = df[(df["distance"] > 30) & (df["noscope"] == True)]
-    print(df)
+    #df = df[(df["distance"] > 30) & (df["noscope"] == True)]
+    #print(df)
 
 
 """

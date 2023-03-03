@@ -8,6 +8,9 @@ use ahash::HashMap;
 use ahash::RandomState;
 use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use csgoproto::netmessages::*;
+use std::cmp::Reverse;
+use std::collections::BTreeMap;
+use std::collections::BinaryHeap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -32,6 +35,7 @@ pub struct ParserState {
     pub weapon_handle_id: i32,
     pub clip_id: i32,
     pub item_def_id: i32,
+    pub eid_cls_map: HashMap<i32, Vec<EidClsHistoryEntry>>,
 }
 
 pub struct Maps {
@@ -41,48 +45,50 @@ pub struct Maps {
     pub serverclass_map: HashMap<u16, ServerClass>,
     pub event_map: Option<HashMap<i32, Descriptor_t>>,
     pub dt_map: Option<HashMap<String, CSVCMsg_SendTable>>,
-    pub players: HashMap<u64, UserInfo>,
+    pub players: BTreeMap<u64, UserInfo>,
     pub userid_sid_map: HashMap<u32, u64>,
     pub sid_entid_map: HashMap<u64, u32>,
     pub uid_eid_map: HashMap<u32, u32>,
     pub baselines: HashMap<u32, HashMap<i32, PropData>>,
     pub baseline_no_cls: HashMap<u32, Vec<u8>>,
+    pub name_entid_prop: HashMap<String, usize>,
+    pub name_ptype_map: HashMap<String, i32>,
+    pub event_name_to_id: HashMap<String, i32>,
 }
 
 pub struct ParserSettings {
     pub only_players: bool,
-    pub only_header: bool,
     pub only_events: bool,
     pub parse_props: bool,
     pub event_name: String,
-    pub no_gameevents: bool,
-    pub early_exit_tick: i32,
+    pub parse_game_events: bool,
     pub wanted_props: Vec<String>,
     pub wanted_ticks: Vec<i32>,
     pub wanted_players: Vec<u64>,
     pub playback_frames: usize,
     pub og_names: Vec<String>,
     pub is_cache_run: bool,
+    pub collect_props: Vec<String>,
+}
+pub struct ParserInputs {
+    pub demo_path: String,
+    pub parse_props: bool,
+    pub only_events: bool,
+    pub wanted_ticks: Vec<i32>,
+    pub wanted_players: Vec<u64>,
+    pub event_name: String,
+    pub only_players: bool,
+    pub parse_game_events: bool,
+    pub wanted_props: Vec<String>,
+    pub og_names: Vec<String>,
+    pub collect_props: Vec<String>,
 }
 
 impl Parser {
-    pub fn new(
-        demo_path: String,
-        parse_props: bool,
-        only_events: bool,
-        wanted_ticks: Vec<i32>,
-        wanted_players: Vec<u64>,
-        mut wanted_props: Vec<String>,
-        event_name: String,
-        only_players: bool,
-        only_header: bool,
-        no_gameevents: bool,
-        early_exit_tick: i32,
-        og_names: Vec<String>,
-    ) -> Result<Self, std::io::Error> {
+    pub fn new(settings: ParserInputs) -> Result<Self, std::io::Error> {
         let mut extra_wanted_props = vec![];
 
-        for p in &wanted_props {
+        for p in &settings.wanted_props {
             match CACHE_ID_MAP.get(p) {
                 Some(_) => match &p[(p.len() - 1)..] {
                     "X" => extra_wanted_props.push((&p[..p.len() - 2]).to_owned()),
@@ -96,34 +102,42 @@ impl Parser {
             }
         }
 
-        match read_file(demo_path) {
+        match read_file(settings.demo_path) {
             Err(e) => Err(e),
             Ok(data) => {
                 let maps = Maps {
                     serverclass_map: HashMap::default(),
                     event_map: Some(HashMap::default()),
                     dt_map: Some(HashMap::default()),
-                    players: HashMap::default(),
+                    players: BTreeMap::default(),
                     userid_sid_map: HashMap::default(),
                     baselines: HashMap::default(),
                     baseline_no_cls: HashMap::default(),
                     sid_entid_map: HashMap::default(),
                     uid_eid_map: HashMap::default(),
+                    name_entid_prop: HashMap::default(),
+                    name_ptype_map: HashMap::default(),
+                    event_name_to_id: HashMap::default(),
                 };
+                let mut wanted_tick_heap = BinaryHeap::new();
+
+                for tick in &settings.wanted_ticks {
+                    wanted_tick_heap.push(Reverse(*tick));
+                }
+
                 let settings = ParserSettings {
-                    only_players: only_players,
-                    only_header: only_header,
-                    only_events: only_events,
-                    parse_props: parse_props,
-                    event_name: event_name,
-                    no_gameevents: no_gameevents,
-                    early_exit_tick: early_exit_tick,
-                    wanted_props: wanted_props,
-                    wanted_ticks: wanted_ticks,
-                    wanted_players: wanted_players,
+                    only_players: settings.only_players,
+                    only_events: settings.only_events,
+                    parse_props: settings.parse_props,
+                    event_name: settings.event_name,
+                    parse_game_events: settings.parse_game_events,
+                    wanted_props: settings.wanted_props,
+                    wanted_ticks: settings.wanted_ticks,
+                    wanted_players: settings.wanted_players,
                     playback_frames: 0,
-                    og_names: og_names,
+                    og_names: settings.og_names,
                     is_cache_run: false,
+                    collect_props: settings.collect_props,
                 };
                 let state = ParserState {
                     fp: 0,
@@ -146,6 +160,7 @@ impl Parser {
                     clip_id: 0,
                     weapon_handle_id: 0,
                     item_def_id: 0,
+                    eid_cls_map: HashMap::default(),
                 };
                 match data {
                     Mmap3(m) => Ok(Self {

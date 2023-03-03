@@ -3,6 +3,8 @@ use memmap2::Mmap;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::demo_parsing::KeyData;
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PropData {
     I32(i32),
@@ -56,6 +58,17 @@ impl BytesVariant {
     }
 }
 
+impl From<PropData> for KeyData {
+    fn from(value: PropData) -> Self {
+        match value {
+            PropData::F32(f) => KeyData::Float(f),
+            PropData::I32(i) => KeyData::Long(i),
+            PropData::String(s) => KeyData::Str(s),
+            _ => panic!("Cant create Keydata from: {:?}", value),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PropColumn {
     pub data: VarVec,
@@ -86,7 +99,6 @@ impl VarVec {
             PropData::String(p) => match self {
                 VarVec::String(f) => f.push(Some(p)),
                 _ => {
-                    println!("{:?}", self);
                     panic!("Tried to push a {:?} into a string column", p);
                 }
             },

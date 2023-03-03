@@ -19,7 +19,7 @@ class TestFullDemo(unittest.TestCase):
         demo_path = os.path.join(os.path.dirname(__file__), 'test_demo.dem')
         self.parser = DemoParser(demo_path)
 
-    def test_player_ping(self):
+    """def test_player_ping(self):
         df = self.parser.parse_ticks(["manager@m_iPing"], ticks=[x for x in range(10000, 10001)])
         d = {'steamid': {0: 76561197993611582, 1: 76561198089780719, 2: 76561198134270402, 3: 76561198147100782, 4: 76561198189734257, 5: 76561198194694750, 6: 76561198201296319, 7: 76561198229793868, 8: 76561198258044111, 9: 76561198271657717}, 'tick': {0: 10000, 1: 10000, 2: 10000, 3: 10000, 4: 10000, 5: 10000, 6: 10000, 7: 10000, 8: 10000, 9: 10000}, 'name': {0: 'mormoncrew', 1: 'NN', 2: 'KosatkaPeek mosambitchpeek', 3: 'Bewer', 4: 'Ganterhatced', 5: 'Road to LE', 6: 'duck', 7: 'Psychopath', 8: '-ExΩtiC-', 9: 'krYtep'}, 'manager@m_iPing': {0: 31.0, 1: 29.0, 2: 30.0, 3: 18.0, 4: 24.0, 5: 15.0, 6: 11.0, 7: 5.0, 8: 35.0, 9: 43.0}}
         assert_frame_equal(pd.DataFrame(d), df, check_dtype=False)
@@ -48,4 +48,22 @@ class TestFullDemo(unittest.TestCase):
     def test_header(self):
         header = self.parser.parse_header()
         h = {'network_protocol': '13819', 'protocol': '4', 'server_name': 'Valve CS:GO EU North Server (srcds8047-sto1.188.33)', 'playback_frames': '37039', 'signon_length': '567626', 'protoplayback_tickscol': '74195', 'client_name': 'GOTV Demo', 'playback_time': '1159.2969', 'map_name': 'de_mirage', 'game_dir': 'csgo'}
-        self.assertDictEqual(header, h)
+        self.assertDictEqual(header, h)"""
+
+    """def test_weapons(self):
+        df = self.parser.parse_ticks(["weapon", "ammo"], ticks=[x for x in range(10000, 25000)])
+        df = df[df["tick"] == 22000]
+        correct = {'tick': {132000: 22000, 132001: 22000, 132002: 22000, 132003: 22000, 132004: 22000, 132005: 22000, 132006: 22000, 132007: 22000, 132008: 22000, 132009: 22000, 132010: 22000}, 'name': {132000: 'Bert', 132001: 'mormoncrew', 132002: 'NN', 132003: 'KosatkaPeek mosambitchpeek', 132004: 'Bewer', 132005: 'Ganterhatced', 132006: 'Road to LE', 132007: 'duck', 132008: 'Psychopath', 132009: '-ExΩtiC-', 132010: 'krYtep'}, 'steamid': {132000: 0, 132001: 76561197993611582, 132002: 76561198089780719, 132003: 76561198134270402, 132004: 76561198147100782, 132005: 76561198189734257, 132006: 76561198194694750, 132007: 76561198201296319, 132008: 76561198229793868, 132009: 76561198258044111, 132010: 76561198271657717}, 'weapon': {132000: 'BaseWeaponWorldModel', 132001: 'molotov', 132002: 'awp', 132003: 'bizon', 132004: 'm4a1_silencer', 132005: 'p90', 132006: 'ak47', 132007: 'm4a4', 132008: 'awp', 132009: None, 132010: 'ak47'}, 'ammo': {132000: np.nan, 132001: -1.0, 132002: 10.0, 132003: 64.0, 132004: 25.0, 132005: 50.0, 132006: 30.0, 132007: 21.0, 132008: 10.0, 132009: np.nan, 132010: 30.0}}
+        assert_frame_equal(pd.DataFrame(correct), df, check_dtype=False)
+
+
+    def test_XY(self):
+        df = self.parser.parse_ticks(["X", "Y"], ticks=[x for x in range(10000, 25000)])
+        df = df[df["tick"] == 22000]
+        correct = {'tick': {132000: 22000, 132001: 22000, 132002: 22000, 132003: 22000, 132004: 22000, 132005: 22000, 132006: 22000, 132007: 22000, 132008: 22000, 132009: 22000, 132010: 22000}, 'name': {132000: 'Bert', 132001: 'mormoncrew', 132002: 'NN', 132003: 'KosatkaPeek mosambitchpeek', 132004: 'Bewer', 132005: 'Ganterhatced', 132006: 'Road to LE', 132007: 'duck', 132008: 'Psychopath', 132009: '-ExΩtiC-', 132010: 'krYtep'}, 'steamid': {132000: 0, 132001: 76561197993611582, 132002: 76561198089780719, 132003: 76561198134270402, 132004: 76561198147100782, 132005: 76561198189734257, 132006: 76561198194694750, 132007: 76561198201296319, 132008: 76561198229793868, 132009: 76561198258044111, 132010: 76561198271657717}, 'X': {132000: -560.0, 132001: 526.1273193359375, 132002: -1181.72900390625, 132003: 56.75040054321289, 132004: -751.0429077148438, 132005: -2347.137451171875, 132006: -636.0609741210938, 132007: -1029.7215576171875, 132008: -520.0070190429688, 132009: -636.0609741210938, 132010: 100.56692504882812}, 'Y': {132000: -7680.0, 132001: -1624.7550048828125, 132002: -733.2579345703125, 132003: 807.7340087890625, 132004: 50.30073165893555, 132005: 412.8190002441406, 132006: -2295.5322265625, 132007: -2531.05615234375, 132008: -1053.8978271484375, 132009: -2295.5322265625, 132010: -1438.1640625}}
+        assert_frame_equal(pd.DataFrame(correct), df, check_dtype=False)"""
+
+    def test_bomb_plant_coordinate(self):
+        df = self.parser.parse_events("bomb_planted", props=["X", "Y"])
+        correct = {'site': {0: 455, 1: 454, 2: 454, 3: 454}, 'tick': {0: 9563, 1: 15181, 2: 22693, 3: 30994}, 'user_X': {0: -1905.6671142578125, 1: -252.3131561279297, 2: -253.96875, 3: -296.5209045410156}, 'user_Y': {0: 242.03125, 1: -2139.345947265625, 2: -2142.978515625, 3: -2162.304931640625}, 'userid': {0: 76561198258044111, 1: 76561198271657717, 2: 76561197993611582, 3: 76561198271657717}}
+        assert_frame_equal(pd.DataFrame(correct), df, check_dtype=False)

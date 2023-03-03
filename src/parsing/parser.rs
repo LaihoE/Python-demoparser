@@ -25,7 +25,6 @@ pub struct Parser {
     pub settings: ParserSettings,
     pub state: ParserState,
     pub bytes: Arc<Mmap>,
-    // General purpose int vec, for perf reasons
 }
 /*
 FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
@@ -35,78 +34,94 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 
 impl Parser {
     pub fn start_parsing(&mut self) {
+        let mut read_cache = ReadCache::new(&self.bytes);
+        self.parse_mandatory_ticks(&mut read_cache);
         self.speed();
-        //self.parse_bytes(vec![], true);
+
+        //self.settings.is_cache_run = true;
+        //self.parse_bytes(vec![], true, &vec![]);
         //self.indicies_modify();
     }
-    fn generate_name_id_map(&mut self) -> HashMap<String, usize> {
-        let mut mapping = HashMap::default();
 
-        for (k, m) in &self.maps.serverclass_map {
-            for (idx, p) in m.props.iter().enumerate() {
-                if p.name == "m_hActiveWeapon" && k == &40 {
-                    println!("{} {}", k, p.name);
-                    self.state.weapon_handle_id = idx as i32;
-                }
-                mapping.insert(p.name.clone(), idx);
-            }
-        }
-        mapping
-    }
-    fn parse_mandatory_ticks(
-        &mut self,
-        read_cache: &mut ReadCache,
-    ) -> Option<HashMap<String, usize>> {
-        // Read index at end of file
+    fn parse_mandatory_ticks(&mut self, read_cache: &mut ReadCache) {
         read_cache.read_index();
-        // Used in entities.rs
-        self.state.eid_cls_history = read_cache.get_eid_cls_map();
+        self.state.eid_cls_map = read_cache.get_eid_cls_map();
 
         let mut wanted_bytes = vec![];
         // 2 maps needed for parsing
         let (dt_start, ge_start) = read_cache.read_dt_ge_map();
         if dt_start == 0 && ge_start == 0 {
             println!("NO MAP");
-            return None;
+            return;
         }
-        // Players come trough here (name, steamid, entid etc.)
-        let string_table_bytes = read_cache.read_stringtables();
         wanted_bytes.push(dt_start);
+        // Players come trough here (name, steamid, entid etc.)
+        if self.settings.parse_props {
+            wanted_bytes.push(dt_start);
+        }
         wanted_bytes.push(ge_start);
-        wanted_bytes.extend(string_table_bytes);
-        self.parse_bytes(wanted_bytes, false);
-        Some(self.generate_name_id_map())
-        //Some(HashMap::default())
+        wanted_bytes.extend(read_cache.read_stringtables());
+        self.parse_bytes(wanted_bytes, false, &vec![12, 13, 30]);
+
+        if self.settings.parse_props {
+            self.maps.name_entid_prop = self.generate_name_id_map();
+            self.maps.name_ptype_map = self.generate_name_ptype_map();
+        }
     }
+
     pub fn speed(&mut self) {
         let mut read_cache = ReadCache::new(&self.bytes);
-
-        let name_id_map = match self.parse_mandatory_ticks(&mut read_cache) {
-            Some(map) => map,
-            None => return,
-        };
+        self.parse_mandatory_ticks(&mut read_cache);
 
         let mut wanted_bytes = vec![];
-        for prop in &self.settings.wanted_props {
-            let prop_id = CACHE_ID_MAP[prop];
-            let b = read_cache.read_by_id_players(prop_id as i32, &self.settings.wanted_ticks);
-            wanted_bytes.extend(b);
+
+        if self.settings.parse_game_events {
+            let event_id = self.maps.event_name_to_id[&self.settings.event_name];
+
+            let wanted_ticks_this_event = read_cache.get_event_ticks(event_id);
+            self.settings.wanted_ticks = wanted_ticks_this_event;
+            wanted_bytes.extend(read_cache.game_events_by_id(event_id));
         }
+
+        if self.settings.parse_props {
+            for prop in &self.settings.wanted_props {
+                let prop_id = CACHE_ID_MAP[prop];
+                let b = read_cache.read_by_id_players(prop_id as i32, &self.settings.wanted_ticks);
+                wanted_bytes.extend(b);
+            }
+        }
+
+        /*
         wanted_bytes.extend(read_cache.read_weapons());
-
-        println!("WBL: {:?}", wanted_bytes.len());
-
+        let creates: Vec<u64> = self
+            .state
+            .eid_cls_history
+            .iter()
+            .map(|x| x.byte as u64)
+            .collect();
+        wanted_bytes.extend(creates);
         wanted_bytes.sort();
         let uniq: Vec<u64> = wanted_bytes.iter().map(|x| *x).unique().collect();
 
-        self.state.clip_id = name_id_map["m_iClip1"] as i32;
-        self.state.item_def_id = name_id_map["m_iItemDefinitionIndex"] as i32;
-        println!("SSSS {}", name_id_map["m_iItemDefinitionIndex"]);
-
-        self.parse_bytes(uniq, true);
+        self.state.clip_id = self.maps.name_entid_prop["m_iClip1"] as i32;
+        self.state.item_def_id = self.maps.name_entid_prop["m_iItemDefinitionIndex"] as i32;
+        */
+        let mut uniq: Vec<u64> = wanted_bytes.iter().map(|x| *x).unique().collect();
+        //println!("UNIQ BYTES: {}", uniq.len());
+        uniq.sort();
+        if self.settings.parse_game_events && self.settings.parse_props {
+            self.parse_bytes(uniq, false, &vec![]);
+        } else {
+            self.parse_bytes(uniq, true, &vec![]);
+        }
     }
 
-    pub fn parse_bytes(&mut self, wanted_bytes: Vec<u64>, should_collect: bool) {
+    pub fn parse_bytes(
+        &mut self,
+        wanted_bytes: Vec<u64>,
+        should_collect: bool,
+        wanted_msg: &Vec<i32>,
+    ) {
         let byte_readers = ByteReader::get_byte_readers(&self.bytes, wanted_bytes);
         let n_byte_readers = byte_readers.len();
 
@@ -115,24 +130,51 @@ impl Parser {
                 self.state.frame_started_at = byte_reader.byte_idx as u64;
                 let (cmd, tick) = byte_reader.read_frame();
                 self.state.tick = tick;
-                //println!("{} {}", self.state.weapon_handle_id, self.state.item_def_id);
-                self.parse_cmd(cmd, &mut byte_reader);
+                self.parse_cmd(cmd, &mut byte_reader, wanted_msg);
                 if should_collect {
-                    self.collect_data(21);
+                    self.collect_data();
                     self.collect_weapons();
                 }
-
                 if n_byte_readers > 1 {
                     break;
                 }
             }
         }
     }
+    fn generate_name_id_map(&mut self) -> HashMap<String, usize> {
+        let mut mapping = HashMap::default();
+
+        for (k, m) in &self.maps.serverclass_map {
+            for (idx, p) in m.props.iter().enumerate() {
+                if k != &40 && !(p.name == "m_iClip1" || p.name == "m_iItemDefinitionIndex") {
+                    continue;
+                }
+                if p.name == "m_hActiveWeapon" && k == &40 {
+                    self.state.weapon_handle_id = idx as i32;
+                }
+                mapping.insert(p.name.clone(), idx);
+            }
+        }
+        mapping.insert("X".to_string(), 4999);
+        mapping.insert("Y".to_string(), 4998);
+        mapping
+    }
+    fn generate_name_ptype_map(&mut self) -> HashMap<String, i32> {
+        let mut mapping = HashMap::default();
+
+        for (k, m) in &self.maps.serverclass_map {
+            for (idx, p) in m.props.iter().enumerate() {
+                if k != &40 && !(p.name == "m_iClip1" || p.name == "m_iItemDefinitionIndex") {
+                    continue;
+                }
+                mapping.insert(p.name.clone(), p.p_type);
+            }
+        }
+        mapping.insert("X".to_string(), 1);
+        mapping.insert("Y".to_string(), 1);
+        mapping
+    }
     pub fn indicies_modify(&mut self) -> Vec<u64> {
-        /*
-        Takes the vector with every updated packet ent index
-        and transforms into pidx: Vec<(tick, entid)> pairs.
-        */
         let mut wc = WriteCache::new(&self.bytes);
         wc.write_packet_ents(&self.state.test, &self.maps.serverclass_map);
         wc.write_eid_cls_map(&self.state.eid_cls_history);
@@ -144,21 +186,29 @@ impl Parser {
         let mut rc = ReadCache::new(&self.bytes);
         rc.read_index();
         let map = rc.get_eid_cls_map();
-        self.state.eid_cls_history = map;
         vec![]
     }
-    pub fn parse_cmd(&mut self, cmd: u8, byte_reader: &mut ByteReader) {
+    pub fn parse_cmd(&mut self, cmd: u8, byte_reader: &mut ByteReader, wanted_msg: &Vec<i32>) {
         match cmd {
-            1 => self.messages_from_packet(byte_reader),
-            2 => self.messages_from_packet(byte_reader),
+            1 => self.messages_from_packet(byte_reader, wanted_msg),
+            2 => self.messages_from_packet(byte_reader, wanted_msg),
             6 => self.parse_datatable(byte_reader),
             7 => { // signals end of demo
             }
             _ => {}
         }
     }
-    pub fn msg_handler(&mut self, msg: u32, size: u32, byte_reader: &mut ByteReader) {
-        //println!("{} {}", msg, self.state.tick);
+    pub fn msg_handler(
+        &mut self,
+        msg: u32,
+        size: u32,
+        byte_reader: &mut ByteReader,
+        wanted_msg: &Vec<i32>,
+    ) {
+        if wanted_msg.len() != 0 && !wanted_msg.contains(&(msg as i32)) {
+            byte_reader.skip_n_bytes(size);
+            return;
+        }
         match msg {
             12 => self.create_string_table(byte_reader, size as usize),
             13 => self.update_string_table_msg(byte_reader, size as usize),
@@ -170,14 +220,14 @@ impl Parser {
             }
         }
     }
-    pub fn messages_from_packet(&mut self, byte_reader: &mut ByteReader) {
+    pub fn messages_from_packet(&mut self, byte_reader: &mut ByteReader, wanted_msg: &Vec<i32>) {
         byte_reader.skip_n_bytes(160);
         let packet_len = byte_reader.read_i32();
         let goal_inx = byte_reader.byte_idx + packet_len as usize;
         while byte_reader.byte_idx < goal_inx {
             let msg = byte_reader.read_varint();
             let size = byte_reader.read_varint();
-            self.msg_handler(msg, size, byte_reader);
+            self.msg_handler(msg, size, byte_reader, wanted_msg);
         }
     }
 }

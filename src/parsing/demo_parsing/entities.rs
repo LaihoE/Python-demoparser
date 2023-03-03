@@ -22,6 +22,7 @@ pub struct Entity {
     pub class_id: u32,
     pub entity_id: i32,
     pub props: Vec<Option<PropData>>,
+    pub tick_set_at: Vec<i32>,
 }
 
 #[derive(Debug, Clone)]
@@ -70,12 +71,15 @@ impl Parser {
                 let mut entity = Entity {
                     class_id: cls_id,
                     entity_id: entity_id,
-                    props: vec![None; 10000],
+                    props: vec![None; 5000],
+                    tick_set_at: vec![-1; 5000],
                 };
+
                 match self.maps.baselines.get(&cls_id) {
                     Some(baseline) => {
                         for (k, v) in baseline {
                             entity.props[*k as usize] = Some(v.clone());
+                            entity.tick_set_at[*k as usize] = -69;
                         }
                     }
                     None => {}
@@ -95,12 +99,16 @@ impl Parser {
             }
         }
     }
-    fn find_cls_id(history: &Vec<EidClsHistoryEntry>, entity_id: i32, tick: i32) -> u32 {
+    fn find_cls_id(
+        history: &mut HashMap<i32, Vec<EidClsHistoryEntry>>,
+        entity_id: i32,
+        tick: i32,
+    ) -> u32 {
         // Finds current cls id for entity. Has to be mapped based on tick because
         // entity ids are reused :(
-        let mut myid: Vec<&EidClsHistoryEntry> =
-            history.iter().filter(|x| x.eid == entity_id).collect();
+        let myid = history.get_mut(&entity_id).unwrap();
         myid.sort_by_key(|x| x.tick);
+
         if myid.len() == 0 {
             panic!("ENITD {} NO CLS", entity_id);
         }
@@ -120,17 +128,19 @@ impl Parser {
             Some(_e) => {}
             None => {
                 let cls_id =
-                    Parser::find_cls_id(&self.state.eid_cls_history, entity_id, self.state.tick);
+                    Parser::find_cls_id(&mut self.state.eid_cls_map, entity_id, self.state.tick);
                 let mut entity = Entity {
                     class_id: cls_id,
                     entity_id: entity_id,
-                    props: vec![None; 10000],
+                    props: vec![None; 5000],
+                    tick_set_at: vec![0; 5000],
                 };
                 match self.maps.baselines.get(&cls_id) {
                     Some(baseline) => {
                         for (k, v) in baseline {
                             //println!("{} {:?}", k, v);
                             entity.props[*k as usize] = Some(v.clone());
+                            entity.tick_set_at[*k as usize] = -69;
                         }
                     }
                     None => {}
@@ -156,7 +166,8 @@ impl Parser {
             if val == -1 {
                 break;
             }
-            if !forbidden.contains(&val) {
+
+            if self.settings.is_cache_run && !forbidden.contains(&val) {
                 self.state
                     .test
                     .entry(entity.class_id)
@@ -169,26 +180,35 @@ impl Parser {
                         entity_id,
                     ]);
             }
+
             self.state.workhorse[idx] = val;
             idx += 1;
         }
 
-        let cls_id = Parser::find_cls_id(&self.state.eid_cls_history, entity_id, self.state.tick);
+        let cls_id = match self.settings.is_cache_run {
+            true => entity.class_id,
+            false => Parser::find_cls_id(&mut self.state.eid_cls_map, entity_id, self.state.tick),
+        };
+
         let sv_cls = self.maps.serverclass_map.get(&(cls_id as u16)).unwrap();
 
         for i in 0..idx {
             let idx = self.state.workhorse[i];
             let prop = &sv_cls.props[idx as usize];
-            let p = bitreader.decode(prop);
+            let p = bitreader.decode(prop).unwrap();
 
-            if prop.name.contains("Item") {
-                println!(
-                    "{} {} {} {} {:?}",
-                    idx, entity_id, self.state.tick, prop.name, p
-                );
+            if prop.name == "m_vecOrigin" {
+                match p {
+                    PropData::VecXY(xy) => {
+                        entity.props[4999] = Some(PropData::F32(xy[0]));
+                        entity.props[4998] = Some(PropData::F32(xy[1]));
+                    }
+                    _ => {}
+                }
             }
-
-            entity.props[idx as usize] = p;
+            entity.props[idx as usize] = Some(p);
+            //println!("{}", self.state.tick);
+            entity.tick_set_at[idx as usize] = self.state.tick;
         }
     }
 }
@@ -197,6 +217,7 @@ pub fn parse_baselines(
     data: &[u8],
     sv_cls: &ServerClass,
     baselines: &mut HashMap<u32, HashMap<i32, PropData>>,
+    tick: i32,
 ) {
     let mut b = MyBitreader::new(data);
     let mut val = -1;
@@ -214,7 +235,7 @@ pub fn parse_baselines(
     for inx in indicies {
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop).unwrap();
-        //println!("{} {:?}", prop.name.to_owned(), pdata);
+        //println!("{} {:?} {}", prop.name.to_owned(), pdata, tick);
         baseline.insert(inx, pdata);
     }
     baselines.insert(sv_cls.id.try_into().unwrap(), baseline);

@@ -21,6 +21,7 @@ pub const GAME_EVENT_ID: i32 = -5;
 pub const STRING_TABLE_ID: i32 = -6;
 pub const AMMO_ID: i32 = -42;
 pub const ITEMDEF_ID: i32 = -88;
+pub const ACTIVE_WEAPON_ID: i32 = 8;
 
 #[derive(Debug)]
 pub struct WriteCache {
@@ -80,15 +81,19 @@ impl WriteCache {
 
     pub fn write_eid_cls_map(&mut self, eid_cls_map: &Vec<EidClsHistoryEntry>) {
         let mut bytes = vec![];
+        //for (k, v) in eid_cls_map
+
         bytes.extend(eid_cls_map.iter().flat_map(|x| x.cls_id.to_le_bytes()));
         bytes.extend(eid_cls_map.iter().flat_map(|x| x.eid.to_le_bytes()));
         bytes.extend(eid_cls_map.iter().flat_map(|x| x.tick.to_le_bytes()));
+        bytes.extend(eid_cls_map.iter().flat_map(|x| x.byte.to_le_bytes()));
         self.append_to_buffer(&bytes, EID_CLS_MAP_ID);
     }
 
     pub fn write_game_events(&mut self, game_events: &Vec<GameEventHistory>) {
         let mut bytes = vec![];
         bytes.extend(game_events.iter().flat_map(|x| x.byte.to_le_bytes()));
+        bytes.extend(game_events.iter().flat_map(|x| x.tick.to_le_bytes()));
         bytes.extend(game_events.iter().flat_map(|x| x.id.to_le_bytes()));
         self.append_to_buffer(&bytes, GAME_EVENT_ID)
     }
@@ -125,13 +130,13 @@ impl WriteCache {
 
                         match prop.name.as_str() {
                             "m_iClip1" => {
-                                println!("CLIP");
+                                //println!("CLIP");
                                 ammo_bytes.extend(v.iter().flat_map(|x| x[0].to_le_bytes()));
                                 ammo_ticks.extend(v.iter().flat_map(|x| x[1].to_le_bytes()));
                                 ammo_entids.extend(v.iter().flat_map(|x| 0_i32.to_le_bytes()));
                             }
                             "m_iItemDefinitionIndex" => {
-                                println!("HRERE");
+                                //println!("HRERE");
                                 def_bytes.extend(v.iter().flat_map(|x| x[0].to_le_bytes()));
                                 def_ticks.extend(v.iter().flat_map(|x| x[1].to_le_bytes()));
                                 def_entids.extend(v.iter().flat_map(|x| 0_i32.to_le_bytes()));

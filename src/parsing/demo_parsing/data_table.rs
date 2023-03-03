@@ -68,7 +68,12 @@ impl Parser {
             // before this event. Seems oddly complicated
             match self.maps.baseline_no_cls.get(&(id as u32)) {
                 Some(user_data) => {
-                    parse_baselines(&user_data, &server_class, &mut self.maps.baselines);
+                    parse_baselines(
+                        &user_data,
+                        &server_class,
+                        &mut self.maps.baselines,
+                        self.state.tick,
+                    );
                     // Remove after being parsed
                     self.maps.baseline_no_cls.remove(&(id as u32));
                 }

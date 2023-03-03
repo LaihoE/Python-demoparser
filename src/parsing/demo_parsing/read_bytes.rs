@@ -19,7 +19,7 @@ impl ByteReader {
         big bytereader is returned. Starting from 1072 (header is 1072)
         and ending at end of file. This happens when no cache is available
         */
-
+        println!("{}", start_pos.len());
         if start_pos.len() == 0 {
             return vec![ByteReader::new(bytes.clone(), false, 1072)];
         }

@@ -124,9 +124,8 @@ impl Parser {
         }
     }
 
-    pub fn collect_data(&mut self) {
+    pub fn collect_players(&mut self) {
         for prop in &self.settings.collect_props {
-            //println!("{:?}", self.maps.name_entid_prop);
             let prop_id = self.maps.name_entid_prop[prop];
             for (xuid, player) in &self.maps.players {
                 match &self.state.entities.get(&(player.entity_id as i32)) {

@@ -56,17 +56,28 @@ pub struct ReadCache {
 const HASH_BYTE_LENGTH: usize = 10000;
 
 impl ReadCache {
-    pub fn new(bytes: &[u8]) -> Self {
-        let path = ReadCache::get_cache_path(bytes);
+    pub fn new(path: &str) -> Self {
         let file = File::open(&path).unwrap();
         let map = unsafe { MmapOptions::new().map(&file).unwrap() };
 
         ReadCache {
             deltas: HashMap::default(),
-            path: path,
+            path: path.to_string(),
             bytes: map,
             index: HashMap::default(),
             game_events: vec![],
+        }
+    }
+    pub fn get_cache_path(bytes: &[u8]) -> String {
+        let file_hash = sha256::digest(&bytes[..HASH_BYTE_LENGTH]);
+        let path = "/home/laiho/Documents/cache/".to_owned();
+        path + &file_hash + &".h5"
+    }
+    pub fn get_cache_if_exists(bytes: &[u8]) -> Option<ReadCache> {
+        let cache_path = Self::get_cache_path(&bytes);
+        match Path::new(&cache_path).exists() {
+            true => Some(ReadCache::new(&cache_path)),
+            false => None,
         }
     }
     pub fn read_index(&mut self) {
@@ -132,11 +143,6 @@ impl ReadCache {
     }
     pub fn get_event_ticks(&mut self, id: i32) -> Vec<i32> {
         self.read_game_events();
-        for ev in &self.game_events {
-            if ev.id == id {
-                println!("{:?}", ev);
-            }
-        }
 
         self.game_events
             .iter()
@@ -153,22 +159,11 @@ impl ReadCache {
         bytes_out
     }
 
-    pub fn get_cache_path(bytes: &[u8]) -> String {
-        let file_hash = sha256::digest(&bytes[..HASH_BYTE_LENGTH]);
-        let path = "/home/laiho/Documents/cache/".to_owned();
-        path + &file_hash + &".h5"
-    }
-
     pub fn filter_delta_ticks_wanted(
         &self,
         deltas: &Vec<&Delta>,
         wanted_ticks: &Vec<i32>,
     ) -> Vec<u64> {
-        println!(
-            "DELTA LEN {:?} WANTED_LEN {:?}",
-            deltas.len(),
-            wanted_ticks.len()
-        );
         if deltas.len() == 0 {
             return vec![];
         }

@@ -11,7 +11,7 @@ from pandas.testing import assert_frame_equal
 
 def coordinates(file):
     parser = DemoParser("/home/laiho/Documents/programming/rust/newparser/Python-demoparser/tests/test_demo.dem")
-    df = parser.parse_ticks(["m_angEyeAngles[1]"], ticks=[x for x in range(10000, 15000)])
+    df = parser.parse_ticks(["m_angEyeAngles[1]"], ticks=[x for x in range(15000, 15500)])
     print(df)
 
 

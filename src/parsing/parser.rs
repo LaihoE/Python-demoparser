@@ -1,3 +1,4 @@
+use super::cache::WriteCache;
 use crate::parsing::cache::cache_reader::ReadCache;
 use crate::parsing::cache::AMMO_ID;
 use crate::parsing::demo_parsing::*;
@@ -14,8 +15,6 @@ use mimalloc::MiMalloc;
 use ndarray::{arr2, s};
 use std::sync::Arc;
 use std::u8;
-
-use super::cache::WriteCache;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -34,13 +33,93 @@ FRAME -> CMD -> NETMESSAGE----------> TYPE --> Packet entities
 
 impl Parser {
     pub fn start_parsing(&mut self) {
-        let mut read_cache = ReadCache::new(&self.bytes);
-        self.parse_mandatory_ticks(&mut read_cache);
-        self.speed();
+        match ReadCache::get_cache_if_exists(&self.bytes) {
+            Some(mut index) => {
+                self.parse_wanted_ticks(&mut index);
+            }
+            None => {
+                self.settings.is_cache_run = true;
+                self.parse_bytes(vec![], true, &vec![]);
+                self.write_index_file();
+            }
+        }
+    }
+    pub fn parse_bytes(
+        &mut self,
+        wanted_bytes: Vec<u64>,
+        should_collect: bool,
+        wanted_msg: &Vec<i32>,
+    ) {
+        let byte_readers = ByteReader::get_byte_readers(&self.bytes, wanted_bytes);
+        let n_byte_readers = byte_readers.len();
 
-        //self.settings.is_cache_run = true;
-        //self.parse_bytes(vec![], true, &vec![]);
-        //self.indicies_modify();
+        for mut byte_reader in byte_readers {
+            while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
+                self.state.frame_started_at = byte_reader.byte_idx as u64;
+                let (cmd, tick) = byte_reader.read_frame();
+                self.state.tick = tick;
+                self.parse_cmd(cmd, &mut byte_reader, wanted_msg);
+                if should_collect {
+                    self.collect_players();
+                    //self.collect_weapons();
+                }
+                if n_byte_readers > 1 {
+                    break;
+                }
+            }
+        }
+    }
+    pub fn parse_cmd(&mut self, cmd: u8, byte_reader: &mut ByteReader, wanted_msg: &Vec<i32>) {
+        match cmd {
+            1 => self.messages_from_packet(byte_reader, wanted_msg),
+            2 => self.messages_from_packet(byte_reader, wanted_msg),
+            6 => self.parse_datatable(byte_reader),
+            7 => { // signals end of demo
+            }
+            _ => {}
+        }
+    }
+    pub fn messages_from_packet(&mut self, byte_reader: &mut ByteReader, wanted_msg: &Vec<i32>) {
+        byte_reader.skip_n_bytes(160);
+        let packet_len = byte_reader.read_i32();
+        let goal_inx = byte_reader.byte_idx + packet_len as usize;
+        while byte_reader.byte_idx < goal_inx {
+            let msg = byte_reader.read_varint();
+            let size = byte_reader.read_varint();
+            self.msg_handler(msg, size, byte_reader, wanted_msg);
+        }
+    }
+    pub fn msg_handler(
+        &mut self,
+        msg: u32,
+        size: u32,
+        byte_reader: &mut ByteReader,
+        wanted_msg: &Vec<i32>,
+    ) {
+        if wanted_msg.len() != 0 && !wanted_msg.contains(&(msg as i32)) {
+            byte_reader.skip_n_bytes(size);
+            return;
+        }
+        match msg {
+            12 => self.create_string_table(byte_reader, size as usize),
+            13 => self.update_string_table_msg(byte_reader, size as usize),
+            25 => self.parse_game_event(byte_reader, size as usize),
+            26 => self.parse_packet_entities(byte_reader, size as usize),
+            30 => self.parse_game_event_map(byte_reader, size as usize),
+            _ => {
+                byte_reader.skip_n_bytes(size);
+            }
+        }
+    }
+
+    pub fn write_index_file(&mut self) {
+        let mut wc = WriteCache::new(&self.bytes);
+        wc.write_packet_ents(&self.state.test, &self.maps.serverclass_map);
+        wc.write_eid_cls_map(&self.state.eid_cls_history);
+        wc.write_dt_ge_map(self.state.dt_started_at, self.state.ge_map_started_at);
+        wc.write_game_events(&self.state.game_event_history);
+        wc.write_stringtables(&self.state.stringtable_history);
+        wc.flush();
     }
 
     fn parse_mandatory_ticks(&mut self, read_cache: &mut ReadCache) {
@@ -69,15 +148,12 @@ impl Parser {
         }
     }
 
-    pub fn speed(&mut self) {
-        let mut read_cache = ReadCache::new(&self.bytes);
-        self.parse_mandatory_ticks(&mut read_cache);
+    pub fn parse_wanted_ticks(&mut self, read_cache: &mut ReadCache) {
+        self.parse_mandatory_ticks(read_cache);
 
         let mut wanted_bytes = vec![];
-
         if self.settings.parse_game_events {
             let event_id = self.maps.event_name_to_id[&self.settings.event_name];
-
             let wanted_ticks_this_event = read_cache.get_event_ticks(event_id);
             self.settings.wanted_ticks = wanted_ticks_this_event;
             wanted_bytes.extend(read_cache.game_events_by_id(event_id));
@@ -107,89 +183,11 @@ impl Parser {
         self.state.item_def_id = self.maps.name_entid_prop["m_iItemDefinitionIndex"] as i32;
         */
         let mut uniq: Vec<u64> = wanted_bytes.iter().map(|x| *x).unique().collect();
-        //println!("UNIQ BYTES: {}", uniq.len());
         uniq.sort();
         if self.settings.parse_game_events && self.settings.parse_props {
             self.parse_bytes(uniq, false, &vec![]);
         } else {
             self.parse_bytes(uniq, true, &vec![]);
         }
-    }
-
-    pub fn parse_bytes(
-        &mut self,
-        wanted_bytes: Vec<u64>,
-        should_collect: bool,
-        wanted_msg: &Vec<i32>,
-    ) {
-        let byte_readers = ByteReader::get_byte_readers(&self.bytes, wanted_bytes);
-        let n_byte_readers = byte_readers.len();
-
-        for mut byte_reader in byte_readers {
-            while byte_reader.byte_idx < byte_reader.bytes.len() as usize {
-                self.state.frame_started_at = byte_reader.byte_idx as u64;
-                let (cmd, tick) = byte_reader.read_frame();
-                self.state.tick = tick;
-                self.parse_cmd(cmd, &mut byte_reader, wanted_msg);
-                if should_collect {
-                    self.collect_data();
-                    self.collect_weapons();
-                }
-                if n_byte_readers > 1 {
-                    break;
-                }
-            }
-        }
-    }
-    pub fn parse_cmd(&mut self, cmd: u8, byte_reader: &mut ByteReader, wanted_msg: &Vec<i32>) {
-        match cmd {
-            1 => self.messages_from_packet(byte_reader, wanted_msg),
-            2 => self.messages_from_packet(byte_reader, wanted_msg),
-            6 => self.parse_datatable(byte_reader),
-            7 => { // signals end of demo
-            }
-            _ => {}
-        }
-    }
-    pub fn msg_handler(
-        &mut self,
-        msg: u32,
-        size: u32,
-        byte_reader: &mut ByteReader,
-        wanted_msg: &Vec<i32>,
-    ) {
-        if wanted_msg.len() != 0 && !wanted_msg.contains(&(msg as i32)) {
-            byte_reader.skip_n_bytes(size);
-            return;
-        }
-        match msg {
-            12 => self.create_string_table(byte_reader, size as usize),
-            13 => self.update_string_table_msg(byte_reader, size as usize),
-            25 => self.parse_game_event(byte_reader, size as usize),
-            26 => self.parse_packet_entities(byte_reader, size as usize),
-            30 => self.parse_game_event_map(byte_reader, size as usize),
-            _ => {
-                byte_reader.skip_n_bytes(size);
-            }
-        }
-    }
-    pub fn messages_from_packet(&mut self, byte_reader: &mut ByteReader, wanted_msg: &Vec<i32>) {
-        byte_reader.skip_n_bytes(160);
-        let packet_len = byte_reader.read_i32();
-        let goal_inx = byte_reader.byte_idx + packet_len as usize;
-        while byte_reader.byte_idx < goal_inx {
-            let msg = byte_reader.read_varint();
-            let size = byte_reader.read_varint();
-            self.msg_handler(msg, size, byte_reader, wanted_msg);
-        }
-    }
-    pub fn write_index_file(&mut self) {
-        let mut wc = WriteCache::new(&self.bytes);
-        wc.write_packet_ents(&self.state.test, &self.maps.serverclass_map);
-        wc.write_eid_cls_map(&self.state.eid_cls_history);
-        wc.write_dt_ge_map(self.state.dt_started_at, self.state.ge_map_started_at);
-        wc.write_game_events(&self.state.game_event_history);
-        wc.write_stringtables(&self.state.stringtable_history);
-        wc.flush();
     }
 }

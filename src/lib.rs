@@ -311,7 +311,7 @@ impl DemoParser {
                 match &parser.state.output[&TICK_ID].data {
                     VarVec::I32(i) => {
                         let (ticks, offsets) = find_copy_offsets(&i, &parser.settings.wanted_ticks);
-                        println!("{:?}", ticks);
+                        println!("{:?}", ticks.len());
                         rust_series.push(Series::new(&"tick".to_string(), ticks));
 
                         for id in ids {
@@ -453,9 +453,6 @@ fn find_copy_offsets(
     v1: &Vec<Option<i32>>,
     wanted_ticks: &Vec<i32>,
 ) -> (Vec<i32>, Vec<(usize, usize)>) {
-    println!("{:?}", wanted_ticks);
-    //println!("{:?}", v1);
-
     let mut mapping: Vec<Offsets> = vec![];
     let mut cur_tick = v1[0];
     let mut tick_start = 0;

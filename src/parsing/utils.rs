@@ -1,13 +1,13 @@
 use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::Parser;
 pub use crate::parsing::variants::*;
+use ahash::HashMap;
 use flate2::read::GzDecoder;
 use memmap2::MmapOptions;
 use phf::phf_map;
 use pyo3::Py;
 use pyo3::PyAny;
 use pyo3::ToPyObject;
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::Read;
@@ -33,7 +33,7 @@ pub struct Header {
 
 impl Header {
     fn to_hashmap(&self) -> HashMap<String, String> {
-        let mut hm: HashMap<String, String> = HashMap::new();
+        let mut hm: HashMap<String, String> = HashMap::default();
         hm.insert("protocol".to_string(), self.protocol.to_string());
         hm.insert(
             "network_protocol".to_string(),
@@ -97,6 +97,39 @@ impl Parser {
         };
         self.state.fp += 1072_usize;
         h
+    }
+    pub fn generate_name_id_map(&mut self) -> HashMap<String, usize> {
+        let mut mapping = HashMap::default();
+
+        for (k, m) in &self.maps.serverclass_map {
+            for (idx, p) in m.props.iter().enumerate() {
+                if k != &40 && !(p.name == "m_iClip1" || p.name == "m_iItemDefinitionIndex") {
+                    continue;
+                }
+                if p.name == "m_hActiveWeapon" && k == &40 {
+                    self.state.weapon_handle_id = idx as i32;
+                }
+                mapping.insert(p.name.clone(), idx);
+            }
+        }
+        mapping.insert("X".to_string(), 4999);
+        mapping.insert("Y".to_string(), 4998);
+        mapping
+    }
+    pub fn generate_name_ptype_map(&mut self) -> HashMap<String, i32> {
+        let mut mapping = HashMap::default();
+
+        for (k, m) in &self.maps.serverclass_map {
+            for (idx, p) in m.props.iter().enumerate() {
+                if k != &40 && !(p.name == "m_iClip1" || p.name == "m_iItemDefinitionIndex") {
+                    continue;
+                }
+                mapping.insert(p.name.clone(), p.p_type);
+            }
+        }
+        mapping.insert("X".to_string(), 1);
+        mapping.insert("Y".to_string(), 1);
+        mapping
     }
 }
 

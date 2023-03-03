@@ -453,6 +453,9 @@ fn find_copy_offsets(
     v1: &Vec<Option<i32>>,
     wanted_ticks: &Vec<i32>,
 ) -> (Vec<i32>, Vec<(usize, usize)>) {
+    println!("{:?}", wanted_ticks);
+    //println!("{:?}", v1);
+
     let mut mapping: Vec<Offsets> = vec![];
     let mut cur_tick = v1[0];
     let mut tick_start = 0;

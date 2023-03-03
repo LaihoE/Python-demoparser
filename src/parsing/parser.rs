@@ -141,53 +141,6 @@ impl Parser {
             }
         }
     }
-    fn generate_name_id_map(&mut self) -> HashMap<String, usize> {
-        let mut mapping = HashMap::default();
-
-        for (k, m) in &self.maps.serverclass_map {
-            for (idx, p) in m.props.iter().enumerate() {
-                if k != &40 && !(p.name == "m_iClip1" || p.name == "m_iItemDefinitionIndex") {
-                    continue;
-                }
-                if p.name == "m_hActiveWeapon" && k == &40 {
-                    self.state.weapon_handle_id = idx as i32;
-                }
-                mapping.insert(p.name.clone(), idx);
-            }
-        }
-        mapping.insert("X".to_string(), 4999);
-        mapping.insert("Y".to_string(), 4998);
-        mapping
-    }
-    fn generate_name_ptype_map(&mut self) -> HashMap<String, i32> {
-        let mut mapping = HashMap::default();
-
-        for (k, m) in &self.maps.serverclass_map {
-            for (idx, p) in m.props.iter().enumerate() {
-                if k != &40 && !(p.name == "m_iClip1" || p.name == "m_iItemDefinitionIndex") {
-                    continue;
-                }
-                mapping.insert(p.name.clone(), p.p_type);
-            }
-        }
-        mapping.insert("X".to_string(), 1);
-        mapping.insert("Y".to_string(), 1);
-        mapping
-    }
-    pub fn indicies_modify(&mut self) -> Vec<u64> {
-        let mut wc = WriteCache::new(&self.bytes);
-        wc.write_packet_ents(&self.state.test, &self.maps.serverclass_map);
-        wc.write_eid_cls_map(&self.state.eid_cls_history);
-        wc.write_dt_ge_map(self.state.dt_started_at, self.state.ge_map_started_at);
-        wc.write_game_events(&self.state.game_event_history);
-        wc.write_stringtables(&self.state.stringtable_history);
-        wc.flush();
-
-        let mut rc = ReadCache::new(&self.bytes);
-        rc.read_index();
-        let map = rc.get_eid_cls_map();
-        vec![]
-    }
     pub fn parse_cmd(&mut self, cmd: u8, byte_reader: &mut ByteReader, wanted_msg: &Vec<i32>) {
         match cmd {
             1 => self.messages_from_packet(byte_reader, wanted_msg),
@@ -229,5 +182,14 @@ impl Parser {
             let size = byte_reader.read_varint();
             self.msg_handler(msg, size, byte_reader, wanted_msg);
         }
+    }
+    pub fn write_index_file(&mut self) {
+        let mut wc = WriteCache::new(&self.bytes);
+        wc.write_packet_ents(&self.state.test, &self.maps.serverclass_map);
+        wc.write_eid_cls_map(&self.state.eid_cls_history);
+        wc.write_dt_ge_map(self.state.dt_started_at, self.state.ge_map_started_at);
+        wc.write_game_events(&self.state.game_event_history);
+        wc.write_stringtables(&self.state.stringtable_history);
+        wc.flush();
     }
 }

@@ -1,3 +1,4 @@
+use crate::parsing::cache::ReadCache;
 use crate::parsing::demo_parsing::EidClsHistoryEntry;
 use crate::parsing::demo_parsing::GameEventHistory;
 use crate::parsing::demo_parsing::ServerClass;
@@ -38,7 +39,7 @@ pub struct IndexEntry {
 
 impl WriteCache {
     pub fn new(bytes: &[u8]) -> Self {
-        let cache_path = WriteCache::get_cache_path(bytes);
+        let cache_path = ReadCache::get_cache_path(bytes);
         WriteCache {
             path: cache_path,
             index: vec![],
@@ -162,10 +163,4 @@ impl WriteCache {
         self.append_to_buffer(&def_bytes, ITEMDEF_ID);
         self.append_to_buffer(&ammo_bytes, AMMO_ID);
     }
-    pub fn get_cache_path(bytes: &[u8]) -> String {
-        let file_hash = sha256::digest(&bytes[..HASH_BYTE_LENGTH]);
-        let path = "/home/laiho/Documents/cache/".to_owned();
-        path + &file_hash + &".h5"
-    }
 }
-use phf::phf_map;

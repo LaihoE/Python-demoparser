@@ -12,8 +12,8 @@ from pandas.testing import assert_frame_equal
 def coordinates(file):
     #parser = DemoParser("/home/laiho/Documents/programming/rust/newparser/Python-demoparser/tests/test_demo.dem")
     parser = DemoParser(file)
-    #df = parser.parse_ticks(["X"], ticks=[x for x in range(30000, 30001)])
-    df = parser.parse_events("bomb_planted")
+    df = parser.parse_ticks(["X"], ticks=[x for x in range(30000, 30001)])
+    #df = parser.parse_events("player_death")
     return df
     #print(df)
     """df = parser.parse_ticks(["weapon", "ammo"], ticks=[x for x in range(22000, 22001)])
@@ -25,7 +25,7 @@ def coordinates(file):
 
 
 if __name__ == "__main__":
-    #files = glob.glob("/home/laiho/Documents/demos/mygames/*")#[30:31]
+    # files = glob.glob("/home/laiho/Documents/demos/mygames/*")#[30:31]
     files = glob.glob("/home/laiho/Documents/demos/bench_pro_demos/*")
 
     before = time.time()
@@ -35,6 +35,7 @@ if __name__ == "__main__":
     
     df = pd.concat(results)
     print(df)
+    print(time.time() - before)
     #df = df[(df["distance"] > 30) & (df["noscope"] == True)]
     #print(df)
 

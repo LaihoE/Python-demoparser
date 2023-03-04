@@ -82,8 +82,6 @@ impl WriteCache {
 
     pub fn write_eid_cls_map(&mut self, eid_cls_map: &Vec<EidClsHistoryEntry>) {
         let mut bytes = vec![];
-        //for (k, v) in eid_cls_map
-
         bytes.extend(eid_cls_map.iter().flat_map(|x| x.cls_id.to_le_bytes()));
         bytes.extend(eid_cls_map.iter().flat_map(|x| x.eid.to_le_bytes()));
         bytes.extend(eid_cls_map.iter().flat_map(|x| x.tick.to_le_bytes()));

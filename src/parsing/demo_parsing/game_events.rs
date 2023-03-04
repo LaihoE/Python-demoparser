@@ -196,12 +196,14 @@ impl Parser {
                 // Replace userids with steamids
                 "userid" => self.parse_key_steamid(ge),
                 "attacker" => self.parse_key_steamid(ge),
+                "assister" => self.parse_key_steamid(ge),
                 _ => val,
             };
-            let data_type = if desc.name() == "userid" || desc.name() == "attacker" {
-                7
-            } else {
-                ge.type_()
+            let data_type = match desc.name() {
+                "userid" => 7,
+                "attacker" => 7,
+                "assister" => 7,
+                _ => ge.type_(),
             };
             kv_pairs.push(NameDataPair {
                 name: desc.name().to_owned(),
@@ -214,6 +216,7 @@ impl Parser {
             let pairs = match pair.name.as_str() {
                 "userid" => self.get_tick_props(&pair, "user_"),
                 "attacker" => self.get_tick_props(&pair, "attacker_"),
+                "assister" => self.get_tick_props(&pair, "assister_"),
                 _ => None,
             };
             match pairs {

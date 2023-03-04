@@ -35,7 +35,6 @@ impl Parser {
     pub fn start_parsing(&mut self) {
         match ReadCache::get_cache_if_exists(&self.bytes) {
             Some(mut index) => {
-                println!("CACHE FOUND");
                 self.parse_wanted_ticks(&mut index);
             }
             None => {

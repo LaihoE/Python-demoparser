@@ -158,7 +158,6 @@ impl DemoParser {
         py_kwargs: Option<&PyDict>,
     ) -> PyResult<Py<PyAny>> {
         let (rounds, wanted_props) = parse_kwargs_event(py_kwargs);
-        println!("{:?}", wanted_props);
         let real_props = rm_user_friendly_names(&wanted_props);
         let unk_props = check_validity_props(&real_props);
         if !unk_props.is_empty() {
@@ -167,11 +166,10 @@ impl DemoParser {
                 unk_props
             )));
         }
-        println!("REAL {:?}", real_props);
         let parser_inputs = ParserInputs {
             demo_path: self.path.clone(),
-            parse_props: true,
-            only_events: false,
+            parse_props: wanted_props.len() > 0,
+            only_events: wanted_props.len() == 0,
             wanted_ticks: vec![],
             wanted_players: vec![],
             event_name: event_name,
@@ -311,7 +309,7 @@ impl DemoParser {
                 match &parser.state.output[&TICK_ID].data {
                     VarVec::I32(i) => {
                         let (ticks, offsets) = find_copy_offsets(&i, &parser.settings.wanted_ticks);
-                        println!("{:?}", ticks.len());
+
                         rust_series.push(Series::new(&"tick".to_string(), ticks));
 
                         for id in ids {
@@ -321,7 +319,6 @@ impl DemoParser {
                                     for x in &offsets {
                                         v.extend_from_slice(&f[x.0..x.1]);
                                     }
-
                                     rust_series.push(Series::new(&id.to_string(), v));
                                 }
                                 VarVec::U64(f) => {
@@ -356,6 +353,7 @@ impl DemoParser {
                 for series in &rust_series {
                     py_series.push(rust_series_to_py_series(&series).unwrap())
                 }
+
                 let polars = py.import("polars")?;
                 let all_series_py = py_series.to_object(py);
                 let df = polars.call_method1("DataFrame", (all_series_py,))?;

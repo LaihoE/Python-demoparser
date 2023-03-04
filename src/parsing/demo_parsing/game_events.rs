@@ -140,7 +140,6 @@ impl Parser {
                 Some(ent) => {
                     match ent.props.get(prop_idx) {
                         Some(prop) => {
-                            println!("{:?} {}", prop, ent.tick_set_at[prop_idx]);
                             let pair = match prop {
                                 Some(p) => {
                                     let data = KeyData::from(p.clone());
@@ -151,14 +150,11 @@ impl Parser {
                                         data_type: data_type,
                                     }
                                 }
-                                None => {
-                                    println!("Entity id had no prop");
-                                    NameDataPair {
-                                        name: prefix.to_string() + &prop_name,
-                                        data: KeyData::Float(0.0),
-                                        data_type: 2,
-                                    }
-                                }
+                                None => NameDataPair {
+                                    name: prefix.to_string() + &prop_name,
+                                    data: KeyData::Float(0.0),
+                                    data_type: 2,
+                                },
                             };
                             found_props.push(pair)
                         }

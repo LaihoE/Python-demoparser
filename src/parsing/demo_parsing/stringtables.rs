@@ -102,7 +102,7 @@ impl Parser {
             max_entries: data.max_entries(),
             udfs: data.user_data_fixed_size(),
             uds: data.user_data_size(),
-            data: Vec::new(),
+            data: vec![],
         };
         if data.name() == "userinfo" || data.name() == "instancebaseline" {
             for _ in 1..50000 {
@@ -190,18 +190,20 @@ impl Parser {
                 };
 
                 if st.name == "instancebaseline" {
-                    self.state.stringtable_history.push(StringTableHistory {
-                        byte: self.state.frame_started_at as i32,
-                    });
                     let k = entry.parse::<u32>().unwrap_or(999999);
                     match self.maps.serverclass_map.get(&(k as u16)) {
                         Some(sv_cls) => {
-                            parse_baselines(
+                            let is_interesting = parse_baselines(
                                 &user_data,
                                 sv_cls,
                                 &mut self.maps.baselines,
                                 self.state.tick,
                             );
+                            if is_interesting {
+                                self.state.stringtable_history.push(StringTableHistory {
+                                    byte: self.state.frame_started_at as i32,
+                                });
+                            }
                         }
                         None => {
                             // Serverclass_map is not initiated yet, we need to parse this

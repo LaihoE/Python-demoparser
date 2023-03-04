@@ -45,6 +45,9 @@ impl Parser {
     }
     pub fn collect_weapons(&mut self) {
         for (xuid, player) in &self.maps.players {
+            if xuid == &0 {
+                continue;
+            }
             match &self.state.entities.get(&(player.entity_id as i32)) {
                 Some(ent) => {
                     let weapon_ent = self.get_weapon_ent(&ent);
@@ -128,6 +131,9 @@ impl Parser {
         for prop in &self.settings.collect_props {
             let prop_id = self.maps.name_entid_prop[prop];
             for (xuid, player) in &self.maps.players {
+                if xuid == &0 {
+                    continue;
+                }
                 match &self.state.entities.get(&(player.entity_id as i32)) {
                     Some(ent) => match ent.props.get(prop_id as usize).unwrap() {
                         None => self
@@ -148,11 +154,21 @@ impl Parser {
                                 .push_propdata(p.clone());
                         }
                     },
-                    None => {}
+                    None => {
+                        self.state
+                            .output
+                            .entry(prop_id as i32)
+                            .or_insert_with(|| create_default(self.maps.name_ptype_map[prop], 1024))
+                            .data
+                            .push_none();
+                    }
                 }
             }
         }
         for (xuid, player) in &self.maps.players {
+            if xuid == &0 {
+                continue;
+            }
             // Metadata
             self.state
                 .output

@@ -1,27 +1,18 @@
 use crate::parsing::cache::IndexEntry;
 use crate::parsing::cache::GAME_EVENT_ID;
 use crate::parsing::demo_parsing::EidClsHistoryEntry;
-use crate::parsing::demo_parsing::ServerClass;
 use ahash::HashMap;
 use ahash::HashSet;
-use csgoproto::netmessages::csvcmsg_game_event_list::Descriptor_t;
 use flate2::bufread::ZlibDecoder;
 use itertools::izip;
 use itertools::Itertools;
 use memmap2::Mmap;
 use memmap2::MmapOptions;
-use ndarray::{arr2, s};
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs::File;
-use std::io;
-use std::io::prelude::*;
 use std::io::Read;
-use std::io::SeekFrom;
 use std::path::Path;
-use std::time::Instant;
-use zip::result::ZipError;
-use zip::{ZipArchive, ZipWriter};
 
 use super::AMMO_ID;
 use super::ITEMDEF_ID;

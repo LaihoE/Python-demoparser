@@ -218,12 +218,13 @@ pub fn parse_baselines(
     sv_cls: &ServerClass,
     baselines: &mut HashMap<u32, HashMap<i32, PropData>>,
     tick: i32,
-) {
+) -> bool {
     let mut b = MyBitreader::new(data);
     let mut val = -1;
     let new_way = b.read_boolie().unwrap();
     let mut indicies = vec![];
     let mut baseline: HashMap<i32, PropData> = HashMap::default();
+    let mut is_interesting = false;
     loop {
         val = b.read_inx(val, new_way).unwrap();
 
@@ -235,8 +236,20 @@ pub fn parse_baselines(
     for inx in indicies {
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop).unwrap();
-        //println!("{} {:?} {}", prop.name.to_owned(), pdata, tick);
+        if prop.name.contains("Clip") {
+            is_interesting = true;
+            /*
+            println!(
+                "{} {} {:?} {}",
+                sv_cls.dt,
+                prop.name.to_owned(),
+                pdata,
+                tick
+            );
+            */
+        }
         baseline.insert(inx, pdata);
     }
     baselines.insert(sv_cls.id.try_into().unwrap(), baseline);
+    return is_interesting;
 }

@@ -1,5 +1,6 @@
 mod parsing;
 use crate::parsing::parser_settings::ParserInputs;
+use itertools::Itertools;
 use mimalloc::MiMalloc;
 use ndarray::{arr1, Array1};
 use parsing::parser::Parser;
@@ -31,16 +32,16 @@ fn parse_demo(demo_path: String) -> i32 {
     //let wanted_ticks = vec![10000]
     let parser_inputs = ParserInputs {
         demo_path: demo_path,
-        parse_props: true,
-        only_events: false,
+        parse_props: false,
+        only_events: true,
         wanted_ticks: vec![],
         wanted_players: vec![],
-        event_name: "".to_string(),
+        event_name: "bomb_planted".to_string(),
         only_players: true,
-        parse_game_events: false,
+        parse_game_events: true,
         og_names: vec![],
         collect_props: vec![],
-        wanted_props: vec!["m_vecVelocity[0]".to_string()],
+        wanted_props: vec![],
     };
     let mut parser = Parser::new(parser_inputs).unwrap();
 
@@ -57,9 +58,9 @@ fn main() {
     let now = Instant::now();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/").unwrap();
     //let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
+    //let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems").unwrap();
-    //let paths = fs::read_dir("/home/laiho/Documents/demos/bench_pro_demos/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/bench_pro_demos/").unwrap();
 
     let mut paths_v = vec![];
     for path in paths {
@@ -76,10 +77,7 @@ fn main() {
     let single = vec![this_p];
 
     use rayon::iter::ParallelIterator;
-    let x: Vec<i32> = paths_v
-        .par_iter()
-        .map(|f| parse_demo(f.to_string()))
-        .collect();
+    let x: Vec<i32> = paths_v.iter().map(|f| parse_demo(f.to_string())).collect();
 
     // 145
     let elapsed = now.elapsed();

@@ -35,11 +35,12 @@ impl Parser {
     pub fn start_parsing(&mut self) {
         match ReadCache::get_cache_if_exists(&self.bytes) {
             Some(mut index) => {
+                println!("CACHE FOUND");
                 self.parse_wanted_ticks(&mut index);
             }
             None => {
                 self.settings.is_cache_run = true;
-                self.parse_bytes(vec![], true, &vec![]);
+                self.parse_bytes(vec![], false, &vec![]);
                 self.write_index_file();
             }
         }
@@ -166,26 +167,38 @@ impl Parser {
                 wanted_bytes.extend(b);
             }
         }
+        if self.settings.wanted_props.contains(&"weapon".to_string())
+            || self.settings.wanted_props.contains(&"ammo".to_string())
+        {
+            wanted_bytes.extend(read_cache.read_weapons());
+            let creates: Vec<u64> = self
+                .state
+                .eid_cls_history
+                .iter()
+                .map(|x| x.byte as u64)
+                .collect();
+            wanted_bytes.extend(creates);
+            wanted_bytes.sort();
 
-        /*
-        wanted_bytes.extend(read_cache.read_weapons());
-        let creates: Vec<u64> = self
-            .state
-            .eid_cls_history
-            .iter()
-            .map(|x| x.byte as u64)
-            .collect();
-        wanted_bytes.extend(creates);
-        wanted_bytes.sort();
-        let uniq: Vec<u64> = wanted_bytes.iter().map(|x| *x).unique().collect();
+            self.state.clip_id = self.maps.name_entid_prop["m_iClip1"] as i32;
+            self.state.item_def_id = self.maps.name_entid_prop["m_iItemDefinitionIndex"] as i32;
+            wanted_bytes.extend(read_cache.read_weapons());
+            let creates: Vec<u64> = self
+                .state
+                .eid_cls_history
+                .iter()
+                .map(|x| x.byte as u64)
+                .collect();
+            wanted_bytes.extend(creates);
+            wanted_bytes.sort();
+        }
 
-        self.state.clip_id = self.maps.name_entid_prop["m_iClip1"] as i32;
-        self.state.item_def_id = self.maps.name_entid_prop["m_iItemDefinitionIndex"] as i32;
-        */
         let mut uniq: Vec<u64> = wanted_bytes.iter().map(|x| *x).unique().collect();
         uniq.sort();
         if self.settings.parse_game_events && self.settings.parse_props {
             self.parse_bytes(uniq, false, &vec![]);
+        } else if self.settings.parse_game_events && !self.settings.parse_props {
+            self.parse_bytes(uniq, false, &vec![25]);
         } else {
             self.parse_bytes(uniq, true, &vec![]);
         }

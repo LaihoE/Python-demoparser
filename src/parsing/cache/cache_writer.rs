@@ -8,6 +8,7 @@ use ahash::HashMap;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use hdf5::{File, Group};
+use itertools::Itertools;
 use ndarray::arr1;
 use ndarray::Array1;
 use serde::Deserialize;
@@ -23,6 +24,12 @@ pub const STRING_TABLE_ID: i32 = -6;
 pub const AMMO_ID: i32 = -42;
 pub const ITEMDEF_ID: i32 = -88;
 pub const ACTIVE_WEAPON_ID: i32 = 8;
+
+pub const TEAM_CLSID: u32 = 43;
+pub const MANAGER_CLSID: u32 = 41;
+pub const RULES_CLSID: u32 = 39;
+pub const PLAYER_CLSID: u32 = 40;
+pub const PLAYER_MAX_ENTID: i32 = 64;
 
 #[derive(Debug)]
 pub struct WriteCache {
@@ -102,14 +109,61 @@ impl WriteCache {
         self.append_to_buffer(&bytes, STRING_TABLE_ID)
     }
 
-    fn group_manager_rules_props(serverclass_map: &HashMap<u16, ServerClass>) {
-        for (cls_id, svc) in serverclass_map {
-            if cls_id == &39 {
-                for prop in &svc.props {
-                    println!("{} {}", prop.table, prop.name);
-                }
+    fn group_per_clsid(
+        &mut self,
+        cls_id: &u32,
+        serverclass: &ServerClass,
+        inner: &HashMap<u32, Vec<[i32; 3]>>,
+    ) {
+        let mut per_prop: HashMap<String, Vec<[i32; 3]>> = HashMap::default();
+
+        for (pidx, idxs) in inner {
+            if let Some(prop) = serverclass.props.get(*pidx as usize) {
+                //println!("{}", prop.table);
+                per_prop
+                    .entry(prop.table.clone())
+                    .or_insert(vec![])
+                    .extend(idxs);
             }
         }
+
+        for (k, v) in &per_prop {
+            println!("{}", k);
+            let cache_id = CACHE_ID_MAP[k];
+
+            let mut temp_arr: Vec<u8> = vec![];
+            temp_arr.extend(v.iter().flat_map(|x| x[0].to_le_bytes()));
+            temp_arr.extend(v.iter().flat_map(|x| x[1].to_le_bytes()));
+            temp_arr.extend(v.iter().flat_map(|x| x[2].to_le_bytes()));
+            self.append_to_buffer(&temp_arr, cache_id);
+        }
+    }
+
+    fn group_manager_rules_props(serverclass_map: &HashMap<u16, ServerClass>) {
+        //let mut manager_props = HashMap::default();
+        //let mut team_props = vec![];
+        //let mut rules_props = vec![];
+        /*
+        for (cls_id, svc) in serverclass_map {
+            if cls_id == &RULES_CLSID {
+                let x = svc.props.iter().into_group_map_by(|x| &x.table);
+                for (k, v) in x {
+                    for p in v {
+                        manager_props
+                            .entry(p.table.clone())
+                            .or_insert(vec![])
+                            .push(p);
+                    }
+                }
+                //for prop in &svc.props {
+                //println!("{} {}", prop.table, prop.name);
+                //}
+            }
+        }
+        */
+        //for (k, v) in manager_props {
+        // println!("{} {:?}", k, v);
+        //}
     }
 
     pub fn write_packet_ents(
@@ -129,6 +183,12 @@ impl WriteCache {
 
         for (cls_id, inner) in packet_ents {
             if let Some(serverclass) = &serverclass_map.get(&(*cls_id as u16)) {
+                match cls_id {
+                    &RULES_CLSID => self.group_per_clsid(cls_id, serverclass, inner),
+                    &TEAM_CLSID => self.group_per_clsid(cls_id, serverclass, inner),
+                    &MANAGER_CLSID => self.group_per_clsid(cls_id, serverclass, inner),
+                    _ => {}
+                }
                 for (pidx, v) in inner {
                     if let Some(prop) = serverclass.props.get(*pidx as usize) {
                         let mut temp_arr: Vec<u8> = vec![];

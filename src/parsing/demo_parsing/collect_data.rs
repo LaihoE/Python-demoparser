@@ -1,5 +1,6 @@
 use crate::parsing::demo_parsing::*;
 use crate::parsing::parser::Parser;
+use crate::parsing::utils::IS_ARRAY_PROP;
 use crate::parsing::variants::PropColumn;
 use crate::parsing::variants::PropData;
 use crate::parsing::variants::VarVec;
@@ -127,13 +128,26 @@ impl Parser {
         }
     }
 
+    pub fn find_array_prop(&mut self, entity_id: i32, prop: &String) -> (u32, i32) {
+        let key = if entity_id < 10 {
+            "00".to_owned() + &entity_id.to_string()
+        } else if entity_id < 100 {
+            "0".to_owned() + &entity_id.to_string()
+        } else {
+            panic!("Entity id > 100 ????: id:{}", entity_id);
+        };
+
+        let prop_id = self.maps.name_entid_prop[&(prop.to_owned() + &key)];
+    }
+
     pub fn collect_players(&mut self) {
         for prop in &self.settings.collect_props {
-            let prop_id = self.maps.name_entid_prop[prop];
             for (xuid, player) in &self.maps.players {
                 if xuid == &0 {
                     continue;
                 }
+                //let (entid, pidx)
+
                 match &self.state.entities.get(&(player.entity_id as i32)) {
                     Some(ent) => match ent.props.get(prop_id as usize).unwrap() {
                         None => self

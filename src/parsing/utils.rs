@@ -15,6 +15,10 @@ use std::path::Path;
 use std::str;
 use std::u8;
 
+use super::cache::MANAGER_CLSID;
+use super::cache::RULES_CLSID;
+use super::cache::TEAM_CLSID;
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct Header {
@@ -103,19 +107,34 @@ impl Parser {
 
         for (k, m) in &self.maps.serverclass_map {
             for (idx, p) in m.props.iter().enumerate() {
-                if k != &40 && !(p.name == "m_iClip1" || p.name == "m_iItemDefinitionIndex") {
-                    continue;
-                }
-                if p.name == "m_hActiveWeapon" && k == &40 {
-                    self.state.weapon_handle_id = idx as i32;
-                }
-                mapping.insert(p.name.clone(), idx);
+                match *k as u32 {
+                    MANAGER_CLSID => {
+                        mapping.insert(p.table.clone() + &p.name, idx);
+                    }
+                    TEAM_CLSID => {
+                        mapping.insert(p.table.clone() + &p.name, idx);
+                    }
+                    RULES_CLSID => {
+                        mapping.insert(p.table.clone() + &p.name, idx);
+                    }
+                    _ => {
+                        if k != &40 && !(p.name == "m_iClip1" || p.name == "m_iItemDefinitionIndex")
+                        {
+                            continue;
+                        }
+                        if p.name == "m_hActiveWeapon" && k == &40 {
+                            self.state.weapon_handle_id = idx as i32;
+                        }
+                        mapping.insert(p.name.clone(), idx);
+                    }
+                };
             }
         }
         mapping.insert("X".to_string(), 4999);
         mapping.insert("Y".to_string(), 4998);
         mapping
     }
+
     pub fn generate_name_ptype_map(&mut self) -> HashMap<String, i32> {
         let mut mapping = HashMap::default();
 
@@ -383,4 +402,25 @@ pub static CACHE_ID_MAP: phf::Map<&'static str, i32> = phf_map! {
 "m_unCurrentEquipmentValue" => 199,
 "ammo" => 200,
 "weapon" => 201,
+"m_nCharacterDefIndex" => 202,
+"m_iBotDifficulty" => 204,
+"m_szCrosshairCodes" => 207,
+"m_iPendingTeam" => 215,
+"m_iMatchStats_PlayersAlive_CT" => 216,
+"m_bAlive" => 221,
+"m_nEndMatchNextMapVotes" => 222,
+"DT_CSGameRules" => 226,
+"m_iCompetitiveRankType" => 227,
+"DT_Team" => 229,
+"m_szClan" => 236,
+"m_iMatchStats_PlayersAlive_T" => 241,
+"m_iCompTeammateColor" => 244,
+"m_iMatchStats_RoundResults" => 250,
+"DT_CSPlayerResource" => 252,
+"m_nMusicID" => 254,
+"m_flNextRespawnWave" => 256,
+};
+
+pub static IS_ARRAY_PROP: phf::Map<&'static str, i32> = phf_map! {
+    "m_iPing" => 70,
 };

@@ -18,9 +18,8 @@ pub struct ServerClass {
 
 impl Parser {
     pub fn parse_datatable(&mut self, byte_reader: &mut ByteReader) {
-        /*
-        Parse datatables. These are the tables that entities refer to for values. If this fails then gg?
-        */
+        //Parse datatables. These are the tables that entities refer to for values. If this fails then gg?
+
         self.state.dt_started_at = self.state.frame_started_at;
 
         let dt_size = byte_reader.read_i32();
@@ -41,7 +40,6 @@ impl Parser {
                     if table.is_end() {
                         break;
                     }
-
                     self.maps.dt_map.as_mut().unwrap().insert(
                         table.net_table_name.as_ref().unwrap().to_string(),
                         table.clone(),

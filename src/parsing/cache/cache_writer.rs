@@ -102,6 +102,16 @@ impl WriteCache {
         self.append_to_buffer(&bytes, STRING_TABLE_ID)
     }
 
+    fn group_manager_rules_props(serverclass_map: &HashMap<u16, ServerClass>) {
+        for (cls_id, svc) in serverclass_map {
+            if cls_id == &39 {
+                for prop in &svc.props {
+                    println!("{} {}", prop.table, prop.name);
+                }
+            }
+        }
+    }
+
     pub fn write_packet_ents(
         &mut self,
         packet_ents: &HashMap<u32, HashMap<u32, Vec<[i32; 3]>>>,
@@ -115,6 +125,8 @@ impl WriteCache {
         let mut def_ticks = vec![];
         let mut def_entids = vec![];
 
+        WriteCache::group_manager_rules_props(serverclass_map);
+
         for (cls_id, inner) in packet_ents {
             if let Some(serverclass) = &serverclass_map.get(&(*cls_id as u16)) {
                 for (pidx, v) in inner {
@@ -127,15 +139,15 @@ impl WriteCache {
                         let prop_name =
                             serverclass.dt.to_string() + "-" + &prop.table + "-" + &prop.name;
 
+                        //println!("{:?}", prop_name);
+
                         match prop.name.as_str() {
                             "m_iClip1" => {
-                                //println!("CLIP");
                                 ammo_bytes.extend(v.iter().flat_map(|x| x[0].to_le_bytes()));
                                 ammo_ticks.extend(v.iter().flat_map(|x| x[1].to_le_bytes()));
                                 ammo_entids.extend(v.iter().flat_map(|x| 0_i32.to_le_bytes()));
                             }
                             "m_iItemDefinitionIndex" => {
-                                //println!("HRERE");
                                 def_bytes.extend(v.iter().flat_map(|x| x[0].to_le_bytes()));
                                 def_ticks.extend(v.iter().flat_map(|x| x[1].to_le_bytes()));
                                 def_entids.extend(v.iter().flat_map(|x| 0_i32.to_le_bytes()));

@@ -298,6 +298,7 @@ impl DemoParser {
                 }
 
                 for prop in &collect_props {
+                    println!("{}", prop);
                     df_column_names.push(prop.clone());
                     match prop.as_str() {
                         "ammo" => ids.push(AMMO_ID),

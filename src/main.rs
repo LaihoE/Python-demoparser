@@ -32,8 +32,8 @@ fn parse_demo(demo_path: String) -> i32 {
     //let wanted_ticks = vec![10000]
     let parser_inputs = ParserInputs {
         demo_path: demo_path,
-        parse_props: false,
-        only_events: true,
+        parse_props: true,
+        only_events: false,
         wanted_ticks: vec![],
         wanted_players: vec![],
         event_name: "bomb_planted".to_string(),
@@ -58,9 +58,9 @@ fn main() {
     let now = Instant::now();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems/").unwrap();
     //let paths = fs::read_dir("/home/laiho/Documents/demos/faceits/cu/").unwrap();
-    //let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
+    let paths = fs::read_dir("/home/laiho/Documents/demos/mygames/").unwrap();
     //let paths = fs::read_dir("/media/laiho/cc302116-f9ac-4408-a786-7c7df3e7d807/dems").unwrap();
-    let paths = fs::read_dir("/home/laiho/Documents/demos/bench_pro_demos/").unwrap();
+    //let paths = fs::read_dir("/home/laiho/Documents/demos/bench_pro_demos/").unwrap();
 
     let mut paths_v = vec![];
     for path in paths {
@@ -77,7 +77,10 @@ fn main() {
     let single = vec![this_p];
 
     use rayon::iter::ParallelIterator;
-    let x: Vec<i32> = paths_v.iter().map(|f| parse_demo(f.to_string())).collect();
+    let x: Vec<i32> = paths_v
+        .par_iter()
+        .map(|f| parse_demo(f.to_string()))
+        .collect();
 
     // 145
     let elapsed = now.elapsed();

@@ -34,15 +34,16 @@ fn parse_demo(demo_path: String) -> i32 {
         demo_path: demo_path,
         parse_props: true,
         only_events: false,
-        wanted_ticks: vec![],
+        wanted_ticks: (10000..10050).collect_vec(),
         wanted_players: vec![],
         event_name: "bomb_planted".to_string(),
         only_players: true,
-        parse_game_events: true,
+        parse_game_events: false,
         og_names: vec![],
         collect_props: vec![],
-        wanted_props: vec![],
+        wanted_props: vec!["m_vecVelocity[0]".to_string()],
     };
+
     let mut parser = Parser::new(parser_inputs).unwrap();
 
     let h: Header = parser.parse_demo_header();
@@ -77,7 +78,7 @@ fn main() {
     let single = vec![this_p];
 
     use rayon::iter::ParallelIterator;
-    let x: Vec<i32> = paths_v
+    let x: Vec<i32> = paths_v //[..10]
         .par_iter()
         .map(|f| parse_demo(f.to_string()))
         .collect();

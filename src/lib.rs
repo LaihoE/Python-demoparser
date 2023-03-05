@@ -30,6 +30,7 @@ use pyo3::types::PyDict;
 use pyo3::{PyAny, PyObject, PyResult};
 use pyo3::{PyErr, Python};
 
+use crate::parsing::utils::IS_ARRAY_PROP;
 use parsing::utils::CACHE_ID_MAP;
 use parsing::variants::*;
 use pyo3::types::IntoPyDict;
@@ -296,14 +297,18 @@ impl DemoParser {
                         collect_props.push(p.clone());
                     }
                 }
-
+                df_column_names.extend(wanted_props);
                 for prop in &collect_props {
-                    println!("{}", prop);
-                    df_column_names.push(prop.clone());
+                    let p = if IS_ARRAY_PROP.contains_key(prop) {
+                        prop.to_string() + &"000"
+                    } else {
+                        prop.to_string()
+                    };
+                    //df_column_names.push(prop.clone());
                     match prop.as_str() {
                         "ammo" => ids.push(AMMO_ID),
                         "weapon" => ids.push(WEAP_NAME_ID),
-                        _ => ids.push(parser.maps.name_entid_prop[prop] as i32),
+                        _ => ids.push(parser.maps.name_entid_prop[&p] as i32),
                     }
                 }
 

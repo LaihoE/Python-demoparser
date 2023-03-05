@@ -128,16 +128,25 @@ impl Parser {
         }
     }
 
-    pub fn find_array_prop(&mut self, entity_id: i32, prop: &String) -> (u32, i32) {
-        let key = if entity_id < 10 {
-            "00".to_owned() + &entity_id.to_string()
-        } else if entity_id < 100 {
-            "0".to_owned() + &entity_id.to_string()
-        } else {
-            panic!("Entity id > 100 ????: id:{}", entity_id);
-        };
-
-        let prop_id = self.maps.name_entid_prop[&(prop.to_owned() + &key)];
+    pub fn find_prop(&self, entity_id: i32, prop: &String) -> (i32, usize, usize) {
+        match IS_ARRAY_PROP.get(prop) {
+            Some(entid) => {
+                let key = if entity_id < 10 {
+                    "00".to_owned() + &entity_id.to_string()
+                } else if entity_id < 100 {
+                    "0".to_owned() + &entity_id.to_string()
+                } else {
+                    panic!("Entity id > 100 ????: id:{}", entity_id);
+                };
+                let prop_id = self.maps.name_entid_prop[&(prop.to_owned() + &key)];
+                let collect_id = self.maps.name_entid_prop[&(prop.to_owned() + &"000")];
+                (*entid, prop_id, collect_id)
+            }
+            None => {
+                let pidx = self.maps.name_entid_prop[prop];
+                return (entity_id, pidx, pidx);
+            }
+        }
     }
 
     pub fn collect_players(&mut self) {
@@ -146,21 +155,21 @@ impl Parser {
                 if xuid == &0 {
                     continue;
                 }
-                //let (entid, pidx)
+                let (entid, prop_id, collect_id) = self.find_prop(player.entity_id as i32, prop);
 
-                match &self.state.entities.get(&(player.entity_id as i32)) {
+                match &self.state.entities.get(&(entid as i32)) {
                     Some(ent) => match ent.props.get(prop_id as usize).unwrap() {
                         None => self
                             .state
                             .output
-                            .entry(prop_id as i32)
+                            .entry(collect_id as i32)
                             .or_insert_with(|| create_default(self.maps.name_ptype_map[prop], 1024))
                             .data
                             .push_none(),
                         Some(p) => {
                             self.state
                                 .output
-                                .entry(prop_id as i32)
+                                .entry(collect_id as i32)
                                 .or_insert_with(|| {
                                     create_default(self.maps.name_ptype_map[prop], 1024)
                                 })
@@ -171,7 +180,7 @@ impl Parser {
                     None => {
                         self.state
                             .output
-                            .entry(prop_id as i32)
+                            .entry(collect_id as i32)
                             .or_insert_with(|| create_default(self.maps.name_ptype_map[prop], 1024))
                             .data
                             .push_none();

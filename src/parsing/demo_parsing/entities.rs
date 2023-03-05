@@ -60,7 +60,6 @@ impl Parser {
 
         for _ in 0..n_upd_ents {
             entity_id += 1 + (b.read_u_bit_var().unwrap() as i32);
-            //println!("{}", entity_id);
             if b.read_boolie().unwrap() {
                 b.read_boolie();
             } else if b.read_boolie().unwrap() {
@@ -145,14 +144,17 @@ impl Parser {
                     }
                     None => {}
                 }
+                self.state.eid_cls_history.push(EidClsHistoryEntry {
+                    eid: entity_id,
+                    cls_id: cls_id,
+                    tick: self.state.tick,
+                    byte: self.state.frame_started_at as i32,
+                });
                 self.state.entities.insert(entity_id, entity);
             }
         }
     }
 
-    // entid 10  --> weap 204
-
-    #[inline(always)]
     pub fn update_entity(&mut self, bitreader: &mut MyBitreader, entity_id: i32) {
         let mut val = -1;
         let new_way = bitreader.read_boolie().unwrap();
@@ -180,7 +182,6 @@ impl Parser {
                         entity_id,
                     ]);
             }
-
             self.state.workhorse[idx] = val;
             idx += 1;
         }
@@ -191,7 +192,6 @@ impl Parser {
         };
 
         let sv_cls = self.maps.serverclass_map.get(&(cls_id as u16)).unwrap();
-
         for i in 0..idx {
             let idx = self.state.workhorse[i];
             let prop = &sv_cls.props[idx as usize];
@@ -207,7 +207,6 @@ impl Parser {
                 }
             }
             entity.props[idx as usize] = Some(p);
-            //println!("{}", self.state.tick);
             entity.tick_set_at[idx as usize] = self.state.tick;
         }
     }
@@ -236,17 +235,8 @@ pub fn parse_baselines(
     for inx in indicies {
         let prop = &sv_cls.props[inx as usize];
         let pdata = b.decode(prop).unwrap();
-        if prop.name.contains("Clip") {
+        if prop.name.contains("Clip") || prop.name.contains("Health") {
             is_interesting = true;
-            /*
-            println!(
-                "{} {} {:?} {}",
-                sv_cls.dt,
-                prop.name.to_owned(),
-                pdata,
-                tick
-            );
-            */
         }
         baseline.insert(inx, pdata);
     }

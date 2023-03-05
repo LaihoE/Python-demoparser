@@ -8,25 +8,9 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::u32;
 
-const SPROP_UNSIGNED: i32 = 1 << 0;
-const SPROP_COORD: i32 = 1 << 1;
-const SPROP_NOSCALE: i32 = 1 << 2;
-const SPROP_ROUNDDOWN: i32 = 1 << 3;
-const SPROP_ROUNDUP: i32 = 1 << 4;
-const SPROP_NORMAL: i32 = 1 << 5;
-const SPROP_EXCLUDE: i32 = 1 << 6;
-const SPROP_XYZE: i32 = 1 << 7;
-const SPROP_INSIDEARRAY: i32 = 1 << 8;
-const SPROP_PROXY_ALWAYS_YES: i32 = 1 << 9;
-const SPROP_IS_A_VECTOR_ELEM: i32 = 1 << 10;
-const SPROP_COLLAPSIBLE: i32 = 1 << 11;
 const SPROP_COORD_MP: i32 = 1 << 12;
 const SPROP_COORD_MP_LOWPRECISION: i32 = 1 << 13;
 const SPROP_COORD_MP_INTEGRAL: i32 = 1 << 14;
-const SPROP_CELL_COORD: i32 = 1 << 15;
-const SPROP_CELL_COORD_LOWPRECISION: i32 = 1 << 16;
-const SPROP_CELL_COORD_INTEGRAL: i32 = 1 << 17;
-const SPROP_VARINT: i32 = 1 << 19;
 
 const coordFractionalBitsMp: u32 = 5;
 const coordFractionalBitsMpLowPrecision: i32 = 3;
@@ -169,8 +153,6 @@ impl<'a> MyBitreader<'a> {
             }
             s.push(c);
         }
-
-        //Some("69".to_string())
         let out = String::from_utf8_lossy(&s);
         Some(out.to_string())
     }
@@ -329,7 +311,6 @@ impl<'a> MyBitreader<'a> {
         }
         let resol: f64 = 1.0 / (1 << 5) as f64;
         let result: i32 = (int_val as f64 + (frac_val as f64 * resol) as f64) as i32;
-        //println!("HERE {}", result as f32);
         if sign {
             Some(-result)
         } else {

@@ -128,42 +128,19 @@ impl WriteCache {
         }
 
         for (k, v) in &per_prop {
-            println!("{}", k);
-            let cache_id = CACHE_ID_MAP[k];
+            let cache_id = match CACHE_ID_MAP.get(k) {
+                Some(id) => id,
+                None => {
+                    continue;
+                }
+            };
 
             let mut temp_arr: Vec<u8> = vec![];
             temp_arr.extend(v.iter().flat_map(|x| x[0].to_le_bytes()));
             temp_arr.extend(v.iter().flat_map(|x| x[1].to_le_bytes()));
             temp_arr.extend(v.iter().flat_map(|x| x[2].to_le_bytes()));
-            self.append_to_buffer(&temp_arr, cache_id);
+            self.append_to_buffer(&temp_arr, *cache_id);
         }
-    }
-
-    fn group_manager_rules_props(serverclass_map: &HashMap<u16, ServerClass>) {
-        //let mut manager_props = HashMap::default();
-        //let mut team_props = vec![];
-        //let mut rules_props = vec![];
-        /*
-        for (cls_id, svc) in serverclass_map {
-            if cls_id == &RULES_CLSID {
-                let x = svc.props.iter().into_group_map_by(|x| &x.table);
-                for (k, v) in x {
-                    for p in v {
-                        manager_props
-                            .entry(p.table.clone())
-                            .or_insert(vec![])
-                            .push(p);
-                    }
-                }
-                //for prop in &svc.props {
-                //println!("{} {}", prop.table, prop.name);
-                //}
-            }
-        }
-        */
-        //for (k, v) in manager_props {
-        // println!("{} {:?}", k, v);
-        //}
     }
 
     pub fn write_packet_ents(
@@ -179,8 +156,6 @@ impl WriteCache {
         let mut def_ticks = vec![];
         let mut def_entids = vec![];
 
-        WriteCache::group_manager_rules_props(serverclass_map);
-
         for (cls_id, inner) in packet_ents {
             if let Some(serverclass) = &serverclass_map.get(&(*cls_id as u16)) {
                 match cls_id {
@@ -195,11 +170,6 @@ impl WriteCache {
                         temp_arr.extend(v.iter().flat_map(|x| x[0].to_le_bytes()));
                         temp_arr.extend(v.iter().flat_map(|x| x[1].to_le_bytes()));
                         temp_arr.extend(v.iter().flat_map(|x| x[2].to_le_bytes()));
-
-                        let prop_name =
-                            serverclass.dt.to_string() + "-" + &prop.table + "-" + &prop.name;
-
-                        //println!("{:?}", prop_name);
 
                         match prop.name.as_str() {
                             "m_iClip1" => {

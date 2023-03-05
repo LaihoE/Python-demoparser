@@ -109,6 +109,9 @@ impl Parser {
             for (idx, p) in m.props.iter().enumerate() {
                 match *k as u32 {
                     MANAGER_CLSID => {
+                        if p.table == "m_iHealth" {
+                            continue;
+                        }
                         mapping.insert(p.table.clone() + &p.name, idx);
                     }
                     TEAM_CLSID => {
@@ -140,10 +143,27 @@ impl Parser {
 
         for (k, m) in &self.maps.serverclass_map {
             for (idx, p) in m.props.iter().enumerate() {
-                if k != &40 && !(p.name == "m_iClip1" || p.name == "m_iItemDefinitionIndex") {
-                    continue;
-                }
-                mapping.insert(p.name.clone(), p.p_type);
+                match *k as u32 {
+                    MANAGER_CLSID => {
+                        mapping.insert(p.table.clone(), p.p_type);
+                    }
+                    TEAM_CLSID => {
+                        mapping.insert(p.table.clone(), p.p_type);
+                    }
+                    RULES_CLSID => {
+                        mapping.insert(p.table.clone(), p.p_type);
+                    }
+                    _ => {
+                        if k != &40 && !(p.name == "m_iClip1" || p.name == "m_iItemDefinitionIndex")
+                        {
+                            continue;
+                        }
+                        if p.name == "m_hActiveWeapon" && k == &40 {
+                            self.state.weapon_handle_id = p.p_type as i32;
+                        }
+                        mapping.insert(p.name.clone(), p.p_type);
+                    }
+                };
             }
         }
         mapping.insert("X".to_string(), 1);
@@ -423,4 +443,90 @@ pub static CACHE_ID_MAP: phf::Map<&'static str, i32> = phf_map! {
 
 pub static IS_ARRAY_PROP: phf::Map<&'static str, i32> = phf_map! {
     "m_iPing" => 70,
+    "m_iMatchStats_Damage_Total" => 70,
+    "m_GGProgressiveWeaponOrderT" => 71,
+    "m_iPendingTeam" => 70,
+    "m_iMatchStats_EquipmentValue_Total" => 70,
+    "m_roundData_playerXuids" => 71,
+    "m_iMatchStats_RoundResults" => 71,
+    "m_bControllingBot" => 70,
+    "m_iMatchStats_Kills_Total" => 70,
+    "m_nCharacterDefIndex" => 70,
+    "m_iMatchStats_Objective_Total" => 70,
+    "m_iTotalCashSpent" => 70,
+    "m_hostageRescueX" => 70,
+    "m_bAlive" => 70,
+    "m_arrFeaturedGiftersGifts" => 71,
+    "m_GGProgressiveWeaponKillUpgradeOrderCT" => 71,
+    "m_nEndMatchMapGroupVoteTypes" => 71,
+    "m_iKills" => 70,
+    "m_iMatchStats_Deaths_Total" => 70,
+    "m_nPersonaDataPublicCommendsFriendly" => 70,
+    "DT_SurvivalGameRules" => 71,
+    "m_iBotDifficulty" => 70,
+    "m_iControlledPlayer" => 70,
+    "m_roundData_playerPositions" => 71,
+    "m_nPersonaDataPublicCommendsTeacher" => 70,
+    "m_SpawnTileState" => 71,
+    "DT_RetakeGameRules" => 71,
+    "m_GGProgressiveWeaponKillUpgradeOrderT" => 71,
+    "m_bHasDefuser" => 70,
+    "m_iMatchStats_KillReward_Total" => 70,
+    "m_SurvivalGameRuleDecisionValues" => 71,
+    "m_nPersonaDataPublicLevel" => 70,
+    "m_szClan" => 70,
+    "m_iMatchStats_EnemiesFlashed_Total" => 70,
+    "m_iMatchStats_LiveTime_Total" => 70,
+    "m_iMatchStats_PlayersAlive_T" => 71,
+    "m_iMatchStats_3k_Total" => 70,
+    "m_nPersonaDataPublicCommendsLeader" => 70,
+    "m_iLifetimeStart" => 70,
+    "m_iMatchStats_4k_Total" => 70,
+    "m_iDeaths" => 70,
+    "m_iCompetitiveRanking" => 70,
+    "m_SurvivalGameRuleDecisionTypes" => 71,
+    "m_iCompetitiveWins" => 70,
+    "m_flNextRespawnWave" => 71,
+    "m_bHasCommunicationAbuseMute" => 70,
+    "m_iScore" => 70,
+    "m_iCashSpentThisRound" => 70,
+    "m_roundData_playerTeams" => 71,
+    "m_bConnected" => 70,
+    "m_iMatchStats_Assists_Total" => 70,
+    "m_arrProhibitedItemIndices" => 71,
+    "m_szCrosshairCodes" => 70,
+    "m_GGProgressiveWeaponOrderCT" => 71,
+    "m_iAssists" => 70,
+    "m_arrTournamentActiveCasterAccounts" => 71,
+    "m_bHasHelmet" => 70,
+    "m_iCoachingTeam" => 70,
+    "m_nEndMatchMapGroupVoteOptions" => 71,
+    "m_iCompetitiveRankType" => 70,
+    "m_hostageRescueZ" => 70,
+    "m_iMatchStats_UtilityDamage_Total" => 70,
+    "DT_Team" => 67,
+    "m_iMatchStats_PlayersAlive_CT" => 71,
+    "m_iPlayerSpawnHexIndices" => 71,
+    "m_TeamRespawnWaveTimes" => 71,
+    "m_hostageRescueY" => 70,
+    "m_iGunGameLevel" => 70,
+    "m_iTeam" => 70,
+    "m_iMatchStats_HeadShotKills_Total" => 70,
+    "m_iLifetimeEnd" => 70,
+    "m_nMusicID" => 70,
+    "DT_CSGameRules" => 71,
+    "m_iMatchStats_5k_Total" => 70,
+    "m_iMatchStats_CashEarned_Total" => 70,
+    "m_nActiveCoinRank" => 70,
+    "m_iCompTeammateColor" => 70,
+    "m_arrFeaturedGiftersAccounts" => 71,
+    "m_iControlledByPlayer" => 70,
+    "DT_CSPlayerResource" => 70,
+    "m_isHostageFollowingSomeone" => 70,
+    "m_iMVPs" => 70,
+    "m_bHostageAlive" => 70,
+    "m_iHostageEntityIDs" => 70,
+    "m_nEndMatchNextMapVotes" => 70,
+    "m_iArmor" => 70,
+
 };

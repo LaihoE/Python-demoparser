@@ -1,7 +1,6 @@
 use crate::parsing::parser::Parser;
 use memmap2::Mmap;
 use std::sync::Arc;
-use varint_simd::decode_two_unsafe;
 
 #[derive(Debug)]
 pub struct ByteReader {
@@ -11,7 +10,7 @@ pub struct ByteReader {
 }
 
 impl ByteReader {
-    pub fn get_byte_readers(bytes: &Arc<Mmap>, start_pos: Vec<u64>) -> Vec<ByteReader> {
+    pub fn get_byte_readers(bytes: &Arc<Mmap>, start_pos: Option<Vec<u64>>) -> Vec<ByteReader> {
         /*
         Creates one byte reader per wanted start pos.
 
@@ -19,15 +18,18 @@ impl ByteReader {
         big bytereader is returned. Starting from 1072 (header is 1072)
         and ending at end of file. This happens when no cache is available
         */
+        //println!("{}", start_pos.len());
 
-        if start_pos.len() == 0 {
-            return vec![ByteReader::new(bytes.clone(), false, 1072)];
+        match start_pos {
+            Some(start_pos) => {
+                let mut readers = vec![];
+                for pos in start_pos {
+                    readers.push(ByteReader::new(bytes.clone(), true, pos as usize));
+                }
+                return readers;
+            }
+            None => return vec![ByteReader::new(bytes.clone(), false, 1072)],
         }
-        let mut readers = vec![];
-        for pos in start_pos {
-            readers.push(ByteReader::new(bytes.clone(), true, pos as usize));
-        }
-        return readers;
     }
 
     pub fn new(bytes: Arc<Mmap>, single: bool, start_idx: usize) -> Self {
@@ -113,17 +115,5 @@ impl ByteReader {
         let tick = self.read_i32();
         self.skip_n_bytes(1);
         (cmd, tick)
-    }
-
-    pub fn read_two_varints(&mut self) -> (u32, u32) {
-        unsafe {
-            {
-                let (a, b, one, two) =
-                    decode_two_unsafe(self.bytes[self.byte_idx..self.byte_idx + 10].as_ptr());
-                self.byte_idx += one as usize;
-                self.byte_idx += two as usize;
-                return (a, b);
-            }
-        }
     }
 }

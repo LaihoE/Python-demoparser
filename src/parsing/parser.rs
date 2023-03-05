@@ -1,4 +1,5 @@
 use super::cache::WriteCache;
+use super::utils::IS_ARRAY_PROP;
 use crate::parsing::cache::cache_reader::ReadCache;
 use crate::parsing::cache::AMMO_ID;
 use crate::parsing::demo_parsing::*;
@@ -39,14 +40,21 @@ impl Parser {
             }
             None => {
                 self.settings.is_cache_run = true;
-                self.parse_bytes(vec![], false, &vec![]);
+                self.parse_bytes(None, false, &vec![]);
                 self.write_index_file();
+                match ReadCache::get_cache_if_exists(&self.bytes) {
+                    Some(mut index) => {
+                        self.reset_settings();
+                        self.parse_wanted_ticks(&mut index);
+                    }
+                    None => panic!("Writing cache failed!"),
+                }
             }
         }
     }
     pub fn parse_bytes(
         &mut self,
-        wanted_bytes: Vec<u64>,
+        wanted_bytes: Option<Vec<u64>>,
         should_collect: bool,
         wanted_msg: &Vec<i32>,
     ) {
@@ -61,7 +69,7 @@ impl Parser {
                 self.parse_cmd(cmd, &mut byte_reader, wanted_msg);
                 if should_collect {
                     self.collect_players();
-                    //self.collect_weapons();
+                    self.collect_weapons();
                 }
                 if n_byte_readers > 1 {
                     break;
@@ -140,7 +148,7 @@ impl Parser {
         }
         wanted_bytes.push(ge_start);
         wanted_bytes.extend(read_cache.read_stringtables());
-        self.parse_bytes(wanted_bytes, false, &vec![12, 13, 30]);
+        self.parse_bytes(Some(wanted_bytes), false, &vec![12, 13, 30]);
 
         if self.settings.parse_props {
             self.maps.name_entid_prop = self.generate_name_id_map();
@@ -162,8 +170,13 @@ impl Parser {
         if self.settings.parse_props {
             for prop in &self.settings.wanted_props {
                 let prop_id = CACHE_ID_MAP[prop];
-                let b = read_cache.read_by_id_players(prop_id as i32, &self.settings.wanted_ticks);
-                wanted_bytes.extend(b);
+                let bytes = match IS_ARRAY_PROP.contains_key(prop) {
+                    true => read_cache.read_by_id_others(prop_id as i32),
+                    false => {
+                        read_cache.read_by_id_players(prop_id as i32, &self.settings.wanted_ticks)
+                    }
+                };
+                wanted_bytes.extend(bytes);
             }
         }
         if self.settings.wanted_props.contains(&"weapon".to_string())
@@ -195,11 +208,17 @@ impl Parser {
         let mut uniq: Vec<u64> = wanted_bytes.iter().map(|x| *x).unique().collect();
         uniq.sort();
         if self.settings.parse_game_events && self.settings.parse_props {
-            self.parse_bytes(uniq, false, &vec![]);
+            self.parse_bytes(Some(uniq), false, &vec![]);
         } else if self.settings.parse_game_events && !self.settings.parse_props {
-            self.parse_bytes(uniq, false, &vec![25]);
+            self.parse_bytes(Some(uniq), false, &vec![25]);
         } else {
-            self.parse_bytes(uniq, true, &vec![]);
+            self.parse_bytes(Some(uniq), true, &vec![]);
         }
+    }
+    fn reset_settings(&mut self) {
+        self.settings.is_cache_run = false;
+        self.state.output = HashMap::default();
+        self.state.game_events = vec![];
+        self.state.entities = HashMap::default();
     }
 }

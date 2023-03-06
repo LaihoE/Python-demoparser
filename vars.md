@@ -96,6 +96,7 @@ Some example props that can be gotten from players.
 |     in_duck_jump      | m_bInDuckJump                        | ?                                                                                                              |
 |    last_duck_time     | m_flLastDuckTime                     | Seconds since demo started when the player last ducked                                                         |
 |      is_ducking       | m_bDucking                           | is between not ducked and ducked?                                                                              |
+|         round         | m_totalRoundsPlayed                  | How many rounds have been played                                                                               |
 
 
 Parser also allows you to use the "real names". Just make sure you add _X _Y and potentially _Z to the vector prop names. Like so:

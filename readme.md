@@ -1,5 +1,8 @@
 # CSGO demo parser for Python
 
+## DEVELOPMENT OF SOURCE 2 VERSION MOVED HERE: https://github.com/LaihoE/demoparser
+
+
 Demo parser for Counter-Strike: Global Offensive. Parser is used to collect data from replay files (".dem" files).  
 The goal of the parser fast and simple. Performance is solved by having Rust do the heavy lifting and to keep it simple we completely avoid "hooks" and rather just let users "query" the demo.
 

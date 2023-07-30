@@ -97,6 +97,19 @@ Some example props that can be gotten from players.
 |    last_duck_time     | m_flLastDuckTime                     | Seconds since demo started when the player last ducked                                                         |
 |      is_ducking       | m_bDucking                           | is between not ducked and ducked?                                                                              |
 |         round         | m_totalRoundsPlayed                  | How many rounds have been played                                                                               |
+|is_freeze_period|m_bFreezePeriod|
+|ct_losses_in_a_row|m_iNumConsecutiveCTLoses|
+|t_losses_in_a_row|m_iNumConsecutiveTerroristLoses|
+|is_match_started|m_bHasMatchStarted|
+|game_start_time|m_flGameStartTime|
+|warmup_period_start|m_fWarmupPeriodStart|
+|is_warmup_period|m_bWarmupPeriod|
+|round_start_time|m_fRoundStartTime|
+|warmup_period_end|m_fWarmupPeriodEnd|
+|bomb_planted|m_bBombPlanted|
+|match_start_time|m_fMatchStartTime|
+|total_rounds_played|m_totalRoundsPlayed|
+
 
 
 Parser also allows you to use the "real names". Just make sure you add _X _Y and potentially _Z to the vector prop names. Like so:

@@ -195,6 +195,35 @@ fn insert_manager_prop(
     }
 }
 #[inline(always)]
+fn insert_rules_prop(
+    ticks_props: &mut HashMap<String, PropColumn, RandomState>,
+    prop_name: &String,
+    playback_frames: usize,
+    col_type: i32,
+    rules: Option<&Entity>,
+) {
+    match rules {
+        Some(ent) => match ent.props.get(prop_name) {
+            None => ticks_props
+                .entry(prop_name.to_string())
+                .or_insert_with(|| create_default(col_type, playback_frames))
+                .data
+                .push_none(),
+            Some(p) => ticks_props
+                .entry(prop_name.to_string())
+                .or_insert_with(|| create_default(col_type, playback_frames))
+                .data
+                .push_propdata(p.data.clone()),
+        },
+        None => ticks_props
+            .entry(prop_name.to_string())
+            .or_insert_with(|| create_default(col_type, playback_frames))
+            .data
+            .push_none(),
+    }
+}
+
+#[inline(always)]
 fn weap_id_from_ent(ent: &Entity) -> Option<u32> {
     match ent.props.get("m_hActiveWeapon") {
         None => None,
@@ -235,6 +264,7 @@ impl Demo {
         manager_id: &Option<u32>,
         cls_map: &HashMap<u16, ServerClass, RandomState>,
         round: i32,
+        rules_id: Option<u32>,
     ) {
         // Collect wanted props from players
         for player in players.values() {
@@ -250,6 +280,11 @@ impl Demo {
                         let ent = &entities[player.entity_id as usize];
                         let manager = if manager_id.is_some() {
                             Some(&entities[manager_id.unwrap() as usize].1)
+                        } else {
+                            None
+                        };
+                        let rules = if rules_id.is_some() {
+                            Some(&entities[rules_id.unwrap() as usize].1)
                         } else {
                             None
                         };
@@ -290,6 +325,27 @@ impl Demo {
                                     playback_frames,
                                     0,
                                     weapon_ent,
+                                ),
+                                1000 => insert_rules_prop(
+                                    ticks_props,
+                                    prop_name,
+                                    playback_frames,
+                                    0,
+                                    rules,
+                                ),
+                                1001 => insert_rules_prop(
+                                    ticks_props,
+                                    prop_name,
+                                    playback_frames,
+                                    1,
+                                    rules,
+                                ),
+                                1002 => insert_rules_prop(
+                                    ticks_props,
+                                    prop_name,
+                                    playback_frames,
+                                    0,
+                                    rules,
                                 ),
                                 _ => {
                                     insert_propcolumn(
@@ -439,6 +495,20 @@ pub static WEAPINDICIES: phf::Map<&'static str, &'static str> = phf_map! {
 };
 
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
+    "m_bFreezePeriod" => 1000,
+    "m_iNumConsecutiveCTLoses" => 1002,
+    "m_flRestartRoundTime"=> 1000,
+    "m_bHasMatchStarted"=> 1000,
+    "m_flGameStartTime"=> 1001,
+    "m_fWarmupPeriodStart"=> 1001,
+    "m_bWarmupPeriod"=> 1000,
+    "m_fRoundStartTime"=> 1001,
+    "m_fWarmupPeriodEnd" => 1001,
+    "m_bBombPlanted"=> 1000,
+    "m_fMatchStartTime"=> 1001,
+    "m_iNumConsecutiveTerroristLoses"=> 1002,
+    "m_totalRoundsPlayed"=> 1002,
+
     "m_flNextAttack" => 1,
     "m_bDuckOverride" => 0,
     "m_flStamina" => 1,

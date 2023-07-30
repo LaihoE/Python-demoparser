@@ -12,12 +12,8 @@ import os
 def coordinates(file):
     print(file)
     parser = DemoParser(file)
-
-    df = parser.parse_ticks(["total_damage", "round"])
-    df = df[df["steamid"] == 76561198194694750]
-    #df = df.loc[:, ["total_damage", "round"]]
-    df = df.drop_duplicates()
-    print(df)
+    df = parser.parse_ticks(["is_freeze_period"])
+    print(df["is_freeze_period"].unique())
     return df
 
 

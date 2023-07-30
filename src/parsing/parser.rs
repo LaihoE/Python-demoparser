@@ -200,11 +200,6 @@ impl Demo {
         for i in 0..20000 {
             self.workhorse.push(i);
         }
-        for i in 1..11 {
-            self.entids_not_connected.insert(i);
-        }
-
-        self.poisoned_until = 1000;
         while self.fp < self.bytes.get_len() as usize {
             self.frames_parsed += 1;
             let (cmd, tick) = self.read_frame();
@@ -231,6 +226,7 @@ impl Demo {
                     &self.manager_id,
                     &self.serverclass_map,
                     self.round,
+                    self.rules_id,
                 );
             }
             self.parse_cmd(cmd);
@@ -387,6 +383,20 @@ pub fn check_round_change(entities: &[(u32, Entity)], rules_id: &Option<u32>, ro
     }
 }
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
+    "m_bFreezePeriod" => 1000,
+    "m_iNumConsecutiveCTLoses" => 1002,
+    "m_flRestartRoundTime"=> 1000,
+    "m_bHasMatchStarted"=> 1000,
+    "m_flGameStartTime"=> 1001,
+    "m_fWarmupPeriodStart"=> 1001,
+    "m_bWarmupPeriod"=> 1000,
+    "m_fRoundStartTime"=> 1001,
+    "m_fWarmupPeriodEnd" => 1001,
+    "m_bBombPlanted"=> 1000,
+    "m_fMatchStartTime"=> 1001,
+    "m_iNumConsecutiveTerroristLoses"=> 1002,
+    "m_totalRoundsPlayed"=> 1002,
+
     "m_flNextAttack" => 1,
     "m_bDuckOverride" => 0,
     "m_flStamina" => 1,

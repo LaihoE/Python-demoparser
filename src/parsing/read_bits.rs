@@ -154,7 +154,8 @@ impl<'a> MyBitreader<'a> {
             }
             s.push(c);
         }
-        Some(String::from_utf8(s).unwrap())
+        let s = String::from_utf8_lossy(&s);
+        Some(s.to_string())
     }
     #[inline(always)]
     pub fn read_string_lossy(&mut self, length: i32) -> Option<String> {

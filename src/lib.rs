@@ -622,12 +622,42 @@ pub fn rm_user_friendly_names(names: &Vec<String>) -> Vec<String> {
             "last_duck_time" => unfriendly_names.push("m_flLastDuckTime".to_string()),
             "is_ducking" => unfriendly_names.push("m_bDucking".to_string()),
 
+            "is_freeze_period" => unfriendly_names.push("m_bFreezePeriod".to_string()),
+            "ct_losses_in_a_row" => unfriendly_names.push("m_iNumConsecutiveCTLoses".to_string()),
+            "t_losses_in_a_row" => {
+                unfriendly_names.push("m_iNumConsecutiveTerroristLoses".to_string())
+            }
+            "is_match_started" => unfriendly_names.push("m_bHasMatchStarted".to_string()),
+            "game_start_time" => unfriendly_names.push("m_flGameStartTime".to_string()),
+            "warmup_period_start" => unfriendly_names.push("m_fWarmupPeriodStart".to_string()),
+            "is_warmup_period" => unfriendly_names.push("m_bWarmupPeriod".to_string()),
+            "round_start_time" => unfriendly_names.push("m_fRoundStartTime".to_string()),
+            "warmup_period_end" => unfriendly_names.push("m_fWarmupPeriodEnd".to_string()),
+            "bomb_planted" => unfriendly_names.push("m_bBombPlanted".to_string()),
+            "match_start_time" => unfriendly_names.push("m_fMatchStartTime".to_string()),
+            "total_rounds_played" => unfriendly_names.push("m_totalRoundsPlayed".to_string()),
+
             _ => unfriendly_names.push(name.to_string()),
         }
     }
     unfriendly_names
 }
+
 pub static TYPEHM: phf::Map<&'static str, i32> = phf_map! {
+    "m_bFreezePeriod" => 1000,
+    "m_iNumConsecutiveCTLoses" => 1002,
+    "m_flRestartRoundTime"=> 1000,
+    "m_bHasMatchStarted"=> 1000,
+    "m_flGameStartTime"=> 1001,
+    "m_fWarmupPeriodStart"=> 1001,
+    "m_bWarmupPeriod"=> 1000,
+    "m_fRoundStartTime"=> 1001,
+    "m_fWarmupPeriodEnd" => 1001,
+    "m_bBombPlanted"=> 1000,
+    "m_fMatchStartTime"=> 1001,
+    "m_iNumConsecutiveTerroristLoses"=> 1002,
+    "m_totalRoundsPlayed"=> 1002,
+
     "m_flNextAttack" => 1,
     "m_bDuckOverride" => 0,
     "m_flStamina" => 1,

@@ -97,7 +97,7 @@ Some example props that can be gotten from players.
 |    last_duck_time     | m_flLastDuckTime                     | Seconds since demo started when the player last ducked                                                         |
 |      is_ducking       | m_bDucking                           | is between not ducked and ducked?                                                                              |
 |         round         | m_totalRoundsPlayed                  | How many rounds have been played                                                                               |
-|is_freeze_period|m_bFreezePeriod|
+|is_freeze_period|m_bFreezePeriod| 
 |ct_losses_in_a_row|m_iNumConsecutiveCTLoses|
 |t_losses_in_a_row|m_iNumConsecutiveTerroristLoses|
 |is_match_started|m_bHasMatchStarted|
